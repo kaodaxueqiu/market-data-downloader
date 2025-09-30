@@ -45,6 +45,11 @@
               <span>数据库字典</span>
             </el-menu-item>
             
+            <el-menu-item index="/static-data-download">
+              <el-icon><FolderOpened /></el-icon>
+              <span>静态数据下载</span>
+            </el-menu-item>
+            
             <el-menu-item index="/settings">
               <el-icon><Setting /></el-icon>
               <span>系统设置</span>
@@ -112,7 +117,8 @@ import {
   Connection,
   Key,
   Document,
-  Folder
+  Folder,
+  FolderOpened
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
@@ -130,6 +136,7 @@ const pageTitle = computed(() => {
     '/history': '历史记录',
     '/dictionary': '数据字典',
     '/database-dictionary': '数据库字典',
+    '/static-data-download': '静态数据下载',
     '/settings': '系统设置'
   }
   return titles[route.path] || '市场数据下载工具'

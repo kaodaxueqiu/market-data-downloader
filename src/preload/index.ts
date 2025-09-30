@@ -72,7 +72,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     buildSQL: (params: any) => ipcRenderer.invoke('dbdict:buildSQL', params),
     getStats: () => ipcRenderer.invoke('dbdict:getStats'),
     exportDict: (params: any) => ipcRenderer.invoke('dbdict:export', params),
-    clearCache: () => ipcRenderer.invoke('dbdict:clearCache')
+    clearCache: () => ipcRenderer.invoke('dbdict:clearCache'),
+    downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath)
   },
 
   // 事件监听
@@ -160,6 +161,7 @@ declare global {
         getStats: () => Promise<any>
         exportDict: (params: any) => Promise<any>
         clearCache: () => Promise<any>
+        downloadData: (params: any, savePath: string) => Promise<any>
       }
       on: (channel: string, callback: Function) => void
       off: (channel: string, callback: Function) => void

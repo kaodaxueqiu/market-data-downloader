@@ -33,6 +33,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/DatabaseDictionary.vue')
   },
   {
+    path: '/static-data-download',
+    name: 'StaticDataDownload',
+    component: () => import('../views/StaticDataDownload.vue')
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue')

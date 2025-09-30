@@ -439,3 +439,50 @@ ipcMain.handle('dbdict:clearCache', async () => {
     throw new Error(error.message || '清除缓存失败')
   }
 })
+
+// 下载静态数据
+ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: string) => {
+  const fs = require('fs').promises
+  
+  try {
+    console.log('开始下载静态数据，参数:', params)
+    console.log('保存路径:', savePath)
+    
+    const result = await dbDictAPI.downloadData(params)
+    
+    console.log('下载完成，数据类型:', typeof result)
+    console.log('是否Buffer:', Buffer.isBuffer(result))
+    console.log('是否ArrayBuffer:', result instanceof ArrayBuffer)
+    
+    // 根据格式保存文件
+    if (params.format === 'csv') {
+      // CSV格式 - arraybuffer/Buffer 数据
+      if (Buffer.isBuffer(result)) {
+        console.log('保存Buffer数据，大小:', result.length)
+        await fs.writeFile(savePath, result)
+      } else if (result instanceof ArrayBuffer) {
+        console.log('保存ArrayBuffer数据，大小:', result.byteLength)
+        await fs.writeFile(savePath, Buffer.from(result))
+      } else {
+        // 可能是字符串
+        console.log('保存字符串数据')
+        await fs.writeFile(savePath, result, 'utf-8')
+      }
+    } else {
+      // JSON格式 - 对象转字符串
+      console.log('保存JSON数据')
+      const jsonStr = JSON.stringify(result, null, 2)
+      await fs.writeFile(savePath, jsonStr, 'utf-8')
+    }
+    
+    console.log(`✅ 文件已成功保存到: ${savePath}`)
+    
+    // 返回简单对象
+    const returnValue = { success: true, path: savePath }
+    console.log('返回值:', returnValue)
+    return returnValue
+  } catch (error: any) {
+    console.error('❌ 下载保存失败:', error)
+    throw new Error(error.message || '下载静态数据失败')
+  }
+})

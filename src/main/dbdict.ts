@@ -235,6 +235,31 @@ export class DatabaseDictAPI {
   clearLocalCache() {
     this.cache.clear()
   }
+
+  // 下载静态数据
+  async downloadData(params: {
+    table_name: string
+    columns?: string[]
+    conditions?: Record<string, any>
+    date_range?: {
+      start_date: string
+      end_date: string
+      date_field: string
+    }
+    order_by?: string
+    limit?: number
+    format?: 'csv' | 'json'
+  }): Promise<any> {
+    try {
+      const response = await this.client.post('/download-data', params, {
+        responseType: params.format === 'json' ? 'json' : 'arraybuffer'
+      })
+      return response.data
+    } catch (error: any) {
+      console.error('下载静态数据失败:', error)
+      throw new Error(error.response?.data?.message || '下载静态数据失败')
+    }
+  }
 }
 
 // 单例实例
