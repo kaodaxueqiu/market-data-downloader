@@ -1,0 +1,45 @@
+appId: com.tradingsystem.market-downloader
+productName: Market Data Downloader
+directories:
+  output: dist
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+extraMetadata:
+  main: dist/electron/main/index.js
+mac:
+  category: public.app-category.finance
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  icon: public/icon.icns
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  # icon: public/icon.ico  # 暂时注释，使用默认图标
+  forceCodeSigning: false
+  verifyUpdateCodeSignature: false
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  maintainer: Trading System Team
+  category: Finance
+  icon: public/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  # installerIcon: public/icon.ico
+  # uninstallerIcon: public/icon.ico
+  # installerHeaderIcon: public/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Market Data Downloader
+forceCodeSigning: false
