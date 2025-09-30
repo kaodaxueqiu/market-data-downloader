@@ -43,6 +43,7 @@
   "build": {
     "appId": "com.tradingsystem.market-downloader",
     "productName": "Market Data Downloader",
+    "publish": null,
     "directories": {
       "output": "dist"
     },
