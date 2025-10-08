@@ -177,6 +177,11 @@ declare global {
         clearCache: () => Promise<any>
         downloadData: (params: any, savePath: string) => Promise<any>
       }
+      updater: {
+        checkForUpdates: () => Promise<any>
+        downloadUpdate: () => Promise<boolean>
+        quitAndInstall: () => void
+      }
       on: (channel: string, callback: Function) => void
       off: (channel: string, callback: Function) => void
     }
