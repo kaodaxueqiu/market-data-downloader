@@ -18,17 +18,29 @@
           >
             <!-- 数据类型选择（放在最前面） -->
             <el-form-item label="数据类型" prop="dataType">
-              <el-radio-group v-model="queryForm.dataType" size="default">
-                <el-radio-button value="DECODED">DECODED (解析数据)</el-radio-button>
-                <el-radio-button value="RAW">RAW (原始数据)</el-radio-button>
-              </el-radio-group>
-              <div style="color: #909399; font-size: 12px; margin-top: 5px">
-                <span v-if="queryForm.dataType === 'RAW'" style="color: #f56c6c">
-                  ⚠️ RAW数据仅支持查询预览，不支持导出下载
-                </span>
-                <span v-else style="color: #67c23a">
-                  ✅ DECODED数据支持查询预览和导出下载
-                </span>
+              <div class="data-type-selector">
+                <el-radio-group v-model="queryForm.dataType" size="large">
+                  <el-radio-button value="DECODED">
+                    <div class="radio-content">
+                      <span class="radio-title">DECODED</span>
+                      <span class="radio-desc">解析数据</span>
+                    </div>
+                  </el-radio-button>
+                  <el-radio-button value="RAW">
+                    <div class="radio-content">
+                      <span class="radio-title">RAW</span>
+                      <span class="radio-desc">原始数据</span>
+                    </div>
+                  </el-radio-button>
+                </el-radio-group>
+                <div class="data-type-hint">
+                  <span v-if="queryForm.dataType === 'RAW'" style="color: #FF9500; font-weight: 500">
+                    ⚠️ RAW数据仅支持查询预览，不支持导出下载
+                  </span>
+                  <span v-else style="color: #34C759; font-weight: 500">
+                    ✅ DECODED数据支持查询预览和导出下载
+                  </span>
+                </div>
               </div>
             </el-form-item>
 
@@ -678,4 +690,95 @@ onMounted(async () => {
 :deep(.el-dialog__body) {
   padding: 20px 30px;
 }
+
+/* 数据类型选择器美化 */
+.data-type-selector {
+  :deep(.el-radio-group) {
+    display: flex;
+    gap: 60px;
+  }
+  
+  :deep(.el-radio-button) {
+    flex: 1;
+    border: none;
+    margin: 0 !important;
+    
+    &:first-child {
+      margin-right: 0 !important;
+      
+      .el-radio-button__inner {
+        border-radius: 12px !important;
+        border-right: 1.5px solid #e4e7ed !important;
+      }
+    }
+    
+    &:last-child {
+      margin-left: 0 !important;
+      
+      .el-radio-button__inner {
+        border-radius: 12px !important;
+        border-left: 1.5px solid #e4e7ed !important;
+      }
+    }
+    
+    .el-radio-button__inner {
+      width: 100%;
+      min-width: 160px;
+      border-radius: 12px !important;
+      padding: 8px 20px;
+      border: 1.5px solid #e4e7ed !important;
+      background: #ffffff;
+      transition: all 0.3s;
+      box-shadow: none;
+      
+      &:hover {
+        border-color: #409EFF;
+        background: #f6f9ff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+    }
+    
+    &.is-active .el-radio-button__inner {
+      background: #409EFF;
+      border-color: #409EFF;
+      box-shadow: 0 4px 16px rgba(64, 158, 255, 0.3);
+      color: white;
+    }
+  }
+  
+  .radio-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    
+    .radio-title {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    
+    .radio-desc {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+  }
+  
+  .data-type-hint {
+    margin-top: 16px;
+    font-size: 13px;
+    padding: 10px 16px;
+    background: #f5f7fa;
+    border-radius: 10px;
+    
+    span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+  }
+}
+
 </style>

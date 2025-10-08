@@ -23,7 +23,7 @@
       </el-button>
     </div>
 
-    <!-- 数据分类 -->
+    <!-- 数据分类标签 -->
     <div class="category-section">
       <div class="category-header">
         <span>数据分类</span>
@@ -33,45 +33,55 @@
         <el-tag
           v-for="cat in categories"
           :key="cat.code"
-          :type="selectedCategory === cat.code ? 'primary' : 'info'"
+          :type="selectedCategory === cat.code ? getCategoryColor(cat.name) : getCategoryColor(cat.name)"
           :effect="selectedCategory === cat.code ? 'dark' : 'plain'"
           size="large"
           class="category-tag"
           @click="selectCategory(cat.code)"
         >
-          {{ cat.name }} {{ cat.table_count }}
+          {{ cat.name }} ({{ cat.table_count }})
         </el-tag>
       </div>
     </div>
 
-    <!-- 表选择 -->
-    <div class="table-selector">
-      <div class="selector-label">选择数据表：</div>
-      <el-select
-        v-model="selectedTable"
-        placeholder="请选择数据表..."
-        filterable
-        clearable
-        size="large"
-        style="width: 600px"
-        @change="handleTableChange"
-      >
-        <el-option
-          v-for="table in filteredTables"
+    <!-- 表卡片列表 -->
+    <div v-loading="loading" class="table-list">
+      <div class="table-grid">
+        <el-card 
+          v-for="table in displayedTables" 
           :key="table.table_name"
-          :label="`${table.table_name} - ${table.table_comment}`"
-          :value="table.table_name"
+          class="table-card" 
+          :class="{ active: selectedTableName === table.table_name }"
+          @click="selectTable(table)"
         >
-          <div class="table-option">
-            <span class="table-name">{{ table.table_name }}</span>
-            <span class="table-comment">{{ table.table_comment }}</span>
+          <div class="table-top-line">
+            <el-tag size="small" :type="getCategoryColor(table.category)" class="category-badge">
+              {{ table.category || '数据库' }}
+            </el-tag>
           </div>
-        </el-option>
-      </el-select>
+          <div class="table-name-code">{{ table.table_name }}</div>
+          <div class="table-comment-text">{{ table.table_comment }}</div>
+          <div class="table-stats">
+            <el-tag type="success" size="small">{{ table.field_count || 0 }} 字段</el-tag>
+            <el-tag type="info" size="small" v-if="table.data_size">{{ table.data_size }}</el-tag>
+          </div>
+        </el-card>
+      </div>
+
+      <!-- 空状态 -->
+      <el-empty v-if="!loading && displayedTables.length === 0" description="未找到数据表" />
     </div>
 
-    <!-- 表详情 -->
-    <div v-if="tableDetail" class="table-detail">
+    <!-- 表详情弹窗 -->
+    <el-dialog
+      v-model="showDetails"
+      :title="tableDetail?.table_name || '表详情'"
+      width="90%"
+      top="5vh"
+      class="detail-dialog"
+      destroy-on-close
+    >
+      <div v-if="tableDetail" class="table-detail">
       <el-card>
         <template #header>
           <div class="detail-header">
@@ -125,14 +135,8 @@
           <pre class="sql-code">{{ tableDetail.select_sql }}</pre>
         </div>
       </el-card>
-    </div>
-
-    <!-- 空状态 -->
-    <el-empty
-      v-else
-      description="选择一个表查看详情"
-      :image-size="120"
-    />
+      </div>
+    </el-dialog>
 
     <!-- SQL构建器对话框 -->
     <el-dialog
@@ -212,8 +216,9 @@ import { Search, CopyDocument, Edit, Key, Check, Close } from '@element-plus/ico
 const loading = ref(false)
 const searchKeyword = ref('')
 const selectedCategory = ref('all')
-const selectedTable = ref('')
+const selectedTableName = ref('')
 const sqlBuilderVisible = ref(false)
+const showDetails = ref(false)
 
 // 数据
 const categories = ref<any[]>([
@@ -251,6 +256,22 @@ const filteredTables = computed(() => {
     t.category === selectedCategory.value || // 匹配code
     t.category === selectedCat.name // 匹配name
   )
+})
+
+// 显示的表（用于卡片展示）
+const displayedTables = computed(() => {
+  let tables = filteredTables.value
+  
+  // 搜索过滤
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    tables = tables.filter(t => 
+      t.table_name.toLowerCase().includes(keyword) ||
+      (t.table_comment && t.table_comment.includes(searchKeyword.value))
+    )
+  }
+  
+  return tables
 })
 
 // 加载分类
@@ -316,23 +337,51 @@ const loadTables = async () => {
   }
 }
 
-// 选择分类
+// 选择分类标签
 const selectCategory = (code: string) => {
   selectedCategory.value = code
-  selectedTable.value = ''
+  selectedTableName.value = ''
   tableDetail.value = null
 }
 
-// 表切换
-const handleTableChange = async (tableName: string) => {
-  if (!tableName) {
-    tableDetail.value = null
-    return
+// 获取分类颜色 - 自动分配
+const getCategoryColor = (category: string) => {
+  // 预定义常见分类的颜色
+  const predefinedColors: Record<string, string> = {
+    '全部': 'primary',
+    '股票基本信息': 'primary',
+    '财务数据': 'success',
+    '市场行情': 'warning',
+    '指数数据': 'danger'
   }
+  
+  // 如果有预定义颜色，使用预定义
+  if (predefinedColors[category]) {
+    return predefinedColors[category]
+  }
+  
+  // 否则根据分类名称自动分配颜色
+  const colors = ['primary', 'success', 'warning', 'danger', 'info']
+  
+  // 计算category字符串的简单hash
+  let hash = 0
+  for (let i = 0; i < category.length; i++) {
+    hash = category.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  
+  // 根据hash选择颜色
+  const index = Math.abs(hash) % colors.length
+  return colors[index]
+}
+
+// 点击表卡片
+const selectTable = async (table: any) => {
+  selectedTableName.value = table.table_name
+  showDetails.value = true
   
   loading.value = true
   try {
-    const result = await window.electronAPI.dbdict.getTableDetail(tableName)
+    const result = await window.electronAPI.dbdict.getTableDetail(table.table_name)
     if (result.code === 200) {
       tableDetail.value = result.data
     }
@@ -344,23 +393,11 @@ const handleTableChange = async (tableName: string) => {
   }
 }
 
-// 搜索
-const handleSearch = async () => {
-  if (!searchKeyword.value.trim()) {
-    ElMessage.warning('请输入搜索关键词')
-    return
-  }
-  
-  try {
-    const result = await window.electronAPI.dbdict.search(searchKeyword.value)
-    if (result.code === 200) {
-      console.log('搜索结果:', result.data)
-      ElMessage.success(`找到 ${result.data.length} 个匹配结果`)
-      // TODO: 显示搜索结果
-    }
-  } catch (error: any) {
-    console.error('搜索失败:', error)
-    ElMessage.error(error.message || '搜索失败')
+// 搜索 - 实时过滤
+const handleSearch = () => {
+  // displayedTables计算属性会自动根据searchKeyword过滤
+  if (displayedTables.value.length === 0) {
+    ElMessage.info('未找到匹配的表')
   }
 }
 
@@ -389,7 +426,7 @@ const showSQLBuilder = () => {
 
 // 构建SQL
 const buildSQL = async () => {
-  if (!selectedTable.value) return
+  if (!selectedTableName.value) return
   
   try {
     const conditions = sqlForm.value.conditionsText
@@ -398,7 +435,7 @@ const buildSQL = async () => {
       .filter(c => c)
     
     const result = await window.electronAPI.dbdict.buildSQL({
-      table_name: selectedTable.value,
+      table_name: selectedTableName.value,
       columns: sqlForm.value.columns.length > 0 ? sqlForm.value.columns : undefined,
       conditions: conditions.length > 0 ? conditions : undefined,
       order_by: sqlForm.value.order_by || undefined,
@@ -463,6 +500,7 @@ onMounted(() => {
     }
   }
 
+  // 分类标签区域
   .category-section {
     margin-bottom: 30px;
     
@@ -483,15 +521,102 @@ onMounted(() => {
     .category-tags {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 12px;
       
       .category-tag {
         cursor: pointer;
+        padding: 8px 16px;
         transition: all 0.3s;
         
         &:hover {
           transform: translateY(-2px);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+      }
+    }
+  }
+  
+  // 表卡片列表
+  .table-list {
+    min-height: 400px;
+    
+    .table-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 20px;
+    }
+    
+    .table-card {
+      cursor: pointer !important;
+      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+      height: 100%;
+      border-radius: 16px;
+      border: 1px solid #f0f0f0;
+      background: #ffffff;
+      overflow: hidden;
+      
+      :deep(.el-card__body) {
+        padding: 24px;
+      }
+      
+      &:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+        border-color: rgba(64, 158, 255, 0.3);
+        
+        .table-name-code {
+          color: #409EFF;
+        }
+      }
+      
+      &.active {
+        border-color: #409EFF;
+        box-shadow: 0 8px 24px rgba(64, 158, 255, 0.2);
+        background: linear-gradient(135deg, #f6f9ff 0%, #ffffff 100%);
+      }
+      
+      // 强制所有子元素也显示pointer
+      * {
+        cursor: pointer !important;
+      }
+      
+      .table-top-line {
+        margin-bottom: 12px;
+        
+        .category-badge {
+          font-size: 11px;
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-weight: 500;
+        }
+      }
+      
+      .table-name-code {
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
+        font-size: 15px;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin-bottom: 10px;
+        word-break: break-all;
+        letter-spacing: -0.3px;
+      }
+      
+      .table-comment-text {
+        font-size: 13px;
+        color: #86868b;
+        margin-bottom: 16px;
+        min-height: 40px;
+        line-height: 1.6;
+        font-weight: 400;
+      }
+      
+      .table-stats {
+        display: flex;
+        gap: 8px;
+        
+        .el-tag {
+          border-radius: 8px;
+          font-weight: 500;
         }
       }
     }

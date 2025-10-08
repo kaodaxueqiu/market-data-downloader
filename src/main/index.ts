@@ -6,6 +6,9 @@ import { ConfigManager } from './config'
 import { getDictionaryAPI } from './dictionary'
 import { getDbDictAPI } from './dbdict'
 
+// 禁用GPU加速，避免Windows上的GPU崩溃问题
+app.disableHardwareAcceleration()
+
 // 配置存储 - 延迟初始化，确保app准备就绪
 let store: Store
 let configManager: ConfigManager
@@ -37,10 +40,58 @@ function createWindow() {
     show: false
   })
 
+  // 捕获渲染进程崩溃
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('❌ 渲染进程崩溃:', JSON.stringify(details))
+    console.error('原因:', details.reason)
+    console.error('退出码:', details.exitCode)
+  })
+
+  // 捕获加载失败
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error('❌ 页面加载失败:', errorCode, errorDescription)
+  })
+
+  // 捕获所有控制台消息
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.log(`[Renderer ${level}]`, message, `(${sourceId}:${line})`)
+  })
+
+  // 捕获崩溃前的日志
+  mainWindow.webContents.on('destroyed', () => {
+    console.log('⚠️ webContents被销毁')
+  })
+
   // 开发环境
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools()
+    console.log('正在加载开发服务器: http://localhost:5173')
+    
+    // 延迟加载，确保Vite服务器准备就绪
+    let retryCount = 0
+    const maxRetries = 10
+    
+    const loadURL = async () => {
+      try {
+        retryCount++
+        console.log(`🔄 尝试加载页面... (第${retryCount}次)`)
+        await mainWindow!.loadURL('http://localhost:5173')
+        console.log('✅ 页面加载成功！')
+        // DevTools会导致崩溃，保持禁用
+        // mainWindow!.webContents.openDevTools()
+      } catch (error: any) {
+        console.error(`❌ 页面加载失败 (第${retryCount}次):`, error.message)
+        if (retryCount < maxRetries) {
+          console.log(`⏳ 2秒后重试...`)
+          setTimeout(loadURL, 2000)
+        } else {
+          console.error('❌ 重试次数已达上限，放弃加载')
+        }
+      }
+    }
+    
+    // 等待3秒确保Vite服务器完全启动
+    console.log('⏰ 3秒后开始加载页面...')
+    setTimeout(loadURL, 3000)
   } else {
     mainWindow.loadFile(join(__dirname, '../../renderer/index.html'))
   }
@@ -52,23 +103,63 @@ function createWindow() {
 
   // 窗口关闭处理
   mainWindow.on('closed', () => {
+    console.log('窗口已关闭')
     mainWindow = null
+  })
+
+  // 防止窗口被意外关闭
+  mainWindow.on('close', () => {
+    console.log('窗口即将关闭')
+  })
+  
+  // 监听窗口是否响应
+  mainWindow.on('unresponsive', () => {
+    console.error('❌ 窗口无响应')
+  })
+  
+  mainWindow.on('responsive', () => {
+    console.log('✅ 窗口恢复响应')
   })
 }
 
+// 捕获未处理的异常
+process.on('uncaughtException', (error) => {
+  console.error('❌ 未捕获的异常:', error)
+  console.error('堆栈:', error.stack)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ 未处理的 Promise 拒绝:', reason)
+  console.error('Promise:', promise)
+})
+
 // 应用准备就绪
 app.whenReady().then(() => {
+  console.log('✅ App准备就绪')
+  
   // 先初始化服务
-  initializeServices()
+  try {
+    initializeServices()
+    console.log('✅ 服务初始化成功')
+  } catch (error) {
+    console.error('❌ 服务初始化失败:', error)
+  }
   
   // 再创建窗口
-  createWindow()
+  try {
+    createWindow()
+    console.log('✅ 窗口创建成功')
+  } catch (error) {
+    console.error('❌ 窗口创建失败:', error)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
   })
+}).catch(error => {
+  console.error('❌ App初始化失败:', error)
 })
 
 // 所有窗口关闭时退出（除了macOS）

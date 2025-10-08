@@ -20,10 +20,20 @@
               <span>首页</span>
             </el-menu-item>
             
-            <el-menu-item index="/download">
-              <el-icon><Download /></el-icon>
-              <span>数据下载</span>
-            </el-menu-item>
+            <el-sub-menu index="download">
+              <template #title>
+                <el-icon><Download /></el-icon>
+                <span>数据下载</span>
+              </template>
+              <el-menu-item index="/download">
+                <el-icon><DataLine /></el-icon>
+                <span>行情数据下载</span>
+              </el-menu-item>
+              <el-menu-item index="/static-data-download">
+                <el-icon><FolderOpened /></el-icon>
+                <span>静态数据下载</span>
+              </el-menu-item>
+            </el-sub-menu>
             
             <el-menu-item index="/tasks">
               <el-icon><List /></el-icon>
@@ -35,20 +45,20 @@
               <span>历史记录</span>
             </el-menu-item>
             
-            <el-menu-item index="/dictionary">
-              <el-icon><Document /></el-icon>
-              <span>数据字典</span>
-            </el-menu-item>
-            
-            <el-menu-item index="/database-dictionary">
-              <el-icon><Folder /></el-icon>
-              <span>数据库字典</span>
-            </el-menu-item>
-            
-            <el-menu-item index="/static-data-download">
-              <el-icon><FolderOpened /></el-icon>
-              <span>静态数据下载</span>
-            </el-menu-item>
+            <el-sub-menu index="dictionary">
+              <template #title>
+                <el-icon><Document /></el-icon>
+                <span>数据字典</span>
+              </template>
+              <el-menu-item index="/dictionary">
+                <el-icon><DataLine /></el-icon>
+                <span>行情数据字典</span>
+              </el-menu-item>
+              <el-menu-item index="/database-dictionary">
+                <el-icon><Folder /></el-icon>
+                <span>静态数据字典</span>
+              </el-menu-item>
+            </el-sub-menu>
             
             <el-menu-item index="/settings">
               <el-icon><Setting /></el-icon>
@@ -57,7 +67,7 @@
           </el-menu>
           
           <div class="app-version">
-            v1.0.0
+            v1.2.0
           </div>
         </el-aside>
         
@@ -118,7 +128,8 @@ import {
   Key,
   Document,
   Folder,
-  FolderOpened
+  FolderOpened,
+  DataLine
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
@@ -131,11 +142,11 @@ const hasApiKey = ref(false)
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     '/': '首页',
-    '/download': '数据下载',
+    '/download': '行情数据下载',
     '/tasks': '任务管理',
     '/history': '历史记录',
-    '/dictionary': '数据字典',
-    '/database-dictionary': '数据库字典',
+    '/dictionary': '行情数据字典',
+    '/database-dictionary': '静态数据字典',
     '/static-data-download': '静态数据下载',
     '/settings': '系统设置'
   }
@@ -152,16 +163,24 @@ const goToSettings = () => {
 
 const checkApiKey = async () => {
   try {
+    console.log('🔑 开始检查API Key...')
     const keys = await window.electronAPI.config.getApiKeys()
+    console.log('✅ API Key检查完成，数量:', keys.length)
     hasApiKey.value = keys.length > 0 && keys.some((k: any) => k.isDefault)
   } catch (error) {
-    console.error('检查API Key失败:', error)
+    console.error('❌ 检查API Key失败:', error)
     hasApiKey.value = false
   }
 }
 
 onMounted(() => {
-  checkApiKey()
+  console.log('📱 App组件已挂载')
+  // 使用setTimeout避免阻塞
+  setTimeout(() => {
+    checkApiKey().catch(err => {
+      console.error('API Key检查异常:', err)
+    })
+  }, 100)
 })
 </script>
 
@@ -191,6 +210,17 @@ onMounted(() => {
       background: transparent;
       border: none;
       
+      .el-sub-menu {
+        .el-sub-menu__title {
+          color: rgba(255, 255, 255, 0.8);
+          
+          &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+          }
+        }
+      }
+      
       .el-menu-item {
         color: rgba(255, 255, 255, 0.8);
         
@@ -206,6 +236,37 @@ onMounted(() => {
       }
     }
     
+    // 子菜单样式（不弹出，直接在侧边栏内展开）
+    .el-sub-menu__icon-arrow {
+      color: rgba(255, 255, 255, 0.8);
+    }
+    
+    // 深层样式覆盖，确保子菜单也是深色
+    :deep(.el-sub-menu) {
+      .el-menu {
+        background-color: rgba(0, 0, 0, 0.2) !important;
+        
+        .el-menu-item {
+          background-color: transparent !important;
+          color: rgba(255, 255, 255, 0.8) !important;
+          padding-left: 50px !important;
+          
+          &:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+          }
+          
+          &.is-active {
+            background-color: rgba(255, 255, 255, 0.2) !important;
+            color: white !important;
+          }
+        }
+      }
+    }
+  }
+  
+  
+  .app-sidebar {
     .app-version {
       padding: 20px;
       text-align: center;
@@ -249,5 +310,28 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+</style>
+
+<style lang="scss">
+/* 全局样式：强制覆盖Element Plus子菜单 */
+.app-sidebar .el-sub-menu .el-menu {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.app-sidebar .el-sub-menu .el-menu .el-menu-item {
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  padding-left: 50px !important;
+}
+
+.app-sidebar .el-sub-menu .el-menu .el-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  color: white !important;
+}
+
+.app-sidebar .el-sub-menu .el-menu .el-menu-item.is-active {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+  color: white !important;
 }
 </style>

@@ -238,7 +238,9 @@ const getStatusText = (status: string) => {
 
 const loadRecentDownloads = async () => {
   try {
+    console.log('🔍 开始加载下载历史...')
     const history = await window.electronAPI.download.getHistory()
+    console.log('✅ 下载历史加载成功，记录数:', history.length)
     recentDownloads.value = history.slice(0, 5)
     
     // 更新统计
@@ -252,12 +254,15 @@ const loadRecentDownloads = async () => {
     
     const totalSize = history.reduce((sum: number, h: any) => sum + (h.fileSize || 0), 0)
     stats.value[3].value = formatFileSize(totalSize)
+    console.log('✅ 统计信息更新完成')
   } catch (error) {
-    console.error('加载下载历史失败:', error)
+    console.error('❌ 加载下载历史失败:', error)
+    // 不抛出错误，避免崩溃
   }
 }
 
 onMounted(() => {
+  console.log('🏠 Home组件已挂载')
   loadRecentDownloads()
 })
 </script>
