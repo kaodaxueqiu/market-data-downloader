@@ -114,7 +114,7 @@
       
       <el-form label-width="120px">
         <el-form-item label="当前版本">
-          <el-tag type="primary" size="large">v1.3.3</el-tag>
+          <el-tag type="primary" size="large">v1.3.7</el-tag>
         </el-form-item>
         
         <el-form-item label="检查更新">
@@ -190,6 +190,7 @@ const downloadProgress = ref(0)
 const downloadStatus = ref('')
 const updateInfo = ref<any>(null)
 const updateReady = ref(false)
+const downloadedFilePath = ref('')
 
 // 保存API Key
 const saveApiKey = async () => {
@@ -324,20 +325,38 @@ const downloadUpdate = async () => {
 }
 
 // 安装更新
-const installUpdate = () => {
-  window.electronAPI.updater.quitAndInstall()
+const installUpdate = async () => {
+  if (!downloadedFilePath.value) {
+    ElMessage.error('未找到更新文件')
+    return
+  }
+  
+  try {
+    await window.electronAPI.updater.quitAndInstall(downloadedFilePath.value)
+  } catch (error: any) {
+    ElMessage.error(error.message || '安装失败')
+  }
 }
 
 // 监听更新事件
 const setupUpdateListeners = () => {
-  window.electronAPI.on('updater:download-progress', (progress: any) => {
-    downloadProgress.value = Math.floor(progress.percent)
-    downloadStatus.value = `已下载 ${(progress.transferred / 1024 / 1024).toFixed(2)} MB / ${(progress.total / 1024 / 1024).toFixed(2)} MB`
+  // 启动时自动检查到更新，用户点击"立即更新"
+  window.electronAPI.on('updater:start-download', (info: any) => {
+    updateInfo.value = info
+    downloadUpdate()
   })
   
-  window.electronAPI.on('updater:update-downloaded', () => {
+  window.electronAPI.on('updater:download-progress', (progress: any) => {
+    downloadProgress.value = Math.floor(progress.percent)
+    const totalMB = (progress.total / 1024 / 1024).toFixed(2)
+    const loadedMB = ((progress.total * progress.percent / 100) / 1024 / 1024).toFixed(2)
+    downloadStatus.value = `已下载 ${loadedMB} MB / ${totalMB} MB`
+  })
+  
+  window.electronAPI.on('updater:update-downloaded', (filePath: string) => {
     downloading.value = false
     updateReady.value = true
+    downloadedFilePath.value = filePath
     downloadStatus.value = '下载完成'
     ElMessage.success('更新下载完成，可以安装了')
   })

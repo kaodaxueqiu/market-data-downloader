@@ -1,18 +1,14 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
-import { autoUpdater } from 'electron-updater'
 import downloadManager from './download'
 import { ConfigManager } from './config'
 import { getDictionaryAPI } from './dictionary'
 import { getDbDictAPI } from './dbdict'
+import * as updater from './updater'
 
 // 禁用GPU加速，避免Windows上的GPU崩溃问题
 app.disableHardwareAcceleration()
-
-// 配置自动更新
-autoUpdater.autoDownload = false // 不自动下载，让用户确认
-autoUpdater.autoInstallOnAppQuit = true // 退出时自动安装
 
 // 配置存储 - 延迟初始化，确保app准备就绪
 let store: Store
@@ -104,6 +100,89 @@ function createWindow() {
   // 窗口准备好后显示
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+    
+    // 生产模式下启动时自动检查更新
+    if (process.env.NODE_ENV !== 'development') {
+      setTimeout(async () => {
+        try {
+          console.log('自动检查更新...')
+          const updateInfo = await updater.checkForUpdates()
+          
+          if (updateInfo && mainWindow && !mainWindow.isDestroyed()) {
+            // 显示更新提示
+            const result = await dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: '发现新版本',
+              message: `发现新版本 v${updateInfo.version}`,
+              detail: updateInfo.release_notes,
+              buttons: ['立即更新', '稍后提醒'],
+              defaultId: 0,
+              cancelId: 1
+            })
+            
+            if (result.response === 0) {
+              // 用户选择立即更新，直接下载
+              try {
+                // 显示保存对话框
+                const platform = process.platform
+                const filename = platform === 'win32' 
+                  ? `Market-Data-Downloader-${updateInfo.version}.exe`
+                  : `Market-Data-Downloader-${updateInfo.version}-mac.zip`
+                
+                const defaultPath = join(app.getPath('downloads'), filename)
+                
+                const saveResult = await dialog.showSaveDialog(mainWindow, {
+                  title: '选择保存位置',
+                  defaultPath: defaultPath,
+                  buttonLabel: '开始下载',
+                  filters: [
+                    { 
+                      name: platform === 'win32' ? 'Windows应用程序' : 'macOS应用程序', 
+                      extensions: platform === 'win32' ? ['exe'] : ['zip'] 
+                    }
+                  ]
+                })
+                
+                if (saveResult.canceled || !saveResult.filePath) {
+                  console.log('用户取消下载')
+                  return
+                }
+                
+                const savePath = saveResult.filePath
+                console.log('✅ 用户选择保存到:', savePath)
+                
+                // 开始下载
+                const filePath = await updater.downloadUpdateToPath(
+                  updateInfo, 
+                  savePath,
+                  (percent, _status) => {
+                    mainWindow?.webContents.send('updater:download-progress', {
+                      percent,
+                      transferred: 0,
+                      total: updateInfo.downloads.windows?.size || 0
+                    })
+                  }
+                )
+                
+                console.log('✅ 下载完成:', filePath)
+                
+                // 自动打开安装
+                await updater.installUpdate(filePath)
+                
+              } catch (error: any) {
+                console.error('❌ 下载失败:', error)
+                if (!error.message.includes('用户取消')) {
+                  dialog.showErrorBox('更新失败', error.message || '下载更新失败')
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('自动检查更新失败:', error)
+          // 静默失败，不打扰用户
+        }
+      }, 5000)
+    }
   })
 
   // 窗口关闭处理
@@ -583,67 +662,115 @@ ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: stri
   }
 })
 
-// ========== 自动更新功能 ==========
+// ========== 自动更新功能（自建服务器） ==========
+
+let currentUpdateInfo: any = null
 
 // 检查更新
 ipcMain.handle('updater:checkForUpdates', async () => {
   try {
     console.log('检查更新...')
-    const result = await autoUpdater.checkForUpdates()
-    return {
-      updateAvailable: result !== null,
-      version: result?.updateInfo.version,
-      releaseNotes: result?.updateInfo.releaseNotes
+    mainWindow?.webContents.send('updater:checking')
+    
+    const updateInfo = await updater.checkForUpdates()
+    
+    if (updateInfo) {
+      currentUpdateInfo = updateInfo
+      console.log('发现新版本:', updateInfo.version)
+      mainWindow?.webContents.send('updater:update-available', updateInfo)
+      
+      return {
+        updateAvailable: true,
+        version: updateInfo.version,
+        releaseNotes: updateInfo.release_notes
+      }
+    } else {
+      console.log('当前已是最新版本')
+      mainWindow?.webContents.send('updater:update-not-available')
+      
+      return {
+        updateAvailable: false,
+        version: updater.getCurrentVersion()
+      }
     }
   } catch (error: any) {
     console.error('检查更新失败:', error)
+    mainWindow?.webContents.send('updater:error', error.message)
     throw new Error(error.message || '检查更新失败')
   }
 })
 
 // 下载更新
 ipcMain.handle('updater:downloadUpdate', async () => {
+  console.log('=== IPC: updater:downloadUpdate 被调用 ===')
+  
+  if (!currentUpdateInfo) {
+    throw new Error('没有可用的更新信息')
+  }
+  
   try {
-    await autoUpdater.downloadUpdate()
-    return true
+    // 先在主进程中显示保存对话框
+    const platform = process.platform
+    const filename = platform === 'win32' 
+      ? `Market-Data-Downloader-${currentUpdateInfo.version}.exe`
+      : `Market-Data-Downloader-${currentUpdateInfo.version}-mac.zip`
+    
+    const defaultPath = join(app.getPath('downloads'), filename)
+    
+    console.log('📂 显示保存对话框...')
+    const saveResult = await dialog.showSaveDialog(mainWindow!, {
+      title: '选择保存位置',
+      defaultPath: defaultPath,
+      buttonLabel: '开始下载',
+      filters: [
+        { 
+          name: platform === 'win32' ? 'Windows应用程序' : 'macOS应用程序', 
+          extensions: platform === 'win32' ? ['exe'] : ['zip'] 
+        }
+      ]
+    })
+    
+    console.log('对话框结果:', saveResult)
+    
+    if (saveResult.canceled || !saveResult.filePath) {
+      throw new Error('用户取消下载')
+    }
+    
+    const savePath = saveResult.filePath
+    console.log('✅ 用户选择保存到:', savePath)
+    
+    // 开始下载到指定路径
+    const filePath = await updater.downloadUpdateToPath(
+      currentUpdateInfo, 
+      savePath,
+      (percent, status) => {
+        console.log(`📊 下载进度: ${percent}% - ${status}`)
+        mainWindow?.webContents.send('updater:download-progress', {
+          percent,
+          transferred: 0,
+          total: currentUpdateInfo.downloads.windows?.size || 0
+        })
+      }
+    )
+    
+    console.log('✅ 更新下载完成:', filePath)
+    mainWindow?.webContents.send('updater:update-downloaded', filePath)
+    
+    return { success: true, filePath }
   } catch (error: any) {
-    console.error('下载更新失败:', error)
+    console.error('❌ 下载更新失败:', error)
+    mainWindow?.webContents.send('updater:error', error.message)
     throw new Error(error.message || '下载更新失败')
   }
 })
 
-// 安装更新（退出并安装）
-ipcMain.handle('updater:quitAndInstall', () => {
-  autoUpdater.quitAndInstall()
-})
-
-// 自动更新事件
-autoUpdater.on('checking-for-update', () => {
-  console.log('正在检查更新...')
-  mainWindow?.webContents.send('updater:checking')
-})
-
-autoUpdater.on('update-available', (info) => {
-  console.log('发现新版本:', info.version)
-  mainWindow?.webContents.send('updater:update-available', info)
-})
-
-autoUpdater.on('update-not-available', () => {
-  console.log('当前已是最新版本')
-  mainWindow?.webContents.send('updater:update-not-available')
-})
-
-autoUpdater.on('download-progress', (progress) => {
-  console.log(`下载进度: ${progress.percent}%`)
-  mainWindow?.webContents.send('updater:download-progress', progress)
-})
-
-autoUpdater.on('update-downloaded', () => {
-  console.log('更新下载完成')
-  mainWindow?.webContents.send('updater:update-downloaded')
-})
-
-autoUpdater.on('error', (error) => {
-  console.error('更新错误:', error)
-  mainWindow?.webContents.send('updater:error', error.message)
+// 安装更新
+ipcMain.handle('updater:quitAndInstall', async (_event, filePath: string) => {
+  try {
+    await updater.installUpdate(filePath)
+    return true
+  } catch (error: any) {
+    console.error('安装更新失败:', error)
+    throw new Error(error.message || '安装更新失败')
+  }
 })

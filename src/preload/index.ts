@@ -80,7 +80,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updater: {
     checkForUpdates: () => ipcRenderer.invoke('updater:checkForUpdates'),
     downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate'),
-    quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall')
+    quitAndInstall: (filePath: string) => ipcRenderer.invoke('updater:quitAndInstall', filePath)
   },
 
   // 事件监听
@@ -103,7 +103,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'updater:update-not-available',
       'updater:download-progress',
       'updater:update-downloaded',
-      'updater:error'
+      'updater:error',
+      'updater:start-download'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))
@@ -179,8 +180,8 @@ declare global {
       }
       updater: {
         checkForUpdates: () => Promise<any>
-        downloadUpdate: () => Promise<boolean>
-        quitAndInstall: () => void
+        downloadUpdate: () => Promise<any>
+        quitAndInstall: (filePath: string) => Promise<boolean>
       }
       on: (channel: string, callback: Function) => void
       off: (channel: string, callback: Function) => void
