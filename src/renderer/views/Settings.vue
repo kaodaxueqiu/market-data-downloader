@@ -114,7 +114,7 @@
       
       <el-form label-width="120px">
         <el-form-item label="当前版本">
-          <el-tag type="primary" size="large">v1.3.0</el-tag>
+          <el-tag type="primary" size="large">v1.3.1</el-tag>
         </el-form-item>
         
         <el-form-item label="检查更新">
