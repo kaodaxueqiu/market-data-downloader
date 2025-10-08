@@ -21,6 +21,7 @@
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.6.2",
     "element-plus": "^2.4.3",
     "papaparse": "^5.4.1",
     "pinia": "^2.1.7",
@@ -43,7 +44,13 @@
   "build": {
     "appId": "com.tradingsystem.market-downloader",
     "productName": "Market Data Downloader",
-    "publish": null,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kaodaxueqiu",
+        "repo": "market-data-downloader"
+      }
+    ],
     "directories": {
       "output": "dist"
     },
@@ -57,7 +64,10 @@
       "target": [
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -65,7 +75,9 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": null
@@ -74,7 +86,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Finance",

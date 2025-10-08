@@ -76,6 +76,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath)
   },
 
+  // 自动更新
+  updater: {
+    checkForUpdates: () => ipcRenderer.invoke('updater:checkForUpdates'),
+    downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate'),
+    quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall')
+  },
+
   // 事件监听
   on: (channel: string, callback: Function) => {
     const validChannels = [
@@ -89,7 +96,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'download:cancel',
       'download:task-created',  // 新增任务事件
       'download:task-updated',
-      'download:tasks-cleared'
+      'download:tasks-cleared',
+      // 更新事件
+      'updater:checking',
+      'updater:update-available',
+      'updater:update-not-available',
+      'updater:download-progress',
+      'updater:update-downloaded',
+      'updater:error'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))

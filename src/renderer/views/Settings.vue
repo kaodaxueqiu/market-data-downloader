@@ -105,13 +105,69 @@
         </el-form-item>
       </el-form>
     </el-card>
+    
+    <!-- 关于和更新 -->
+    <el-card class="settings-card">
+      <template #header>
+        <span>关于和更新</span>
+      </template>
+      
+      <el-form label-width="120px">
+        <el-form-item label="当前版本">
+          <el-tag type="primary" size="large">v1.2.0</el-tag>
+        </el-form-item>
+        
+        <el-form-item label="检查更新">
+          <el-button 
+            type="primary" 
+            @click="checkForUpdates" 
+            :loading="checking"
+            :disabled="downloading"
+          >
+            <el-icon><Refresh /></el-icon>
+            检查更新
+          </el-button>
+          <span v-if="updateInfo" style="margin-left: 15px; color: #67c23a">
+            发现新版本：v{{ updateInfo.version }}
+          </span>
+        </el-form-item>
+        
+        <el-form-item label="更新进度" v-if="downloading">
+          <el-progress 
+            :percentage="downloadProgress" 
+            :status="downloadProgress === 100 ? 'success' : undefined"
+          />
+          <div style="margin-top: 5px; font-size: 12px; color: #909399">
+            {{ downloadProgress }}% - {{ downloadStatus }}
+          </div>
+        </el-form-item>
+        
+        <el-form-item label="" v-if="updateReady">
+          <el-alert
+            title="更新已就绪"
+            type="success"
+            :closable="false"
+            show-icon
+          >
+            <template #default>
+              <div style="margin-top: 10px">
+                <el-button type="success" @click="installUpdate">
+                  <el-icon><Check /></el-icon>
+                  立即重启并更新
+                </el-button>
+              </div>
+            </template>
+          </el-alert>
+        </el-form-item>
+      </el-form>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { FolderOpened } from '@element-plus/icons-vue'
+import { reactive, ref, onMounted, onUnmounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { FolderOpened, Refresh, Check } from '@element-plus/icons-vue'
 
 // API Key配置（单一Key）
 const apiKeyConfig = reactive({
@@ -126,6 +182,14 @@ const appConfig = reactive({
   theme: 'light' as 'light' | 'dark' | 'auto',
   language: 'zh_CN'
 })
+
+// 更新相关状态
+const checking = ref(false)
+const downloading = ref(false)
+const downloadProgress = ref(0)
+const downloadStatus = ref('')
+const updateInfo = ref<any>(null)
+const updateReady = ref(false)
 
 // 保存API Key
 const saveApiKey = async () => {
@@ -210,6 +274,80 @@ const loadConfig = async () => {
   }
 }
 
+// 检查更新
+const checkForUpdates = async () => {
+  checking.value = true
+  updateInfo.value = null
+  
+  try {
+    const result = await window.electronAPI.updater.checkForUpdates()
+    
+    if (result.updateAvailable) {
+      updateInfo.value = result
+      
+      // 询问是否下载
+      ElMessageBox.confirm(
+        `发现新版本 v${result.version}，是否立即下载？`,
+        '更新提示',
+        {
+          confirmButtonText: '立即下载',
+          cancelButtonText: '稍后再说',
+          type: 'info'
+        }
+      ).then(() => {
+        downloadUpdate()
+      }).catch(() => {
+        ElMessage.info('已取消更新')
+      })
+    } else {
+      ElMessage.success('当前已是最新版本')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '检查更新失败，请检查网络连接')
+  } finally {
+    checking.value = false
+  }
+}
+
+// 下载更新
+const downloadUpdate = async () => {
+  downloading.value = true
+  downloadProgress.value = 0
+  downloadStatus.value = '正在下载...'
+  
+  try {
+    await window.electronAPI.updater.downloadUpdate()
+  } catch (error: any) {
+    ElMessage.error(error.message || '下载更新失败')
+    downloading.value = false
+  }
+}
+
+// 安装更新
+const installUpdate = () => {
+  window.electronAPI.updater.quitAndInstall()
+}
+
+// 监听更新事件
+const setupUpdateListeners = () => {
+  window.electronAPI.on('updater:download-progress', (progress: any) => {
+    downloadProgress.value = Math.floor(progress.percent)
+    downloadStatus.value = `已下载 ${(progress.transferred / 1024 / 1024).toFixed(2)} MB / ${(progress.total / 1024 / 1024).toFixed(2)} MB`
+  })
+  
+  window.electronAPI.on('updater:update-downloaded', () => {
+    downloading.value = false
+    updateReady.value = true
+    downloadStatus.value = '下载完成'
+    ElMessage.success('更新下载完成，可以安装了')
+  })
+  
+  window.electronAPI.on('updater:error', (error: string) => {
+    downloading.value = false
+    ElMessage.error(`更新失败: ${error}`)
+  })
+}
+
 onMounted(() => {
   console.log('Settings组件已挂载')
   console.log('window.electronAPI:', window.electronAPI)
@@ -222,6 +360,14 @@ onMounted(() => {
   
   loadApiKey()  // 加载单一API Key
   loadConfig()
+  setupUpdateListeners()
+})
+
+onUnmounted(() => {
+  // 清理事件监听
+  window.electronAPI.off('updater:download-progress', () => {})
+  window.electronAPI.off('updater:update-downloaded', () => {})
+  window.electronAPI.off('updater:error', () => {})
 })
 </script>
 

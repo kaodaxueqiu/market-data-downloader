@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
+import { autoUpdater } from 'electron-updater'
 import downloadManager from './download'
 import { ConfigManager } from './config'
 import { getDictionaryAPI } from './dictionary'
@@ -8,6 +9,10 @@ import { getDbDictAPI } from './dbdict'
 
 // 禁用GPU加速，避免Windows上的GPU崩溃问题
 app.disableHardwareAcceleration()
+
+// 配置自动更新
+autoUpdater.autoDownload = false // 不自动下载，让用户确认
+autoUpdater.autoInstallOnAppQuit = true // 退出时自动安装
 
 // 配置存储 - 延迟初始化，确保app准备就绪
 let store: Store
@@ -576,4 +581,69 @@ ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: stri
     console.error('❌ 下载保存失败:', error)
     throw new Error(error.message || '下载静态数据失败')
   }
+})
+
+// ========== 自动更新功能 ==========
+
+// 检查更新
+ipcMain.handle('updater:checkForUpdates', async () => {
+  try {
+    console.log('检查更新...')
+    const result = await autoUpdater.checkForUpdates()
+    return {
+      updateAvailable: result !== null,
+      version: result?.updateInfo.version,
+      releaseNotes: result?.updateInfo.releaseNotes
+    }
+  } catch (error: any) {
+    console.error('检查更新失败:', error)
+    throw new Error(error.message || '检查更新失败')
+  }
+})
+
+// 下载更新
+ipcMain.handle('updater:downloadUpdate', async () => {
+  try {
+    await autoUpdater.downloadUpdate()
+    return true
+  } catch (error: any) {
+    console.error('下载更新失败:', error)
+    throw new Error(error.message || '下载更新失败')
+  }
+})
+
+// 安装更新（退出并安装）
+ipcMain.handle('updater:quitAndInstall', () => {
+  autoUpdater.quitAndInstall()
+})
+
+// 自动更新事件
+autoUpdater.on('checking-for-update', () => {
+  console.log('正在检查更新...')
+  mainWindow?.webContents.send('updater:checking')
+})
+
+autoUpdater.on('update-available', (info) => {
+  console.log('发现新版本:', info.version)
+  mainWindow?.webContents.send('updater:update-available', info)
+})
+
+autoUpdater.on('update-not-available', () => {
+  console.log('当前已是最新版本')
+  mainWindow?.webContents.send('updater:update-not-available')
+})
+
+autoUpdater.on('download-progress', (progress) => {
+  console.log(`下载进度: ${progress.percent}%`)
+  mainWindow?.webContents.send('updater:download-progress', progress)
+})
+
+autoUpdater.on('update-downloaded', () => {
+  console.log('更新下载完成')
+  mainWindow?.webContents.send('updater:update-downloaded')
+})
+
+autoUpdater.on('error', (error) => {
+  console.error('更新错误:', error)
+  mainWindow?.webContents.send('updater:error', error.message)
 })
