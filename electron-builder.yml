@@ -1,5 +1,9 @@
 appId: com.tradingsystem.market-downloader
 productName: Market Data Downloader
+publish:
+  provider: github
+  owner: kaodaxueqiu
+  repo: market-data-downloader
 directories:
   output: dist
   buildResources: build
