@@ -33,13 +33,13 @@ jobs:
         
       - name: Build Windows
         if: matrix.os == 'windows-latest'
-        run: npm run build:win
+        run: npm run build && electron-builder --win -p always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
       - name: Build macOS
         if: matrix.os == 'macos-latest'
-        run: npm run build:mac
+        run: npm run build && electron-builder --mac -p always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
