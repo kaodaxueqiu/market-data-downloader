@@ -68,7 +68,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.package-version.outputs.version }}
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/*.yml
+            dist/*.blockmap
           draft: false
           prerelease: false
         env:
@@ -79,7 +82,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.package-version.outputs.version }}
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/*.yml
+            dist/*.blockmap
           draft: false
           prerelease: false
         env:
