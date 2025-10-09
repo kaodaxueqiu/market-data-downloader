@@ -8,15 +8,12 @@ directories:
   output: dist
   buildResources: build
 files:
-  - from: dist
-    filter:
-      - "**/*"
-  - "!node_modules"
+  - dist/**/*
+  - package.json
+  - "!**/*.md"
+  - "!.git*"
   - "!src"
   - "!scripts"
-  - "!*.md"
-  - "!.git*"
-  - package.json
 asarUnpack:
   - "**/*.{node,dll}"
 extraMetadata:
