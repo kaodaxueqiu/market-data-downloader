@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
 import downloadManager from './download'
@@ -26,6 +26,11 @@ function initializeServices() {
 }
 
 function createWindow() {
+  // 图标路径（开发模式和生产模式不同）
+  const iconPath = process.env.NODE_ENV === 'development'
+    ? join(process.cwd(), 'public', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+    : join(process.resourcesPath, 'public', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+  
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -36,7 +41,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true
     },
-    icon: join(__dirname, '../../public/icon.png'),
+    icon: iconPath,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     show: false
   })
@@ -220,6 +225,9 @@ process.on('unhandledRejection', (reason, promise) => {
 // 应用准备就绪
 app.whenReady().then(() => {
   console.log('✅ App准备就绪')
+  
+  // 隐藏菜单栏
+  Menu.setApplicationMenu(null)
   
   // 先初始化服务
   try {

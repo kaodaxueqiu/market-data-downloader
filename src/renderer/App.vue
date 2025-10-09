@@ -5,8 +5,7 @@
         <!-- 侧边栏 -->
         <el-aside width="200px" class="app-sidebar">
           <div class="app-logo">
-            <el-icon :size="28"><DataAnalysis /></el-icon>
-            <span>数据下载工具</span>
+            <img src="/logo.svg" alt="Logo" class="logo-image" />
           </div>
           
           <el-menu
@@ -67,7 +66,7 @@
           </el-menu>
           
           <div class="app-version">
-            v1.3.7
+            v1.3.8
           </div>
         </el-aside>
         
@@ -123,7 +122,6 @@ import {
   List, 
   Clock, 
   Setting, 
-  DataAnalysis,
   Connection,
   Key,
   Document,
@@ -195,14 +193,18 @@ onMounted(() => {
     flex-direction: column;
     
     .app-logo {
-      height: 60px;
+      height: 80px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      font-size: 18px;
-      font-weight: bold;
+      padding: 10px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      
+      .logo-image {
+        max-width: 100%;
+        max-height: 60px;
+        object-fit: contain;
+      }
     }
     
     .app-menu {

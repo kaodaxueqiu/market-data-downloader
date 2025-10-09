@@ -3,3 +3,5 @@ repo: market-data-downloader
 provider: github
 updaterCacheDirName: market-data-downloader-updater
 
+
+

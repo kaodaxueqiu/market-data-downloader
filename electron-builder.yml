@@ -10,6 +10,13 @@ directories:
 files:
   - dist/**/*
   - package.json
+extraResources:
+  - from: public/icon.ico
+    to: public/icon.ico
+  - from: public/icon.icns
+    to: public/icon.icns
+  - from: public/icon.png
+    to: public/icon.png
 extraMetadata:
   main: dist/electron/main/index.js
 mac:
@@ -24,7 +31,8 @@ win:
     - target: portable
       arch:
         - x64
-  # icon: public/icon.ico  # 暂时注释，使用默认图标
+  icon: build/icon.ico
+  requestedExecutionLevel: asInvoker
   forceCodeSigning: false
   verifyUpdateCodeSignature: false
 linux:
@@ -40,9 +48,9 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
-  # installerIcon: public/icon.ico
-  # uninstallerIcon: public/icon.ico
-  # installerHeaderIcon: public/icon.ico
+  installerIcon: public/icon.ico
+  uninstallerIcon: public/icon.ico
+  installerHeaderIcon: public/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Market Data Downloader
