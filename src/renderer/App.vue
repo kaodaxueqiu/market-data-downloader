@@ -66,7 +66,7 @@
           </el-menu>
           
           <div class="app-version">
-            v1.3.9
+            v1.4.0
           </div>
         </el-aside>
         
