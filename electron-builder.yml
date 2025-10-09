@@ -10,22 +10,20 @@ directories:
 files:
   - dist/**/*
   - package.json
-extraResources:
-  - from: public/icon.ico
-    to: public/icon.ico
-  - from: public/icon.icns
-    to: public/icon.icns
-  - from: public/icon.png
-    to: public/icon.png
+asarUnpack:
+  - "**/*.{node,dll}"
 extraMetadata:
   main: dist/electron/main/index.js
 mac:
+  target:
+    - target: zip
+      arch:
+        - x64
+        - arm64
   category: public.app-category.finance
-  hardenedRuntime: true
+  hardenedRuntime: false
   gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
-  icon: public/icon.icns
+  icon: build/icon.icns
 win:
   target:
     - target: portable

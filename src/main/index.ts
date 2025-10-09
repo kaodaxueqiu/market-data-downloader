@@ -28,8 +28,8 @@ function initializeServices() {
 function createWindow() {
   // 图标路径（开发模式和生产模式不同）
   const iconPath = process.env.NODE_ENV === 'development'
-    ? join(process.cwd(), 'public', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
-    : join(process.resourcesPath, 'public', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+    ? join(process.cwd(), 'build', 'icon.ico')
+    : join(process.resourcesPath, '..', 'build', 'icon.ico')
   
   mainWindow = new BrowserWindow({
     width: 1400,

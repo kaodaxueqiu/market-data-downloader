@@ -5,7 +5,7 @@
         <!-- 侧边栏 -->
         <el-aside width="200px" class="app-sidebar">
           <div class="app-logo">
-            <img src="/logo.svg" alt="Logo" class="logo-image" />
+            <img src="@/assets/logo.svg" alt="Logo" class="logo-image" />
           </div>
           
           <el-menu
