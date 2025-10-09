@@ -38,6 +38,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/StaticDataDownload.vue')
   },
   {
+    path: '/sdk-download',
+    name: 'SDKDownload',
+    component: () => import('../views/SDKDownload.vue')
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue')

@@ -22,7 +22,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Shell操作
   shell: {
     showItemInFolder: (filePath: string) => 
-      ipcRenderer.invoke('shell:showItemInFolder', filePath)
+      ipcRenderer.invoke('shell:showItemInFolder', filePath),
+    downloadFile: (url: string, savePath: string, onProgress?: (percent: number) => void) => {
+      // 监听下载进度
+      if (onProgress) {
+        const progressHandler = (_event: any, data: any) => {
+          if (data.url === url) {
+            onProgress(data.percent)
+          }
+        }
+        ipcRenderer.on('shell:download-progress', progressHandler)
+      }
+      return ipcRenderer.invoke('shell:downloadFile', url, savePath)
+    },
+    calculateMD5: (filePath: string) => 
+      ipcRenderer.invoke('shell:calculateMD5', filePath)
   },
 
   // 下载管理 - 基于异步任务系统
@@ -104,7 +118,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'updater:download-progress',
       'updater:update-downloaded',
       'updater:error',
-      'updater:start-download'
+      'updater:start-download',
+      // SDK下载进度
+      'shell:download-progress'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))
@@ -135,6 +151,8 @@ declare global {
       }
       shell: {
         showItemInFolder: (filePath: string) => Promise<void>
+        downloadFile: (url: string, savePath: string, onProgress?: (percent: number) => void) => Promise<{ path: string, size: number }>
+        calculateMD5: (filePath: string) => Promise<string>
       }
       download: {
         // 新的任务系统API

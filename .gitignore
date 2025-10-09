@@ -29,3 +29,8 @@ out/
 # Package manager
 yarn.lock
 pnpm-lock.yaml
+
+# Source files (不应该被打包)
+1.svg
+2222.png
+123.png

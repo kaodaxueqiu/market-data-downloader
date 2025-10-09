@@ -8,12 +8,24 @@ directories:
   output: dist
   buildResources: build
 files:
-  - dist/**/*
+  - dist/electron/**/*
+  - dist/renderer/**/*
   - package.json
+  - "!**/node_modules"
   - "!**/*.md"
   - "!.git*"
   - "!src"
   - "!scripts"
+  - "!*.svg"
+  - "!*.png"
+  - "!public"
+  - "!index.html"
+  - "!dist/builder-*.yml"
+  - "!dist/builder-*.yaml"
+  - "!dist/*.exe"
+  - "!dist/win-unpacked"
+  - "!dist/mac"
+  - "!dist/linux-unpacked"
 asarUnpack:
   - "**/*.{node,dll}"
 extraMetadata:
