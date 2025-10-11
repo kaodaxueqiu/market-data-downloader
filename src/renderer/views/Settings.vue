@@ -114,7 +114,7 @@
       
       <el-form label-width="120px">
         <el-form-item label="当前版本">
-          <el-tag type="primary" size="large">v1.3.7</el-tag>
+          <el-tag type="primary" size="large">v{{ appVersion }}</el-tag>
         </el-form-item>
         
         <el-form-item label="检查更新">
@@ -168,6 +168,9 @@
 import { reactive, ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { FolderOpened, Refresh, Check } from '@element-plus/icons-vue'
+
+// 应用版本号
+const appVersion = ref('1.5.0')
 
 // API Key配置（单一Key）
 const apiKeyConfig = reactive({
@@ -367,7 +370,7 @@ const setupUpdateListeners = () => {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
   console.log('Settings组件已挂载')
   console.log('window.electronAPI:', window.electronAPI)
   
@@ -375,6 +378,13 @@ onMounted(() => {
     console.error('electronAPI未定义！')
     ElMessage.error('系统初始化失败，请重启应用')
     return
+  }
+  
+  // 加载应用版本号
+  try {
+    appVersion.value = await window.electronAPI.app.getVersion()
+  } catch (error) {
+    console.error('获取版本号失败:', error)
   }
   
   loadApiKey()  // 加载单一API Key

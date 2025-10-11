@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // 暴露安全的API到渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 应用信息
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:getVersion')
+  },
+
   // 配置管理
   config: {
     get: (key?: string) => ipcRenderer.invoke('config:get', key),
@@ -137,6 +142,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 declare global {
   interface Window {
     electronAPI: {
+      app: {
+        getVersion: () => Promise<string>
+      }
       config: {
         get: (key?: string) => Promise<any>
         set: (key: string, value: any) => Promise<void>

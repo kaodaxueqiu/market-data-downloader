@@ -290,6 +290,11 @@ ipcMain.handle('config:getFullApiKey', async (_event, id: string) => {
   return configManager.getFullApiKey(id)
 })
 
+// 获取应用版本号
+ipcMain.handle('app:getVersion', async () => {
+  return app.getVersion()
+})
+
 // 选择下载目录
 ipcMain.handle('dialog:selectDirectory', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {

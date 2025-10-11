@@ -71,7 +71,7 @@
           </el-menu>
           
           <div class="app-version">
-            v1.4.0
+            v{{ appVersion }}
           </div>
         </el-aside>
         
@@ -142,6 +142,7 @@ const router = useRouter()
 
 const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
+const appVersion = ref('1.5.0')
 
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
@@ -178,8 +179,16 @@ const checkApiKey = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   console.log('📱 App组件已挂载')
+  
+  // 加载应用版本号
+  try {
+    appVersion.value = await window.electronAPI.app.getVersion()
+  } catch (error) {
+    console.error('获取版本号失败:', error)
+  }
+  
   // 使用setTimeout避免阻塞
   setTimeout(() => {
     checkApiKey().catch(err => {
