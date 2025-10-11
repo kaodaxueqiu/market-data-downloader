@@ -3,7 +3,7 @@
     <div id="app">
       <el-container class="app-container">
         <!-- 侧边栏 -->
-        <el-aside width="200px" class="app-sidebar">
+        <el-aside :width="sidebarCollapsed ? '64px' : '200px'" class="app-sidebar" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
           <div class="app-logo">
             <img src="@/assets/logo.svg" alt="Logo" class="logo-image" />
           </div>
@@ -12,11 +12,18 @@
             :default-active="activeMenu"
             router
             class="app-menu"
+            :collapse="sidebarCollapsed"
             @select="handleMenuSelect"
           >
             <el-menu-item index="/">
               <el-icon><House /></el-icon>
               <span>首页</span>
+            </el-menu-item>
+            
+            <el-menu-item index="/data-center">
+              <el-icon><Connection /></el-icon>
+              <span>数据中心</span>
+              <el-tag type="danger" size="small" style="margin-left: 8px">新</el-tag>
             </el-menu-item>
             
             <el-sub-menu index="download">
@@ -71,7 +78,11 @@
           </el-menu>
           
           <div class="app-version">
-            v{{ appVersion }}
+            <span v-if="!sidebarCollapsed">v{{ appVersion }}</span>
+          </div>
+          
+          <div class="sidebar-toggle" @click="toggleSidebar">
+            <el-icon><DArrowLeft v-if="!sidebarCollapsed" /><DArrowRight v-else /></el-icon>
           </div>
         </el-aside>
         
@@ -133,7 +144,9 @@ import {
   Folder,
   FolderOpened,
   DataLine,
-  Box
+  Box,
+  DArrowLeft,
+  DArrowRight
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
@@ -143,10 +156,12 @@ const router = useRouter()
 const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
 const appVersion = ref('1.5.0')
+const sidebarCollapsed = ref(false)
 
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     '/': '首页',
+    '/data-center': '数据中心',
     '/download': '行情数据下载',
     '/tasks': '任务管理',
     '/history': '历史记录',
@@ -165,6 +180,10 @@ const handleMenuSelect = (index: string) => {
 
 const goToSettings = () => {
   router.push('/settings')
+}
+
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
 const checkApiKey = async () => {
@@ -207,6 +226,9 @@ onMounted(async () => {
     color: white;
     display: flex;
     flex-direction: column;
+    transition: width 0.3s;
+    position: relative;
+    overflow-x: hidden !important;
     
     .app-logo {
       height: 80px;
@@ -227,6 +249,7 @@ onMounted(async () => {
       flex: 1;
       background: transparent;
       border: none;
+      overflow-x: hidden;
       
       .el-sub-menu {
         .el-sub-menu__title {
@@ -290,6 +313,56 @@ onMounted(async () => {
       text-align: center;
       font-size: 12px;
       color: rgba(255, 255, 255, 0.5);
+    }
+
+    .sidebar-toggle {
+      position: absolute;
+      right: -18px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 48px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 2px 2px 12px rgba(102, 126, 234, 0.4);
+      color: white;
+      transition: all 0.3s;
+      z-index: 100;
+
+      &:hover {
+        box-shadow: 3px 3px 16px rgba(102, 126, 234, 0.6);
+        transform: translateY(-50%) scale(1.1);
+      }
+
+      &:active {
+        transform: translateY(-50%) scale(0.95);
+      }
+    }
+
+    &.sidebar-collapsed {
+      overflow-x: hidden !important;
+      
+      .app-logo {
+        justify-content: center;
+        
+        .logo-image {
+          width: 40px;
+          height: 40px;
+        }
+      }
+
+      .app-menu {
+        :deep(.el-menu-item span),
+        :deep(.el-sub-menu__title span),
+        :deep(.el-tag) {
+          display: none;
+        }
+      }
     }
   }
   

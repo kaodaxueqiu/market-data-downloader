@@ -1,0 +1,730 @@
+<template>
+  <div class="market-data-detail">
+    <div v-if="!source" class="empty-state">
+      <el-empty description="请从左侧选择数据源" :image-size="120" />
+    </div>
+
+    <div v-else class="detail-content">
+      <!-- 概要信息卡片 -->
+      <div class="summary-card">
+        <div class="card-header">
+          <h3>{{ source.name }}</h3>
+          <el-tag type="primary">{{ source.code }}</el-tag>
+        </div>
+
+        <el-descriptions :column="2" size="small" border>
+          <el-descriptions-item label="市场">{{ source.market }}</el-descriptions-item>
+          <el-descriptions-item label="交易所">{{ source.exchange && source.exchange.trim() ? source.exchange : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="更新频率">{{ source.update_frequency || '实时' }}</el-descriptions-item>
+          <el-descriptions-item label="字段数量">
+            <el-tag type="success" size="small">{{ fields.length }} 个</el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div class="quick-actions">
+          <el-button type="primary" size="large" @click="showDetailDialog" style="width: 100%">
+            <el-icon><View /></el-icon>
+            查看完整详情
+          </el-button>
+        </div>
+
+        <div class="hint-text">
+          💡 提示：点击查看完整的字段列表和格式文档
+        </div>
+      </div>
+
+      <!-- 字段快速选择 -->
+      <div class="quick-select-card">
+        <div class="card-header">
+          <h4>字段快速选择</h4>
+          <el-tag type="info" size="small">已选: {{ selectedFieldsLocal.length }}</el-tag>
+        </div>
+        
+        <div class="quick-select-buttons">
+          <el-button size="small" @click="selectAllFields">全选字段</el-button>
+          <el-button size="small" @click="clearAllFields">清空选择</el-button>
+        </div>
+
+        <div v-if="selectedFieldsLocal.length > 0" class="selected-fields-preview">
+          <el-scrollbar max-height="150px">
+            <el-tag 
+              v-for="field in selectedFieldsLocal" 
+              :key="field"
+              size="small"
+              closable
+              @close="removeField(field)"
+              style="margin: 3px"
+            >
+              {{ field }}
+            </el-tag>
+          </el-scrollbar>
+        </div>
+        <el-empty v-else description="未选择字段" :image-size="60" />
+      </div>
+    </div>
+
+    <!-- 完整详情对话框 -->
+    <el-dialog
+      v-model="showFullDetail"
+      :title="`${source?.name || ''} - 数据源详情`"
+      width="95%"
+      top="3vh"
+      destroy-on-close
+      class="detail-dialog"
+    >
+      <el-tabs v-model="activeTab">
+        <!-- 字段展示 -->
+        <el-tab-pane label="字段展示" name="fields">
+          <div class="fields-panel">
+            <div style="margin-bottom: 10px;">
+              <el-alert type="info" :closable="false">
+                共 {{ fields.length }} 个字段，其中 {{ enabledFieldsCount }} 个已启用，{{ disabledFieldsCount }} 个未启用
+              </el-alert>
+            </div>
+
+            <div class="fields-grid">
+              <div class="grid-column">
+                <el-table
+                  :data="leftFields"
+                  stripe
+                  v-loading="fieldsLoading"
+                  :row-class-name="tableRowClassName"
+                >
+                  <el-table-column type="index" label="序号" width="60" :index="indexMethod1" />
+                  <el-table-column prop="name" label="字段名" width="220">
+                    <template #default="scope">
+                      <el-text style="font-family: monospace">{{ scope.row.name }}</el-text>
+                      <el-tag v-if="!scope.row.enabled" type="warning" size="small" style="margin-left: 5px">未启用</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="cn_name" label="中文名" />
+                </el-table>
+              </div>
+              <div class="grid-column">
+                <el-table
+                  :data="rightFields"
+                  stripe
+                  v-loading="fieldsLoading"
+                  :row-class-name="tableRowClassName"
+                >
+                  <el-table-column type="index" label="序号" width="60" :index="indexMethod2" />
+                  <el-table-column prop="name" label="字段名" width="220">
+                    <template #default="scope">
+                      <el-text style="font-family: monospace">{{ scope.row.name }}</el-text>
+                      <el-tag v-if="!scope.row.enabled" type="warning" size="small" style="margin-left: 5px">未启用</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="cn_name" label="中文名" />
+                </el-table>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <!-- JSON格式 -->
+        <el-tab-pane label="JSON格式" name="decoded">
+          <div v-if="decodedFormat" v-loading="formatLoading" class="format-panel">
+            <el-scrollbar height="100%">
+              <div class="format-content">
+                <el-descriptions :column="2" border class="mb-20">
+                  <el-descriptions-item label="格式">{{ decodedFormat.format }}</el-descriptions-item>
+                  <el-descriptions-item label="编码">{{ decodedFormat.encoding }}</el-descriptions-item>
+                  <el-descriptions-item label="Key模式" :span="2">
+                    <el-text type="info" style="font-family: monospace">
+                      {{ decodedFormat.key_pattern }}
+                    </el-text>
+                  </el-descriptions-item>
+                </el-descriptions>
+
+                <div style="margin-bottom: 10px;">
+                  <el-alert type="info" :closable="false">
+                    共 {{ fields.length }} 个字段，其中 {{ enabledFieldsCount }} 个已启用（已解析），{{ disabledFieldsCount }} 个未启用（未解析）
+                  </el-alert>
+                </div>
+            <h4>字段说明</h4>
+            <el-table :data="fields" stripe :row-class-name="tableRowClassName">
+              <el-table-column type="index" label="序号" width="60" />
+              <el-table-column prop="name" label="字段名" width="180">
+                <template #default="scope">
+                  <el-text style="font-family: monospace">{{ scope.row.name }}</el-text>
+                  <el-tag v-if="!scope.row.enabled" type="warning" size="small" style="margin-left: 5px">未启用</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="cn_name" label="中文名" width="120" />
+              <el-table-column prop="type" label="类型" width="100">
+                <template #default="scope">
+                  <el-tag size="small">{{ scope.row.type }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="description" label="说明" />
+              <el-table-column prop="example" label="示例" width="120">
+                <template #default="scope">
+                  <el-text type="info" size="small">{{ scope.row.example }}</el-text>
+                </template>
+              </el-table-column>
+            </el-table>
+
+                <div v-if="decodedFormat.example" style="margin-top: 20px">
+                  <h4>JSON示例</h4>
+                  <pre class="json-example">{{ JSON.stringify(decodedFormat.example, null, 2) }}</pre>
+                </div>
+              </div>
+            </el-scrollbar>
+          </div>
+          <el-button v-else @click="loadDecodedFormat" type="primary" v-loading="formatLoading">
+            加载格式文档
+          </el-button>
+        </el-tab-pane>
+
+        <!-- 二进制格式 -->
+        <el-tab-pane label="二进制格式" name="raw">
+          <div v-if="rawFormat" v-loading="formatLoading" class="format-panel">
+            <el-scrollbar height="100%">
+              <div class="format-content">
+                <el-descriptions :column="2" border class="mb-20">
+              <el-descriptions-item label="总大小">{{ rawFormat.total_size }} bytes</el-descriptions-item>
+              <el-descriptions-item label="字节序">{{ rawFormat.byte_order }}</el-descriptions-item>
+              <el-descriptions-item label="消息头">{{ rawFormat.header_size }} bytes</el-descriptions-item>
+              <el-descriptions-item label="Key模式" v-if="rawFormat.key_pattern">
+                <el-text type="info" style="font-family: monospace">
+                  {{ rawFormat.key_pattern }}
+                </el-text>
+              </el-descriptions-item>
+            </el-descriptions>
+
+            <div style="margin-bottom: 10px;">
+              <el-alert type="info" :closable="false">
+                共 {{ fields.length }} 个字段，其中 {{ enabledFieldsCount }} 个已启用（已解析），{{ disabledFieldsCount }} 个未启用（未解析）
+              </el-alert>
+            </div>
+            <h4>字段说明</h4>
+            <el-table :data="fields" stripe :row-class-name="tableRowClassName">
+              <el-table-column type="index" label="序号" width="60" />
+              <el-table-column prop="name" label="字段名" width="180">
+                <template #default="scope">
+                  <el-text style="font-family: monospace">{{ scope.row.name }}</el-text>
+                  <el-tag v-if="!scope.row.enabled" type="warning" size="small" style="margin-left: 5px">未启用</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="cn_name" label="中文名" width="120" />
+              <el-table-column prop="type" label="类型" width="100">
+                <template #default="scope">
+                  <el-tag size="small">{{ scope.row.type }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="offset" label="偏移" width="80" />
+              <el-table-column prop="size" label="大小" width="80" />
+              <el-table-column prop="description" label="说明" />
+            </el-table>
+              </div>
+            </el-scrollbar>
+          </div>
+          <el-button v-else @click="loadRawFormat" type="primary" v-loading="formatLoading">
+            加载格式文档
+          </el-button>
+        </el-tab-pane>
+
+        <!-- 解析代码 -->
+        <el-tab-pane label="解析代码" name="code">
+          <div class="code-panel">
+            <div class="code-header">
+              <div>
+                <el-select v-model="codeLanguage" @change="loadParserCode">
+                  <el-option label="Python" value="python" />
+                  <el-option label="Go" value="go" />
+                  <el-option label="C++" value="cpp" />
+                  <el-option label="Java" value="java" />
+                </el-select>
+              </div>
+              <div>
+                <el-button type="primary" @click="copyCode">
+                  <el-icon><CopyDocument /></el-icon>
+                  复制代码
+                </el-button>
+              </div>
+            </div>
+            <pre v-if="parserCode" v-loading="codeLoading" class="code-block">{{ parserCode }}</pre>
+            <el-button v-else @click="loadParserCode" type="primary" v-loading="codeLoading">
+              生成代码
+            </el-button>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search, View, CopyDocument } from '@element-plus/icons-vue'
+
+const props = defineProps<{
+  source: any
+  selectedFields: string[]
+}>()
+
+const emit = defineEmits<{
+  fieldsChange: [fields: string[]]
+}>()
+
+// 字段数据
+const fields = ref<any[]>([])
+const fieldSearchKeyword = ref('')
+const selectedFieldsLocal = ref<string[]>([])
+const fieldsLoading = ref(false)
+const tableRef1 = ref()
+const tableRef2 = ref()
+
+// 表格高度（自适应窗口，更大）
+const tableHeight = computed(() => {
+  return Math.max(700, window.innerHeight * 0.85 - 150)
+})
+
+// 序号方法
+const indexMethod1 = (index: number) => {
+  return index + 1
+}
+
+const indexMethod2 = (index: number) => {
+  return index + 1 + leftFields.value.length
+}
+
+// 对话框
+const showFullDetail = ref(false)
+const activeTab = ref('fields')
+
+// 格式数据
+const decodedFormat = ref<any>(null)
+const rawFormat = ref<any>(null)
+const parserCode = ref('')
+const formatLoading = ref(false)
+const codeLoading = ref(false)
+const codeLanguage = ref('python')
+
+// 过滤后的字段
+const filteredFields = computed(() => {
+  if (!fieldSearchKeyword.value) return fields.value
+  const keyword = fieldSearchKeyword.value.toLowerCase()
+  return fields.value.filter(f => 
+    (f.name || '').toLowerCase().includes(keyword) ||
+    (f.cn_name || '').toLowerCase().includes(keyword) ||
+    (f.description || '').toLowerCase().includes(keyword)
+  )
+})
+
+// 左右分栏字段
+const leftFields = computed(() => {
+  const half = Math.ceil(filteredFields.value.length / 2)
+  return filteredFields.value.slice(0, half)
+})
+
+const rightFields = computed(() => {
+  const half = Math.ceil(filteredFields.value.length / 2)
+  return filteredFields.value.slice(half)
+})
+
+// 统计启用和未启用的字段数量
+const enabledFieldsCount = computed(() => {
+  return fields.value.filter(f => f.enabled).length
+})
+
+const disabledFieldsCount = computed(() => {
+  return fields.value.filter(f => !f.enabled).length
+})
+
+// 表格行样式（未启用的字段用灰色显示）
+const tableRowClassName = ({ row }: any) => {
+  return !row.enabled ? 'disabled-row' : ''
+}
+
+// 监听数据源变化，加载字段
+watch(() => props.source, async (newSource) => {
+  if (newSource) {
+    await loadFields()
+  } else {
+    fields.value = []
+    selectedFieldsLocal.value = []
+  }
+}, { immediate: true })
+
+// 监听外部字段变化
+watch(() => props.selectedFields, (newFields) => {
+  selectedFieldsLocal.value = [...newFields]
+})
+
+// 加载字段
+const loadFields = async () => {
+  fieldsLoading.value = true
+  try {
+    const result = await window.electronAPI.dictionary.getFields(props.source.code, false)
+    console.log('字段API返回结果:', result)
+    if (result.code === 200) {
+      fields.value = result.data || []
+      console.log('✅ 加载字段成功:', fields.value.length)
+      console.log('字段数据示例（前3个）:', fields.value.slice(0, 3))
+    } else {
+      ElMessage.error(result.msg || '加载字段失败')
+    }
+  } catch (error) {
+    console.error('❌ 加载字段失败:', error)
+    ElMessage.error('加载字段失败')
+  } finally {
+    fieldsLoading.value = false
+  }
+}
+
+// 显示详情对话框
+const showDetailDialog = async () => {
+  console.log('打开详情对话框，当前字段数量:', fields.value.length)
+  console.log('过滤后字段数量:', filteredFields.value.length)
+  console.log('左侧字段数量:', leftFields.value.length)
+  console.log('右侧字段数量:', rightFields.value.length)
+  showFullDetail.value = true
+  await nextTick()
+  syncTableSelection()
+}
+
+// 同步表格选择状态
+const syncTableSelection = () => {
+  if (!tableRef1.value || !tableRef2.value) return
+  
+  tableRef1.value.clearSelection()
+  tableRef2.value.clearSelection()
+  
+  leftFields.value.forEach((row: any) => {
+    if (selectedFieldsLocal.value.includes(row.name)) {
+      tableRef1.value.toggleRowSelection(row, true)
+    }
+  })
+  
+  rightFields.value.forEach((row: any) => {
+    if (selectedFieldsLocal.value.includes(row.name)) {
+      tableRef2.value.toggleRowSelection(row, true)
+    }
+  })
+}
+
+// 左表格选择变化
+const handleLeftSelectionChange = (selection: any[]) => {
+  const leftSelected = selection.map(f => f.name)
+  const rightSelected = selectedFieldsLocal.value.filter(f => rightFields.value.some(r => r.name === f))
+  selectedFieldsLocal.value = [...leftSelected, ...rightSelected]
+  emit('fieldsChange', selectedFieldsLocal.value)
+}
+
+// 右表格选择变化
+const handleRightSelectionChange = (selection: any[]) => {
+  const rightSelected = selection.map(f => f.name)
+  const leftSelected = selectedFieldsLocal.value.filter(f => leftFields.value.some(l => l.name === f))
+  selectedFieldsLocal.value = [...leftSelected, ...rightSelected]
+  emit('fieldsChange', selectedFieldsLocal.value)
+}
+
+// 全选
+const selectAllFields = () => {
+  selectedFieldsLocal.value = fields.value.map(f => f.name)
+  emit('fieldsChange', selectedFieldsLocal.value)
+  if (showFullDetail.value) {
+    nextTick(() => syncTableSelection())
+  }
+}
+
+// 清空
+const clearAllFields = () => {
+  selectedFieldsLocal.value = []
+  emit('fieldsChange', selectedFieldsLocal.value)
+  if (showFullDetail.value) {
+    if (tableRef1.value) tableRef1.value.clearSelection()
+    if (tableRef2.value) tableRef2.value.clearSelection()
+  }
+}
+
+// 移除单个字段
+const removeField = (field: string) => {
+  selectedFieldsLocal.value = selectedFieldsLocal.value.filter(f => f !== field)
+  emit('fieldsChange', selectedFieldsLocal.value)
+}
+
+// 加载JSON格式
+const loadDecodedFormat = async () => {
+  console.log('开始加载DECODED格式文档...')
+  formatLoading.value = true
+  try {
+    const result = await window.electronAPI.dictionary.getDecodedFormat(props.source.code)
+    console.log('DECODED格式API返回:', result)
+    if (result.code === 200) {
+      decodedFormat.value = result.data
+      console.log('✅ 加载DECODED格式成功，字段数量:', decodedFormat.value.fields?.length)
+    } else {
+      ElMessage.error(result.msg || '加载格式文档失败')
+    }
+  } catch (error) {
+    console.error('❌ 加载格式文档失败:', error)
+    ElMessage.error('加载格式文档失败')
+  } finally {
+    formatLoading.value = false
+  }
+}
+
+// 加载二进制格式
+const loadRawFormat = async () => {
+  formatLoading.value = true
+  try {
+    const result = await window.electronAPI.dictionary.getRawFormat(props.source.code)
+    if (result.code === 200) {
+      rawFormat.value = result.data
+    }
+  } catch (error) {
+    ElMessage.error('加载格式文档失败')
+  } finally {
+    formatLoading.value = false
+  }
+}
+
+// 加载解析代码
+const loadParserCode = async () => {
+  codeLoading.value = true
+  try {
+    const result = await window.electronAPI.dictionary.getCode(props.source.code, codeLanguage.value)
+    if (result.code === 200) {
+      parserCode.value = result.data
+    }
+  } catch (error) {
+    ElMessage.error('加载代码失败')
+  } finally {
+    codeLoading.value = false
+  }
+}
+
+// 复制代码
+const copyCode = () => {
+  navigator.clipboard.writeText(parserCode.value)
+  ElMessage.success('代码已复制到剪贴板')
+}
+
+// 监听Tab切换，按需加载数据
+watch(activeTab, async (newTab) => {
+  if (newTab === 'decoded' && !decodedFormat.value) {
+    await loadDecodedFormat()
+  } else if (newTab === 'raw' && !rawFormat.value) {
+    await loadRawFormat()
+  } else if (newTab === 'code' && !parserCode.value) {
+    await loadParserCode()
+  }
+})
+</script>
+
+<style lang="scss" scoped>
+.market-data-detail {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+
+  .empty-state {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+
+    .summary-card {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      border: 1px solid #e4e7ed;
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+
+        h3 {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 600;
+        }
+      }
+
+      .quick-actions {
+        margin-top: 15px;
+      }
+
+      .hint-text {
+        margin-top: 10px;
+        padding: 10px;
+        background: #f5f7fa;
+        border-radius: 4px;
+        color: #606266;
+        font-size: 12px;
+        text-align: center;
+      }
+    }
+
+    .quick-select-card {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      border: 1px solid #e4e7ed;
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+
+        h4 {
+          margin: 0;
+          font-size: 14px;
+          font-weight: 600;
+        }
+      }
+
+      .quick-select-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+      }
+
+      .selected-fields-preview {
+        margin-top: 10px;
+      }
+    }
+  }
+
+  .fields-panel {
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+    }
+
+    .fields-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      height: 100%;
+
+      .grid-column {
+        min-width: 0;
+        height: 100%;
+      }
+    }
+  }
+
+  .code-panel {
+    .code-header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 15px;
+      
+      .el-select {
+        width: 200px;
+      }
+    }
+  }
+
+  .mb-20 {
+    margin-bottom: 20px;
+  }
+
+  .json-example {
+    background: #f5f7fa;
+    padding: 15px;
+    border-radius: 4px;
+    font-size: 12px;
+    overflow-x: auto;
+    font-family: 'Consolas', monospace;
+  }
+
+  .code-block {
+    background: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 4px;
+    font-size: 13px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
+
+// 未启用的字段行样式
+:deep(.disabled-row) {
+  background-color: #f5f7fa !important;
+  color: #909399;
+  
+  &:hover > td {
+    background-color: #e9ecef !important;
+  }
+}
+
+:deep(.el-dialog) {
+  height: 94vh;
+  margin-top: 3vh !important;
+  display: flex;
+  flex-direction: column;
+
+  .el-dialog__body {
+    flex: 1;
+    overflow: hidden;
+    padding: 20px;
+  }
+
+  .el-tabs {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+
+    .el-tabs__content {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .el-tab-pane {
+      height: 100%;
+    }
+  }
+}
+
+.fields-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+
+  .panel-header {
+    flex-shrink: 0;
+  }
+
+  .fields-grid {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+.format-panel {
+  height: 100%;
+
+  .format-content {
+    padding: 10px;
+  }
+}
+</style>

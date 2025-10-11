@@ -83,26 +83,31 @@ class DownloadManager extends EventEmitter {
     
     const taskId = `task_${Date.now()}`
     
-    // 创建本地任务记录（不需要savePath）
+    // 创建本地任务记录 - 使用后端API统一的字段名
     const task: DownloadTask & { startTime?: string; endTime?: string } = {
       id: taskId,
       status: TaskStatus.PENDING,
       progress: 0,
-      messageType: params.messageType,
-      symbols: params.symbols,
-      startDate: params.startDate,
-      endDate: params.endDate,
+      messageType: params.message_type || params.messageType,  // 兼容两种格式
+      symbols: params.symbols || (params.symbol ? [params.symbol] : undefined),
+      startDate: params.date_start || params.startDate,
+      endDate: params.date_end || params.endDate,
       format: params.format,
       createdAt: new Date().toISOString(),
       apiKey: params.apiKey  // 保存API Key供后续下载使用
     }
     
     // 添加时间参数
-    if (params.startTime) {
-      task.startTime = params.startTime
+    if (params.time_start || params.startTime) {
+      task.startTime = params.time_start || params.startTime
     }
-    if (params.endTime) {
-      task.endTime = params.endTime
+    if (params.time_end || params.endTime) {
+      task.endTime = params.time_end || params.endTime
+    }
+    
+    // 添加字段筛选参数
+    if (params.fields !== undefined) {
+      (task as any).fields = params.fields
     }
     
     this.tasks.set(taskId, task)
@@ -136,25 +141,11 @@ class DownloadManager extends EventEmitter {
       console.log('第一步：创建下载任务...')
       console.log('请求URL:', `${this.apiBaseUrl}/download/task`)
       
-      // 构建请求体 - 使用与网页版相同的格式
+      // 构建请求体 - 按照后端统一的格式
       const requestBody: any = {
-        dataType: 'DECODED',  // 固定使用DECODED数据
+        data_type: 'DECODED',
+        message_type: task.messageType,
         format: task.format
-      }
-      
-      // 消息类型（支持单个或多个）
-      if (Array.isArray(task.messageType)) {
-        requestBody.messageTypes = task.messageType
-      } else {
-        requestBody.messageType = task.messageType
-      }
-      
-      // 日期范围
-      if (task.startDate && task.endDate) {
-        requestBody.dateRange = {
-          start: task.startDate,
-          end: task.endDate
-        }
       }
       
       // 股票代码（可选）
@@ -166,15 +157,31 @@ class DownloadManager extends EventEmitter {
         }
       }
       
+      // 日期范围（可选）
+      if (task.startDate) {
+        requestBody.date_start = task.startDate
+      }
+      if (task.endDate) {
+        requestBody.date_end = task.endDate
+      }
+      
       // 时间范围（可选）
-      if ((task as any).startTime && (task as any).endTime) {
-        requestBody.timeRange = {
-          start: (task as any).startTime,
-          end: (task as any).endTime
-        }
+      if ((task as any).startTime) {
+        requestBody.time_start = (task as any).startTime
+      }
+      if ((task as any).endTime) {
+        requestBody.time_end = (task as any).endTime
+      }
+      
+      // 字段筛选（可选）
+      if ((task as any).fields !== undefined) {
+        requestBody.fields = (task as any).fields
       }
       
       console.log('请求数据:', requestBody)
+      console.log('请求数据（JSON字符串）:', JSON.stringify(requestBody, null, 2))
+      console.log('fields字段类型:', typeof requestBody.fields, Array.isArray(requestBody.fields))
+      console.log('fields内容:', requestBody.fields)
       
       let createTaskResponse
       try {
@@ -382,49 +389,13 @@ class DownloadManager extends EventEmitter {
     })
     
     try {
-      // 构建请求参数
-      const requestData: any = {
-        data_type: params.dataType || 'DECODED',  // 使用传入的数据类型，默认DECODED
-        // 不设置limit，由API返回所有数据
-        include_count: true,     // 包含消息数量统计
-        return_data: true        // 返回数据
-      }
-      
-      // 处理消息类型 - 如果有多个，传递数组给后端
-      if (params.messageTypes && params.messageTypes.length > 0) {
-        // 多个消息类型，传递给后端
-        requestData.message_types = params.messageTypes  
-        console.log(`查询多个消息类型: ${params.messageTypes.join(', ')}`)
-      } else if (params.messageType) {
-        // 单个消息类型
-        requestData.message_type = params.messageType
-        console.log(`查询消息类型: ${params.messageType}`)
-      }
-      
-      // 添加日期参数 - 使用单个date字段，因为查询的是单日
-      if (params.startDate && params.startDate === params.endDate) {
-        // 如果是查询单日，使用date参数
-        requestData.date = params.startDate
-      } else if (params.startDate || params.endDate) {
-        // 如果是日期范围，使用date_start和date_end
-        requestData.date_start = params.startDate
-        requestData.date_end = params.endDate
-      }
-      
-      // 添加可选参数
-      if (params.symbols && params.symbols.length > 0) {
-        // 同时设置symbol和symbols，以兼容不同的API参数格式
-        requestData.symbol = params.symbols[0]  // 第一个股票作为symbol
-        requestData.symbols = params.symbols    // 所有股票作为symbols数组
-      }
-      if (params.startTime) {
-        requestData.time_start = params.startTime
-      }
-      if (params.endTime) {
-        requestData.time_end = params.endTime
-      }
+      // 前端已经按照后端API格式构建好参数，直接透传
+      // 移除apiKey（放到header中）
+      const { apiKey, ...requestData } = params
       
       console.log('发送给API的请求数据:', requestData)
+      console.log('API URL:', `${this.apiBaseUrl}/query`)
+      console.log('请求体（JSON）:', JSON.stringify(requestData, null, 2))
       
       const response = await axios.post(
         `${this.apiBaseUrl}/query`,
@@ -437,6 +408,8 @@ class DownloadManager extends EventEmitter {
           timeout: 30000
         }
       )
+      
+      console.log('后端API返回:', response.data)
 
       // 处理API返回的数据格式
       console.log('API响应:', response.data)
