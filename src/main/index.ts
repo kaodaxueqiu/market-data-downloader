@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
 import downloadManager from './download'
@@ -44,6 +44,9 @@ function createWindow() {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     show: false
   })
+
+  // 🔒 隐藏原生菜单栏（File、Edit、View等）
+  Menu.setApplicationMenu(null)
 
   // 捕获渲染进程崩溃
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
