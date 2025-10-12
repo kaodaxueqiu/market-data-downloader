@@ -95,6 +95,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath)
   },
 
+  // 静态数据下载 (异步任务系统)
+  staticDownload: {
+    createTask: (request: any, apiKey: string) => ipcRenderer.invoke('staticDownload:createTask', request, apiKey),
+    getTaskStatus: (taskId: string, apiKey: string) => ipcRenderer.invoke('staticDownload:getTaskStatus', taskId, apiKey),
+    downloadFile: (fileId: string, savePath: string, fileName: string, apiKey: string) => 
+      ipcRenderer.invoke('staticDownload:downloadFile', fileId, savePath, fileName, apiKey)
+  },
+
   // 自动更新
   updater: {
     checkForUpdates: () => ipcRenderer.invoke('updater:checkForUpdates'),
@@ -203,6 +211,11 @@ declare global {
         exportDict: (params: any) => Promise<any>
         clearCache: () => Promise<any>
         downloadData: (params: any, savePath: string) => Promise<any>
+      }
+      staticDownload: {
+        createTask: (request: any, apiKey: string) => Promise<string>
+        getTaskStatus: (taskId: string, apiKey: string) => Promise<any>
+        downloadFile: (fileId: string, savePath: string, fileName: string, apiKey: string) => Promise<string>
       }
       updater: {
         checkForUpdates: () => Promise<any>

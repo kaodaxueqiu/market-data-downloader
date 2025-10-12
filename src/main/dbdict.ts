@@ -6,15 +6,34 @@ import axios, { AxiosInstance } from 'axios'
 interface TableInfo {
   table_name: string
   table_comment: string
+  table_type?: string
   category: string
+  row_count?: number
+  data_size?: string
+  index_count?: number
   field_count: number
-  row_count: number
+  create_time?: string
+  update_time?: string
+  
+  // 🆕 新增：数据入库时间范围（707/708张表有）
+  earliest_update_time?: string  // 最早数据入库时间，格式：YYYY-MM-DD
+  latest_update_time?: string    // 最新数据入库时间，格式：YYYY-MM-DD
 }
 
 interface TableDetail {
+  // ===== 基本信息 =====
   table_name: string
   table_comment: string
+  table_type?: string
+  category?: string
+  row_count?: number
+  data_size?: string
+  index_count?: number
   field_count: number
+  create_time?: string
+  update_time?: string
+  
+  // ===== 详细信息 =====
   columns: Array<{
     column_name: string
     column_comment: string
@@ -26,6 +45,10 @@ interface TableDetail {
   indexes: any[]
   sample_data: any[]
   select_sql: string
+  
+  // ===== 🆕 新增：数据入库时间范围（707/708张表有）=====
+  earliest_update_time?: string  // 最早数据入库时间，格式：YYYY-MM-DD
+  latest_update_time?: string    // 最新数据入库时间，格式：YYYY-MM-DD
 }
 
 interface Category {
@@ -76,14 +99,16 @@ export class DatabaseDictAPI {
     this.client.defaults.headers['X-API-Key'] = apiKey
   }
 
-  // 1. 获取表列表
+  // 1. 获取表列表（不缓存，因为需要支持分类筛选）
   async getTables(params?: {
     category?: string
     page?: number
     size?: number
   }): Promise<{ code: number; data: TableInfo[]; total: number; page: number; size: number }> {
     try {
+      console.log('📋 调用后端API: GET /tables', params)
       const response = await this.client.get('/tables', { params })
+      console.log('✅ 后端返回:', response.data.code, `${response.data.data?.length || 0} 张表`)
       return response.data
     } catch (error: any) {
       console.error('获取表列表失败:', error)
@@ -91,21 +116,12 @@ export class DatabaseDictAPI {
     }
   }
 
-  // 2. 获取表详情
+  // 2. 获取表详情（实时查询，不缓存）
   async getTableDetail(tableName: string): Promise<{ code: number; data: TableDetail }> {
-    const cacheKey = `table_${tableName}`
-    
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)
-    }
-
     try {
+      console.log('📋 调用后端API: GET /tables/' + tableName)
       const response = await this.client.get(`/tables/${tableName}`)
-      
-      // 缓存1小时
-      this.cache.set(cacheKey, response.data)
-      setTimeout(() => this.cache.delete(cacheKey), 60 * 60 * 1000)
-      
+      console.log('✅ 后端返回表详情:', response.data.code)
       return response.data
     } catch (error: any) {
       console.error(`获取表 ${tableName} 详情失败:`, error)
@@ -127,21 +143,12 @@ export class DatabaseDictAPI {
     }
   }
 
-  // 4. 获取分类统计
+  // 4. 获取分类统计（实时查询，不缓存）
   async getCategories(): Promise<{ code: number; data: Category[] }> {
-    const cacheKey = 'categories'
-    
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)
-    }
-
     try {
+      console.log('📋 调用后端API: GET /categories')
       const response = await this.client.get('/categories')
-      
-      // 缓存1小时
-      this.cache.set(cacheKey, response.data)
-      setTimeout(() => this.cache.delete(cacheKey), 60 * 60 * 1000)
-      
+      console.log('✅ 后端返回分类:', response.data.code, `${response.data.data?.length || 0} 个分类`)
       return response.data
     } catch (error: any) {
       console.error('获取分类统计失败:', error)
@@ -179,21 +186,10 @@ export class DatabaseDictAPI {
     }
   }
 
-  // 7. 获取数据库统计
+  // 7. 获取数据库统计（实时查询，不缓存）
   async getStats(): Promise<{ code: number; data: any }> {
-    const cacheKey = 'stats'
-    
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)
-    }
-
     try {
       const response = await this.client.get('/stats')
-      
-      // 缓存30分钟
-      this.cache.set(cacheKey, response.data)
-      setTimeout(() => this.cache.delete(cacheKey), 30 * 60 * 1000)
-      
       return response.data
     } catch (error: any) {
       console.error('获取数据库统计失败:', error)

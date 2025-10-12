@@ -19,6 +19,17 @@
           <el-descriptions-item label="字段数量">
             <el-tag size="small">{{ source.field_count || 0 }} 个</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="数据行数" v-if="tableDetailData?.row_count !== undefined">
+            {{ tableDetailData.row_count.toLocaleString() }} 行
+          </el-descriptions-item>
+          <el-descriptions-item label="数据大小" v-if="tableDetailData?.data_size">
+            {{ tableDetailData.data_size }}
+          </el-descriptions-item>
+          <el-descriptions-item label="数据入库时间" v-if="tableDetailData?.earliest_update_time && tableDetailData?.latest_update_time" :span="2">
+            <el-text type="primary" size="small">
+              {{ tableDetailData.earliest_update_time }} ~ {{ tableDetailData.latest_update_time }}
+            </el-text>
+          </el-descriptions-item>
         </el-descriptions>
 
         <div class="quick-actions">
@@ -31,35 +42,6 @@
         <div class="hint-text">
           💡 提示：点击查看完整的字段列表和生成SQL
         </div>
-      </div>
-
-      <!-- 字段快速选择 -->
-      <div class="quick-select-card">
-        <div class="card-header">
-          <h4>字段快速选择</h4>
-          <el-tag type="info" size="small">已选: {{ selectedFieldsLocal.length }}</el-tag>
-        </div>
-        
-        <div class="quick-select-buttons">
-          <el-button size="small" @click="selectAllFields">全选字段</el-button>
-          <el-button size="small" @click="clearAllFields">清空选择</el-button>
-        </div>
-
-        <div v-if="selectedFieldsLocal.length > 0" class="selected-fields-preview">
-          <el-scrollbar max-height="150px">
-            <el-tag 
-              v-for="field in selectedFieldsLocal" 
-              :key="field"
-              size="small"
-              closable
-              @close="removeField(field)"
-              style="margin: 3px"
-            >
-              {{ field }}
-            </el-tag>
-          </el-scrollbar>
-        </div>
-        <el-empty v-else description="未选择字段" :image-size="60" />
       </div>
     </div>
 
@@ -76,6 +58,26 @@
         <!-- 字段展示 -->
         <el-tab-pane label="字段展示" name="fields">
           <div class="fields-panel">
+            <!-- 🆕 数据统计信息 -->
+            <el-descriptions v-if="tableDetailData?.row_count !== undefined || tableDetailData?.earliest_update_time" :column="2" border class="mb-15">
+              <el-descriptions-item label="数据行数" v-if="tableDetailData.row_count !== undefined">
+                <el-text type="primary">{{ tableDetailData.row_count.toLocaleString() }} 行</el-text>
+              </el-descriptions-item>
+              <el-descriptions-item label="数据大小" v-if="tableDetailData.data_size">
+                <el-text type="success">{{ tableDetailData.data_size }}</el-text>
+              </el-descriptions-item>
+              <el-descriptions-item label="索引数量" v-if="tableDetailData.index_count !== undefined">
+                {{ tableDetailData.index_count }} 个
+              </el-descriptions-item>
+              <el-descriptions-item label="字段数量">
+                {{ fields.length }} 个
+              </el-descriptions-item>
+              <el-descriptions-item label="数据入库时间范围" v-if="tableDetailData.earliest_update_time && tableDetailData.latest_update_time" :span="2">
+                <el-text type="primary">
+                  {{ tableDetailData.earliest_update_time }} ~ {{ tableDetailData.latest_update_time }}
+                </el-text>
+              </el-descriptions-item>
+            </el-descriptions>
 
             <div class="fields-grid">
               <div class="grid-column">
@@ -184,6 +186,9 @@ const fieldsLoading = ref(false)
 const tableRef1 = ref()
 const tableRef2 = ref()
 
+// 表详情数据（包含数据范围信息）
+const tableDetailData = ref<any>(null)
+
 // 表格高度（自适应窗口，更大）
 const tableHeight = computed(() => {
   return Math.max(700, window.innerHeight * 0.85 - 150)
@@ -231,6 +236,7 @@ watch(() => props.source, async (newSource) => {
   } else {
     fields.value = []
     selectedFieldsLocal.value = []
+    tableDetailData.value = null
   }
 }, { immediate: true })
 
@@ -246,8 +252,15 @@ const loadFields = async () => {
     const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name)
     console.log('静态数据详情返回结果:', result)
     if (result.code === 200) {
+      // 保存完整的表详情数据
+      tableDetailData.value = result.data
       fields.value = result.data?.columns || []
       console.log('✅ 加载字段成功:', fields.value.length)
+      
+      // 🆕 如果有数据入库时间信息，打印出来
+      if (result.data?.earliest_update_time) {
+        console.log('📅 数据入库时间范围:', result.data.earliest_update_time, '~', result.data.latest_update_time)
+      }
     } else {
       ElMessage.error(result.msg || '加载字段失败')
     }
@@ -302,32 +315,6 @@ const handleRightSelectionChange = (selection: any[]) => {
   selectedFieldsLocal.value = [...leftSelected, ...rightSelected]
   emit('fieldsChange', selectedFieldsLocal.value)
   generatedSQL.value = ''
-}
-
-// 全选
-const selectAllFields = () => {
-  selectedFieldsLocal.value = fields.value.map(f => f.column_name)
-  emit('fieldsChange', selectedFieldsLocal.value)
-  if (showFullDetail.value) {
-    nextTick(() => syncTableSelection())
-  }
-}
-
-// 清空
-const clearAllFields = () => {
-  selectedFieldsLocal.value = []
-  emit('fieldsChange', selectedFieldsLocal.value)
-  generatedSQL.value = ''
-  if (showFullDetail.value) {
-    if (tableRef1.value) tableRef1.value.clearSelection()
-    if (tableRef2.value) tableRef2.value.clearSelection()
-  }
-}
-
-// 移除单个字段
-const removeField = (field: string) => {
-  selectedFieldsLocal.value = selectedFieldsLocal.value.filter(f => f !== field)
-  emit('fieldsChange', selectedFieldsLocal.value)
 }
 
 // 生成SQL
@@ -401,36 +388,6 @@ const copySQL = () => {
         text-align: center;
       }
     }
-
-    .quick-select-card {
-      background: white;
-      border-radius: 8px;
-      padding: 15px;
-      border: 1px solid #e4e7ed;
-
-      .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-
-        h4 {
-          margin: 0;
-          font-size: 14px;
-          font-weight: 600;
-        }
-      }
-
-      .quick-select-buttons {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 15px;
-      }
-
-      .selected-fields-preview {
-        margin-top: 10px;
-      }
-    }
   }
 
   .fields-panel {
@@ -484,6 +441,10 @@ const copySQL = () => {
     overflow-x: auto;
     font-family: 'Consolas', monospace;
     white-space: pre;
+  }
+
+  .mb-15 {
+    margin-bottom: 15px;
   }
 }
 

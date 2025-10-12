@@ -119,23 +119,11 @@ export class DataDictionaryAPI {
     this.client.defaults.headers['X-API-Key'] = apiKey
   }
 
-  // 获取所有数据源
+  // 获取所有数据源（实时查询，不缓存）
   async getAllSources(market?: string): Promise<{ code: number; data: DataSource[]; total: number }> {
-    const cacheKey = `sources_${market || 'all'}`
-    
-    // 检查缓存
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)
-    }
-
     try {
       const params = market ? { market } : {}
       const response = await this.client.get('/sources', { params })
-      
-      // 缓存5分钟
-      this.cache.set(cacheKey, response.data)
-      setTimeout(() => this.cache.delete(cacheKey), 5 * 60 * 1000)
-      
       return response.data
     } catch (error: any) {
       console.error('获取数据源列表失败:', error)
@@ -143,20 +131,10 @@ export class DataDictionaryAPI {
     }
   }
 
-  // 获取数据源详情
+  // 获取数据源详情（实时查询，不缓存）
   async getSourceDetail(code: string): Promise<{ code: number; data: DataSource }> {
-    const cacheKey = `source_${code}`
-    
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)
-    }
-
     try {
       const response = await this.client.get(`/sources/${code}`)
-      
-      this.cache.set(cacheKey, response.data)
-      setTimeout(() => this.cache.delete(cacheKey), 5 * 60 * 1000)
-      
       return response.data
     } catch (error: any) {
       console.error(`获取数据源 ${code} 详情失败:`, error)

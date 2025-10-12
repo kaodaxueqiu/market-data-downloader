@@ -49,8 +49,8 @@
             </div>
           </el-form-item>
 
-          <!-- 日期范围（可选） -->
-          <el-form-item label="日期范围（可选）">
+          <!-- 日期范围（可选，仅行情数据） -->
+          <el-form-item v-if="activeTab === 'market'" label="日期范围（可选）">
             <el-date-picker
               v-model="downloadConfig.dateRange"
               type="daterange"
@@ -61,6 +61,38 @@
               value-format="YYYY-MM-DD"
               style="width: 100%"
             />
+          </el-form-item>
+
+          <!-- 日期范围（可选，静态数据 - 支持单选） -->
+          <el-form-item v-if="activeTab === 'static'" label="日期范围（可选）">
+            <el-date-picker
+              v-model="downloadConfig.startDate"
+              type="date"
+              placeholder="开始日期"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              clearable
+              style="width: 100%; margin-bottom: 8px"
+            />
+            <el-date-picker
+              v-model="downloadConfig.endDate"
+              type="date"
+              placeholder="结束日期"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              clearable
+              style="width: 100%"
+            />
+            <div class="input-hint" style="line-height: 1.8; margin-top: 8px; font-size: 12px">
+              <div style="color: #409EFF; font-weight: 500; margin-bottom: 5px">
+                📅 日期筛选说明（按数据入库时间 UPDATE_TIME）：
+              </div>
+              <div style="color: #67C23A">✅ 不选日期 → 下载全表数据</div>
+              <div style="color: #67C23A">✅ 只选开始 → 下载从该日期至今的数据</div>
+              <div style="color: #67C23A">✅ 只选结束 → 下载从最早到该日期的数据</div>
+              <div style="color: #67C23A">✅ 选择范围 → 下载指定时间段的数据</div>
+              <div style="color: #67C23A">✅ 相同日期 → 下载某一天的数据</div>
+            </div>
           </el-form-item>
 
           <!-- 时间范围（可选，仅行情数据） -->
@@ -95,8 +127,8 @@
             </el-radio-group>
           </el-form-item>
 
-          <!-- 操作按钮 -->
-          <el-form-item>
+          <!-- 操作按钮 - 行情数据：预览+下载；静态数据：直接下载 -->
+          <el-form-item v-if="activeTab === 'market'">
             <el-button 
               type="primary" 
               size="large"
@@ -110,8 +142,22 @@
             </el-button>
           </el-form-item>
 
-          <!-- 查询结果 -->
-          <el-form-item v-if="queryResults">
+          <!-- 静态数据：选择字段并下载 -->
+          <el-form-item v-if="activeTab === 'static'">
+            <el-button 
+              type="primary" 
+              size="large"
+              @click="showStaticFieldSelector"
+              :disabled="!canDownload"
+              style="width: 100%"
+            >
+              <el-icon><View /></el-icon>
+              选择字段并下载
+            </el-button>
+          </el-form-item>
+
+          <!-- 查询结果（仅行情数据） -->
+          <el-form-item v-if="activeTab === 'market' && queryResults">
             <el-alert type="success" :closable="false">
               <template #title>
                 <div style="font-weight: 600; margin-bottom: 8px">查询成功</div>
@@ -141,12 +187,18 @@
     <!-- 字段选择对话框 -->
     <el-dialog
       v-model="showFieldSelector"
-      title="选择要下载的字段"
+      :title="`选择要下载的字段 - ${getSourceName()}`"
       width="80%"
       top="5vh"
+      class="field-selector-dialog"
     >
       <el-alert type="info" :closable="false" style="margin-bottom: 15px">
-        请选择要下载的字段（不选则下载全部字段）
+        <template v-if="activeTab === 'market'">
+          请选择要下载的字段（不选则下载全部已启用字段）
+        </template>
+        <template v-else>
+          请选择要下载的字段（不选则下载全部字段）
+        </template>
       </el-alert>
 
       <div class="fields-selector">
@@ -178,17 +230,20 @@
               ref="downloadTableRef1"
               :data="leftDownloadFields"
               stripe
-              height="400"
+              max-height="500"
               @selection-change="handleDownloadLeftSelectionChange"
             >
-              <el-table-column type="selection" width="50" :selectable="row => row.enabled" />
-              <el-table-column prop="name" label="字段名" width="180">
+              <el-table-column type="selection" width="50" />
+              <el-table-column label="字段名" width="200">
                 <template #default="scope">
-                  <el-text style="font-family: monospace">{{ scope.row.name }}</el-text>
-                  <el-tag v-if="!scope.row.enabled" type="warning" size="small" style="margin-left: 5px">未启用</el-tag>
+                  <el-text style="font-family: monospace">{{ getFieldName(scope.row) }}</el-text>
                 </template>
               </el-table-column>
-              <el-table-column prop="cn_name" label="中文名" />
+              <el-table-column label="中文名/说明" min-width="150">
+                <template #default="scope">
+                  {{ getFieldComment(scope.row) }}
+                </template>
+              </el-table-column>
             </el-table>
           </div>
           <div class="grid-column">
@@ -199,14 +254,17 @@
               height="400"
               @selection-change="handleDownloadRightSelectionChange"
             >
-              <el-table-column type="selection" width="50" :selectable="row => row.enabled" />
-              <el-table-column prop="name" label="字段名" width="180">
+              <el-table-column type="selection" width="50" />
+              <el-table-column label="字段名" width="200">
                 <template #default="scope">
-                  <el-text style="font-family: monospace">{{ scope.row.name }}</el-text>
-                  <el-tag v-if="!scope.row.enabled" type="warning" size="small" style="margin-left: 5px">未启用</el-tag>
+                  <el-text style="font-family: monospace">{{ getFieldName(scope.row) }}</el-text>
                 </template>
               </el-table-column>
-              <el-table-column prop="cn_name" label="中文名" />
+              <el-table-column label="中文名/说明" min-width="150">
+                <template #default="scope">
+                  {{ getFieldComment(scope.row) }}
+                </template>
+              </el-table-column>
             </el-table>
           </div>
         </div>
@@ -251,7 +309,9 @@ const symbolsValidated = ref(false)
 
 // 下载配置
 const downloadConfig = ref({
-  dateRange: [] as string[],
+  dateRange: [] as string[],  // 行情数据用
+  startDate: '',              // 静态数据用：开始日期
+  endDate: '',                // 静态数据用：结束日期
   startTime: '',
   endTime: '',
   format: 'csv'
@@ -303,14 +363,25 @@ const canPreview = computed(() => {
   return props.source && props.selectedFields.length > 0
 })
 
+// 获取字段名（兼容行情和静态数据）
+const getFieldName = (field: any): string => {
+  return field.name || field.column_name || ''
+}
+
+// 获取字段说明（兼容行情和静态数据）
+const getFieldComment = (field: any): string => {
+  return field.cn_name || field.column_comment || ''
+}
+
 // 过滤后的字段（用于下载选择）- 显示全部字段
 const filteredDownloadFields = computed(() => {
   if (!fieldSearchKeyword.value) return allFields.value
   const keyword = fieldSearchKeyword.value.toLowerCase()
-  return allFields.value.filter(f => 
-    (f.name || '').toLowerCase().includes(keyword) ||
-    (f.cn_name || '').toLowerCase().includes(keyword)
-  )
+  return allFields.value.filter(f => {
+    const name = getFieldName(f).toLowerCase()
+    const comment = getFieldComment(f).toLowerCase()
+    return name.includes(keyword) || comment.includes(keyword)
+  })
 })
 
 // 左右分栏字段
@@ -338,6 +409,8 @@ const resetConfig = () => {
   lastQueryParams.value = null
   downloadConfig.value = {
     dateRange: [],
+    startDate: '',
+    endDate: '',
     startTime: '',
     endTime: '',
     format: 'csv'
@@ -508,7 +581,34 @@ const handleQuery = async () => {
   }
 }
 
-// 点击创建下载任务 - 弹出字段选择对话框
+// 显示静态数据字段选择器
+const showStaticFieldSelector = async () => {
+  if (!props.source) {
+    ElMessage.error('请先选择数据表')
+    return
+  }
+
+  // 加载表的所有字段
+  try {
+    const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name)
+    if (result.code === 200) {
+      allFields.value = result.data?.columns || []
+      // 默认全选所有字段
+      selectedDownloadFields.value = allFields.value.map(f => f.column_name)
+      showFieldSelector.value = true
+      
+      // 等待对话框打开后同步选择状态
+      await nextTick()
+      syncDownloadTableSelection()
+    } else {
+      ElMessage.error('加载字段失败')
+    }
+  } catch (error) {
+    ElMessage.error('加载字段失败')
+  }
+}
+
+// 点击创建下载任务 - 弹出字段选择对话框（行情数据）
 const handleDownload = async () => {
   if (!lastQueryParams.value) {
     ElMessage.error('请先预览数据')
@@ -544,13 +644,15 @@ const syncDownloadTableSelection = () => {
   downloadTableRef2.value.clearSelection()
   
   leftDownloadFields.value.forEach((row: any) => {
-    if (selectedDownloadFields.value.includes(row.name)) {
+    const fieldName = getFieldName(row)
+    if (selectedDownloadFields.value.includes(fieldName)) {
       downloadTableRef1.value.toggleRowSelection(row, true)
     }
   })
   
   rightDownloadFields.value.forEach((row: any) => {
-    if (selectedDownloadFields.value.includes(row.name)) {
+    const fieldName = getFieldName(row)
+    if (selectedDownloadFields.value.includes(fieldName)) {
       downloadTableRef2.value.toggleRowSelection(row, true)
     }
   })
@@ -558,25 +660,31 @@ const syncDownloadTableSelection = () => {
 
 // 左表格选择变化
 const handleDownloadLeftSelectionChange = (selection: any[]) => {
-  const leftSelected = selection.map(f => f.name)
+  const leftSelected = selection.map(f => getFieldName(f))
   const rightSelected = selectedDownloadFields.value.filter(f => 
-    rightDownloadFields.value.some(r => r.name === f)
+    rightDownloadFields.value.some(r => getFieldName(r) === f)
   )
   selectedDownloadFields.value = [...leftSelected, ...rightSelected]
 }
 
 // 右表格选择变化
 const handleDownloadRightSelectionChange = (selection: any[]) => {
-  const rightSelected = selection.map(f => f.name)
+  const rightSelected = selection.map(f => getFieldName(f))
   const leftSelected = selectedDownloadFields.value.filter(f => 
-    leftDownloadFields.value.some(l => l.name === f)
+    leftDownloadFields.value.some(l => getFieldName(l) === f)
   )
   selectedDownloadFields.value = [...leftSelected, ...rightSelected]
 }
 
-// 全选字段（只选择已启用的）
+// 全选字段
 const selectAllDownloadFields = () => {
-  selectedDownloadFields.value = allFields.value.filter(f => f.enabled).map(f => f.name)
+  if (props.activeTab === 'market') {
+    // 行情数据：只选择已启用的字段
+    selectedDownloadFields.value = allFields.value.filter(f => f.enabled).map(f => f.name)
+  } else {
+    // 静态数据：全选所有字段
+    selectedDownloadFields.value = allFields.value.map(f => f.column_name)
+  }
   nextTick(() => syncDownloadTableSelection())
 }
 
@@ -604,64 +712,115 @@ const confirmDownloadFields = async () => {
     const defaultKey = keys.find((k: any) => k.isDefault)
     const fullApiKey = await window.electronAPI.config.getFullApiKey(defaultKey.id)
     
-    // 构建下载参数 - 按照后端统一的格式
-    const downloadParams: any = {
-      apiKey: fullApiKey,
-      data_type: 'DECODED',
-      message_type: lastQueryParams.value.message_type,
-      format: downloadConfig.value.format
-    }
-    
-    // 复制查询参数（symbol/symbols, date, time）
-    if (lastQueryParams.value.symbol) {
-      downloadParams.symbol = String(lastQueryParams.value.symbol)
-    }
-    if (lastQueryParams.value.symbols) {
-      downloadParams.symbols = [...lastQueryParams.value.symbols]
-    }
-    if (lastQueryParams.value.date_start) {
-      downloadParams.date_start = lastQueryParams.value.date_start
-    }
-    if (lastQueryParams.value.date_end) {
-      downloadParams.date_end = lastQueryParams.value.date_end
-    }
-    if (lastQueryParams.value.time_start) {
-      downloadParams.time_start = lastQueryParams.value.time_start
-    }
-    if (lastQueryParams.value.time_end) {
-      downloadParams.time_end = lastQueryParams.value.time_end
-    }
+    if (props.activeTab === 'market') {
+      // ========== 行情数据下载 ==========
+      const downloadParams: any = {
+        apiKey: fullApiKey,
+        data_type: 'DECODED',
+        message_type: lastQueryParams.value.message_type,
+        format: downloadConfig.value.format
+      }
+      
+      // 复制查询参数（symbol/symbols, date, time）
+      if (lastQueryParams.value.symbol) {
+        downloadParams.symbol = String(lastQueryParams.value.symbol)
+      }
+      if (lastQueryParams.value.symbols) {
+        downloadParams.symbols = [...lastQueryParams.value.symbols]
+      }
+      if (lastQueryParams.value.date_start) {
+        downloadParams.date_start = lastQueryParams.value.date_start
+      }
+      if (lastQueryParams.value.date_end) {
+        downloadParams.date_end = lastQueryParams.value.date_end
+      }
+      if (lastQueryParams.value.time_start) {
+        downloadParams.time_start = lastQueryParams.value.time_start
+      }
+      if (lastQueryParams.value.time_end) {
+        downloadParams.time_end = lastQueryParams.value.time_end
+      }
 
-    // 添加字段筛选 - 使用中文名
-    const enabledFields = allFields.value.filter(f => f.enabled)
-    const allEnabledNames = enabledFields.map(f => f.name)
-    const isSelectAll = selectedDownloadFields.value.length === allEnabledNames.length
-    
-    if (isSelectAll) {
-      // 全选已启用字段：传递空数组
-      downloadParams.fields = []
+      // 添加字段筛选 - 使用中文名
+      const enabledFields = allFields.value.filter(f => f.enabled)
+      const allEnabledNames = enabledFields.map(f => f.name)
+      const isSelectAll = selectedDownloadFields.value.length === allEnabledNames.length
+      
+      if (isSelectAll) {
+        downloadParams.fields = []
+      } else {
+        const selectedCnNames = allFields.value
+          .filter(f => selectedDownloadFields.value.includes(f.name))
+          .map(f => f.cn_name)
+        downloadParams.fields = selectedCnNames
+      }
+
+      console.log('创建行情数据导出任务，参数:', downloadParams)
+      const taskId = await window.electronAPI.download.createTask(downloadParams)
+      ElMessage.success(`任务创建成功！任务ID: ${taskId}`)
+      emit('download', { success: true, taskId })
+      
     } else {
-      // 部分字段：传递选中字段的中文名数组
-      const selectedCnNames = allFields.value
-        .filter(f => selectedDownloadFields.value.includes(f.name))
-        .map(f => f.cn_name)
-      downloadParams.fields = selectedCnNames
+      // ========== 静态数据下载 ==========
+      const request: any = {
+        table_name: getSourceCode(),
+        format: downloadConfig.value.format
+      }
+      
+      // 字段筛选 - 使用英文字段名（column_name）
+      if (selectedDownloadFields.value.length > 0 && selectedDownloadFields.value.length < allFields.value.length) {
+        request.columns = [...selectedDownloadFields.value]  // 转换成普通数组
+      }
+      // 如果全选或不选，则不传 columns 参数（下载所有字段）
+      
+      // 日期范围 - 后端自动使用 UPDATE_TIME 字段筛选
+      if (downloadConfig.value.startDate || downloadConfig.value.endDate) {
+        request.date_range = {}
+        if (downloadConfig.value.startDate) {
+          request.date_range.start_date = downloadConfig.value.startDate
+        }
+        if (downloadConfig.value.endDate) {
+          request.date_range.end_date = downloadConfig.value.endDate
+        }
+        // 不需要 date_field，后端自动用 UPDATE_TIME
+        console.log('📅 日期范围（UPDATE_TIME）:', request.date_range)
+      }
+      
+      console.log('📋 创建静态数据下载任务')
+      console.log('🔧 请求参数:', request)
+      
+      // 调用静态数据下载API（使用 JSON.parse(JSON.stringify()) 确保是纯对象）
+      const pureRequest = JSON.parse(JSON.stringify(request))
+      const taskId = await window.electronAPI.staticDownload.createTask(pureRequest, fullApiKey)
+      console.log('✅ 任务创建成功, task_id:', taskId)
+      
+      // 保存任务到本地存储
+      const localTasks = JSON.parse(localStorage.getItem('staticDownloadTasks') || '[]')
+      const newTask = {
+        id: taskId,
+        type: 'static_download',
+        tableName: request.table_name,
+        status: 'pending',
+        progress: 0,
+        request: request,
+        apiKey: fullApiKey,
+        format: request.format,
+        createdAt: new Date().toISOString()
+      }
+      localTasks.unshift(newTask)
+      localStorage.setItem('staticDownloadTasks', JSON.stringify(localTasks))
+      
+      ElMessage.success(`任务创建成功！任务ID: ${taskId}`)
+      emit('download', { success: true, taskId })
     }
-
-    console.log('创建导出任务，参数:', downloadParams)
-    const taskId = await window.electronAPI.download.createTask(downloadParams)
-    
-    ElMessage.success(`任务创建成功！任务ID: ${taskId}`)
-    
-    // 通知父组件任务已创建
-    emit('download', { success: true, taskId })
   } catch (error: any) {
-    console.error('创建导出任务失败:', error)
-    ElMessage.error(error.message || '创建导出任务失败')
+    console.error('创建任务失败:', error)
+    ElMessage.error(error.message || '创建任务失败')
   } finally {
     downloading.value = false
   }
 }
+
 </script>
 
 <style lang="scss" scoped>

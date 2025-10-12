@@ -102,6 +102,33 @@
           </div>
         </template>
 
+        <!-- 🆕 数据统计信息 -->
+        <el-descriptions v-if="tableDetail.row_count !== undefined || tableDetail.earliest_update_time" :column="2" border class="mb-20">
+          <el-descriptions-item label="数据行数" v-if="tableDetail.row_count !== undefined">
+            <el-text type="primary">{{ formatNumber(tableDetail.row_count) }} 行</el-text>
+          </el-descriptions-item>
+          <el-descriptions-item label="数据大小" v-if="tableDetail.data_size">
+            <el-text type="success">{{ tableDetail.data_size }}</el-text>
+          </el-descriptions-item>
+          <el-descriptions-item label="索引数量" v-if="tableDetail.index_count !== undefined">
+            {{ tableDetail.index_count }} 个
+          </el-descriptions-item>
+          <el-descriptions-item label="字段数量">
+            {{ tableDetail.field_count }} 个
+          </el-descriptions-item>
+          
+          <!-- 🆕 数据入库时间范围 -->
+          <el-descriptions-item label="数据入库时间范围" v-if="tableDetail.earliest_update_time && tableDetail.latest_update_time" :span="2">
+            <el-icon><Calendar /></el-icon>
+            <el-text type="primary" style="margin-left: 5px">
+              {{ tableDetail.earliest_update_time }} ~ {{ tableDetail.latest_update_time }}
+            </el-text>
+            <el-tag type="info" size="small" style="margin-left: 10px">
+              {{ calculateDateRange(tableDetail.earliest_update_time, tableDetail.latest_update_time) }}
+            </el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+
         <!-- 字段列表 -->
         <el-table :data="tableDetail.columns" stripe border max-height="500">
           <el-table-column prop="column_name" label="字段名" width="200">
@@ -210,7 +237,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, CopyDocument, Edit, Key, Check, Close } from '@element-plus/icons-vue'
+import { Search, CopyDocument, Edit, Key, Check, Close, Calendar } from '@element-plus/icons-vue'
 
 // 状态
 const loading = ref(false)
@@ -242,25 +269,10 @@ const totalTables = computed(() => {
   return allCat ? allCat.table_count : 0
 })
 
-const filteredTables = computed(() => {
-  if (selectedCategory.value === 'all') {
-    return allTables.value
-  }
-  
-  // 根据分类code或name筛选
-  const selectedCat = categories.value.find(c => c.code === selectedCategory.value)
-  if (!selectedCat) return []
-  
-  // 尝试匹配 category 字段（可能是中文名称或代码）
-  return allTables.value.filter(t => 
-    t.category === selectedCategory.value || // 匹配code
-    t.category === selectedCat.name // 匹配name
-  )
-})
-
 // 显示的表（用于卡片展示）
+// 分类筛选已在后端完成，这里只需要处理搜索过滤
 const displayedTables = computed(() => {
-  let tables = filteredTables.value
+  let tables = allTables.value
   
   // 搜索过滤
   if (searchKeyword.value) {
@@ -318,30 +330,43 @@ const loadCategories = async () => {
   }
 }
 
-// 加载表列表
-const loadTables = async () => {
+// 加载表列表（支持按分类筛选）
+const loadTables = async (category?: string) => {
   try {
-    const result = await window.electronAPI.dbdict.getTables({
+    const params: any = {
       page: 1,
       size: 1000  // 加载所有表
-    })
+    }
+    
+    // 如果指定了分类，则按分类筛选
+    if (category && category !== 'all') {
+      params.category = category
+      console.log('📋 [数据库字典] 加载分类数据，category参数:', category)
+    } else {
+      console.log('📋 [数据库字典] 加载所有表数据')
+    }
+    
+    const result = await window.electronAPI.dbdict.getTables(params)
+    console.log('✅ [数据库字典] API返回结果:', result)
     if (result.code === 200) {
       allTables.value = result.data
-      console.log(`加载了 ${result.data.length} 张表`)
-      console.log('表数据示例:', result.data[0])
-      console.log('当前分类:', categories.value)
+      console.log(`✅ [数据库字典] 加载了 ${result.data.length} 张表`)
     }
   } catch (error: any) {
-    console.error('加载表列表失败:', error)
+    console.error('❌ [数据库字典] 加载表列表失败:', error)
     ElMessage.error(error.message || '加载表列表失败')
   }
 }
 
 // 选择分类标签
-const selectCategory = (code: string) => {
+const selectCategory = async (code: string) => {
+  console.log('🏷️ [数据库字典] 选择分类 code:', code)
   selectedCategory.value = code
   selectedTableName.value = ''
   tableDetail.value = null
+  
+  // 重新加载对应分类的表
+  await loadTables(code === 'all' ? undefined : code)
 }
 
 // 获取分类颜色 - 自动分配
@@ -460,6 +485,33 @@ const copyGeneratedSQL = () => {
     }).catch(() => {
       ElMessage.error('复制失败')
     })
+  }
+}
+
+// 格式化数字（加千分位）
+const formatNumber = (num: number): string => {
+  return num.toLocaleString()
+}
+
+// 计算日期范围跨度（天数）
+const calculateDateRange = (startDate: string, endDate: string): string => {
+  try {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffTime = Math.abs(end.getTime() - start.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    if (diffDays < 30) {
+      return `${diffDays} 天`
+    } else if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30)
+      return `约 ${months} 个月`
+    } else {
+      const years = (diffDays / 365).toFixed(1)
+      return `约 ${years} 年`
+    }
+  } catch (error) {
+    return ''
   }
 }
 
@@ -713,6 +765,10 @@ onMounted(() => {
       color: #303133;
       min-height: 100px;
     }
+  }
+
+  .mb-20 {
+    margin-bottom: 20px;
   }
 }
 </style>

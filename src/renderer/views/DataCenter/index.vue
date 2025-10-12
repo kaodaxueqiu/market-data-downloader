@@ -112,24 +112,15 @@
     <div v-if="activeTab === 'static'" class="category-section">
       <div class="category-tags">
         <el-tag
-          type="primary"
-          :effect="categoryFilter === '' ? 'dark' : 'plain'"
+          v-for="cat in staticCategories"
+          :key="cat.code"
+          :type="cat.code === 'all' ? 'primary' : 'success'"
+          :effect="categoryFilter === (cat.code === 'all' ? '' : cat.code) ? 'dark' : 'plain'"
           size="large"
           class="category-tag"
-          @click="selectCategory('')"
+          @click="selectCategory(cat.code === 'all' ? '' : cat.code)"
         >
-          全部 ({{ staticSources.length }})
-        </el-tag>
-        <el-tag
-          v-for="cat in categories"
-          :key="cat"
-          type="success"
-          :effect="categoryFilter === cat ? 'dark' : 'plain'"
-          size="large"
-          class="category-tag"
-          @click="selectCategory(cat)"
-        >
-          {{ cat }} ({{ getCategoryCount(cat) }})
+          {{ cat.name }} ({{ cat.table_count }})
         </el-tag>
       </div>
     </div>
@@ -197,7 +188,6 @@ const showLeftPanel = ref(true)
 const searchKeyword = ref('')
 const marketFilter = ref('')
 const categoryFilter = ref('')
-const categories = ref<string[]>([])
 
 // 数据源
 const marketSources = ref<any[]>([])
@@ -205,9 +195,16 @@ const staticSources = ref<any[]>([])
 const selectedSource = ref<any>(null)
 const selectedFields = ref<string[]>([])
 
+// 静态数据分类（包含 'all' 分类）
+const staticCategories = ref<any[]>([])
+
 // 数据源数量
 const marketSourceCount = computed(() => marketSources.value.length)
-const staticSourceCount = computed(() => staticSources.value.length)
+const staticSourceCount = computed(() => {
+  // 从 staticCategories 中查找 code='all' 的分类
+  const allCat = staticCategories.value.find((c: any) => c.code === 'all')
+  return allCat ? allCat.table_count : 0
+})
 
 // 当前数据源列表
 const currentDataSources = computed(() => {
@@ -235,12 +232,7 @@ const filteredDataSources = computed(() => {
     )
   }
 
-  // 分类过滤（静态数据）
-  if (activeTab.value === 'static' && categoryFilter.value) {
-    sources = sources.filter((source: any) => 
-      source.category === categoryFilter.value
-    )
-  }
+  // 静态数据的分类筛选已在后端完成，这里不需要再过滤
 
   return sources
 })
@@ -278,15 +270,13 @@ const getMarketCount = (market: string) => {
 }
 
 // 选择分类
-const selectCategory = (category: string) => {
+const selectCategory = async (category: string) => {
   categoryFilter.value = category
   searchKeyword.value = ''
-  console.log('选择分类:', category)
-}
-
-// 获取分类数量
-const getCategoryCount = (category: string) => {
-  return staticSources.value.filter((s: any) => s.category === category).length
+  console.log('🏷️ 选择分类 code:', category || '全部')
+  
+  // 重新加载对应分类的表
+  await loadStaticSources(category === '' ? undefined : category)
 }
 
 // 刷新
@@ -294,7 +284,8 @@ const handleRefresh = async () => {
   if (activeTab.value === 'market') {
     await loadMarketSources()
   } else {
-    await loadStaticSources()
+    await loadStaticCategories()
+    await loadStaticSources(categoryFilter.value === '' ? undefined : categoryFilter.value)
   }
   ElMessage.success('刷新成功')
 }
@@ -388,14 +379,49 @@ const loadMarketSources = async () => {
   }
 }
 
-// 加载静态数据源
-const loadStaticSources = async () => {
+// 加载静态数据分类
+const loadStaticCategories = async () => {
   try {
-    const result = await window.electronAPI.dbdict.getTables({
+    const result = await window.electronAPI.dbdict.getCategories()
+    console.log('静态数据分类返回结果:', result)
+    if (result.code === 200) {
+      // 后端返回具体分类，前端累加得到总数
+      const allCount = result.data.reduce((sum: number, cat: any) => sum + cat.table_count, 0)
+      
+      // 构建分类数组：'全部' + 具体分类
+      staticCategories.value = [
+        { code: 'all', name: '全部', table_count: allCount },
+        ...result.data
+      ]
+      
+      console.log(`✅ 加载静态数据分类成功: 总表数 ${allCount}, ${result.data.length} 个分类`)
+    } else {
+      ElMessage.error(result.msg || '加载分类失败')
+    }
+  } catch (error: any) {
+    console.error('❌ 加载静态数据分类失败:', error)
+    ElMessage.error('加载分类失败')
+  }
+}
+
+// 加载静态数据源（支持按分类筛选）
+const loadStaticSources = async (category?: string) => {
+  try {
+    const params: any = {
       page: 1,
       size: 1000  // 加载所有表
-    })
-    console.log('静态数据源返回结果:', result)
+    }
+    
+    // 如果指定了分类，则按分类筛选
+    if (category) {
+      params.category = category
+      console.log('📋 加载分类数据，category参数:', category)
+    } else {
+      console.log('📋 加载所有表数据')
+    }
+    
+    const result = await window.electronAPI.dbdict.getTables(params)
+    console.log('✅ 静态数据源返回结果:', result)
     if (result.code === 200) {
       // 按table_name排序
       staticSources.value = (result.data || []).sort((a: any, b: any) => {
@@ -404,10 +430,6 @@ const loadStaticSources = async () => {
         return nameA.localeCompare(nameB)
       })
       console.log('✅ 加载静态数据源成功:', staticSources.value.length)
-      
-      // 提取分类并排序
-      const cats = new Set(staticSources.value.map((s: any) => s.category).filter(Boolean))
-      categories.value = Array.from(cats).sort()
     } else {
       ElMessage.error(result.msg || '加载静态数据源失败')
     }
@@ -425,6 +447,7 @@ onMounted(async () => {
   const hasApiKey = await setupApiKey()
   if (hasApiKey) {
     await loadMarketSources()
+    await loadStaticCategories()
     await loadStaticSources()
   }
 })

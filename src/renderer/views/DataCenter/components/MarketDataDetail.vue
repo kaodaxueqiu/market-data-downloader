@@ -32,35 +32,6 @@
           💡 提示：点击查看完整的字段列表和格式文档
         </div>
       </div>
-
-      <!-- 字段快速选择 -->
-      <div class="quick-select-card">
-        <div class="card-header">
-          <h4>字段快速选择</h4>
-          <el-tag type="info" size="small">已选: {{ selectedFieldsLocal.length }}</el-tag>
-        </div>
-        
-        <div class="quick-select-buttons">
-          <el-button size="small" @click="selectAllFields">全选字段</el-button>
-          <el-button size="small" @click="clearAllFields">清空选择</el-button>
-        </div>
-
-        <div v-if="selectedFieldsLocal.length > 0" class="selected-fields-preview">
-          <el-scrollbar max-height="150px">
-            <el-tag 
-              v-for="field in selectedFieldsLocal" 
-              :key="field"
-              size="small"
-              closable
-              @close="removeField(field)"
-              style="margin: 3px"
-            >
-              {{ field }}
-            </el-tag>
-          </el-scrollbar>
-        </div>
-        <el-empty v-else description="未选择字段" :image-size="60" />
-      </div>
     </div>
 
     <!-- 完整详情对话框 -->
@@ -421,31 +392,6 @@ const handleRightSelectionChange = (selection: any[]) => {
   emit('fieldsChange', selectedFieldsLocal.value)
 }
 
-// 全选
-const selectAllFields = () => {
-  selectedFieldsLocal.value = fields.value.map(f => f.name)
-  emit('fieldsChange', selectedFieldsLocal.value)
-  if (showFullDetail.value) {
-    nextTick(() => syncTableSelection())
-  }
-}
-
-// 清空
-const clearAllFields = () => {
-  selectedFieldsLocal.value = []
-  emit('fieldsChange', selectedFieldsLocal.value)
-  if (showFullDetail.value) {
-    if (tableRef1.value) tableRef1.value.clearSelection()
-    if (tableRef2.value) tableRef2.value.clearSelection()
-  }
-}
-
-// 移除单个字段
-const removeField = (field: string) => {
-  selectedFieldsLocal.value = selectedFieldsLocal.value.filter(f => f !== field)
-  emit('fieldsChange', selectedFieldsLocal.value)
-}
-
 // 加载JSON格式
 const loadDecodedFormat = async () => {
   console.log('开始加载DECODED格式文档...')
@@ -565,36 +511,6 @@ watch(activeTab, async (newTab) => {
         color: #606266;
         font-size: 12px;
         text-align: center;
-      }
-    }
-
-    .quick-select-card {
-      background: white;
-      border-radius: 8px;
-      padding: 15px;
-      border: 1px solid #e4e7ed;
-
-      .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-
-        h4 {
-          margin: 0;
-          font-size: 14px;
-          font-weight: 600;
-        }
-      }
-
-      .quick-select-buttons {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 15px;
-      }
-
-      .selected-fields-preview {
-        margin-top: 10px;
       }
     }
   }

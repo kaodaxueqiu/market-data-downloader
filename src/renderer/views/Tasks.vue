@@ -21,28 +21,63 @@
         :show-overflow-tooltip="false"
       >
         <el-table-column prop="id" label="任务ID" width="180" />
-        <el-table-column prop="messageType" label="消息类型" width="120" />
+        <el-table-column label="类型" width="150">
+          <template #default="scope">
+            <el-tag v-if="scope.row.type === 'static_download'" type="success">
+              静态数据
+            </el-tag>
+            <el-tag v-else type="primary">
+              行情数据
+            </el-tag>
+            <div style="font-size: 12px; margin-top: 5px; color: #909399">
+              {{ scope.row.messageType || scope.row.tableName }}
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="下载条件" width="280">
           <template #default="scope">
             <div style="font-size: 12px; line-height: 1.6">
-              <div v-if="scope.row.symbols && scope.row.symbols.length > 0" style="margin-bottom: 4px">
-                <el-tag size="small" type="primary">代码</el-tag> 
-                {{ scope.row.symbols.join(', ') }}
-              </div>
-              <div v-if="scope.row.startDate || scope.row.endDate" style="margin-bottom: 4px">
-                <el-tag size="small" type="success">日期</el-tag> 
-                {{ scope.row.startDate || '不限' }} ~ {{ scope.row.endDate || '不限' }}
-              </div>
-              <div v-if="scope.row.startTime || scope.row.endTime" style="margin-bottom: 4px">
-                <el-tag size="small" type="warning">时间</el-tag> 
-                {{ scope.row.startTime || '不限' }} ~ {{ scope.row.endTime || '不限' }}
-              </div>
-              <div style="margin-bottom: 4px">
+              <!-- 行情数据条件 -->
+              <template v-if="scope.row.type !== 'static_download'">
+                <div v-if="scope.row.symbols && scope.row.symbols.length > 0" style="margin-bottom: 4px">
+                  <el-tag size="small" type="primary">代码</el-tag> 
+                  {{ scope.row.symbols.join(', ') }}
+                </div>
+                <div v-if="scope.row.startDate || scope.row.endDate" style="margin-bottom: 4px">
+                  <el-tag size="small" type="success">日期</el-tag> 
+                  {{ scope.row.startDate || '不限' }} ~ {{ scope.row.endDate || '不限' }}
+                </div>
+                <div v-if="scope.row.startTime || scope.row.endTime" style="margin-bottom: 4px">
+                  <el-tag size="small" type="warning">时间</el-tag> 
+                  {{ scope.row.startTime || '不限' }} ~ {{ scope.row.endTime || '不限' }}
+                </div>
+                <div v-if="!scope.row.symbols && !scope.row.startDate && !scope.row.startTime">
+                  <el-tag size="small" type="">全部数据</el-tag>
+                </div>
+              </template>
+              
+              <!-- 静态数据条件 -->
+              <template v-else>
+                <div v-if="scope.row.request?.columns && scope.row.request.columns.length > 0" style="margin-bottom: 4px">
+                  <el-tag size="small" type="primary">字段</el-tag> 
+                  {{ scope.row.request.columns.length }} 个
+                </div>
+                <div v-if="scope.row.request?.date_range" style="margin-bottom: 4px">
+                  <el-tag size="small" type="success">日期</el-tag> 
+                  {{ scope.row.request.date_range.start_date || '不限' }} ~ {{ scope.row.request.date_range.end_date || '不限' }}
+                </div>
+                <div v-if="scope.row.request?.conditions" style="margin-bottom: 4px">
+                  <el-tag size="small" type="warning">条件</el-tag> 
+                  {{ Object.keys(scope.row.request.conditions).length }} 个
+                </div>
+                <div v-if="!scope.row.request?.columns && !scope.row.request?.date_range && !scope.row.request?.conditions">
+                  <el-tag size="small" type="">全表数据</el-tag>
+                </div>
+              </template>
+              
+              <div style="margin-top: 4px">
                 <el-tag size="small" type="info">格式</el-tag> 
                 {{ scope.row.format?.toUpperCase() || 'CSV' }}
-              </div>
-              <div v-if="!scope.row.symbols && !scope.row.startDate && !scope.row.startTime">
-                <el-tag size="small" type="">全部条件</el-tag>
               </div>
             </div>
           </template>
@@ -106,7 +141,9 @@ import {
 
 const loading = ref(false)
 const tasks = ref<any[]>([])
+const staticTasks = ref<any[]>([])  // 静态数据任务列表
 let refreshTimer: any = null
+let staticRefreshTimer: any = null  // 静态任务刷新定时器
 
 // 从localStorage加载已下载的任务ID
 const loadDownloadedTasks = (): Set<string> => {
@@ -128,6 +165,46 @@ const saveDownloadedTasks = (tasks: Set<string>) => {
 }
 
 const downloadedTasks = ref<Set<string>>(loadDownloadedTasks())
+
+// 从localStorage加载静态任务列表
+const loadStaticTasks = (): any[] => {
+  try {
+    const saved = localStorage.getItem('staticDownloadTasks')
+    return saved ? JSON.parse(saved) : []
+  } catch {
+    return []
+  }
+}
+
+// 保存静态任务列表到localStorage
+const saveStaticTasks = (tasks: any[]) => {
+  try {
+    localStorage.setItem('staticDownloadTasks', JSON.stringify(tasks))
+  } catch (error) {
+    console.error('保存静态任务失败:', error)
+  }
+}
+
+// 添加静态任务
+const addStaticTask = (taskId: string, request: any, apiKey: string) => {
+  const newTask = {
+    id: taskId,
+    type: 'static_download',
+    tableName: request.table_name,
+    status: 'pending',
+    progress: 0,
+    request: request,
+    apiKey: apiKey,
+    format: request.format,
+    createdAt: new Date().toISOString()
+  }
+  
+  staticTasks.value = [newTask, ...staticTasks.value]
+  saveStaticTasks(staticTasks.value)
+  
+  // 启动轮询
+  startStaticTaskPolling(taskId, apiKey)
+}
 
 const getStatusType = (status: string) => {
   const types: Record<string, any> = {
@@ -159,12 +236,17 @@ const refreshTasks = async (showLoading = false) => {
   }
   
   try {
-    // 获取所有任务
-    const history = await window.electronAPI.download.getHistory()
-    tasks.value = history
+    // 获取行情数据任务
+    const marketTasks = await window.electronAPI.download.getHistory()
+    
+    // 获取静态数据任务（从本地）
+    const localStaticTasks = loadStaticTasks()
+    
+    // 合并所有任务
+    tasks.value = [...marketTasks, ...localStaticTasks]
     
     // 检查是否有进行中的任务，决定是否继续自动刷新
-    const hasActiveTasks = history.some((t: any) => 
+    const hasActiveTasks = tasks.value.some((t: any) => 
       ['pending', 'downloading', 'processing'].includes(t.status)
     )
     
@@ -187,15 +269,71 @@ const refreshTasks = async (showLoading = false) => {
   }
 }
 
+// 轮询单个静态任务状态
+const startStaticTaskPolling = async (taskId: string, apiKey: string) => {
+  console.log('🔄 开始轮询静态任务:', taskId)
+  
+  const poll = async () => {
+    try {
+      const taskData = await window.electronAPI.staticDownload.getTaskStatus(taskId, apiKey)
+      console.log('📊 静态任务状态:', taskData.status, '进度:', taskData.progress)
+      
+      // 更新本地任务状态
+      const taskIndex = staticTasks.value.findIndex(t => t.id === taskId)
+      if (taskIndex !== -1) {
+        staticTasks.value[taskIndex] = {
+          ...staticTasks.value[taskIndex],
+          status: taskData.status,
+          progress: taskData.progress || 0,
+          result: taskData.result,
+          error: taskData.error,
+          message: taskData.message,
+          completedAt: taskData.completed_at
+        }
+        saveStaticTasks(staticTasks.value)
+        
+        // 刷新任务列表显示
+        await refreshTasks(false)
+      }
+      
+      // 如果任务完成或失败，停止轮询
+      if (taskData.status === 'completed') {
+        console.log('✅ 静态任务完成:', taskId)
+        ElMessage.success(`任务完成！共 ${taskData.result?.record_count || 0} 条记录`)
+      } else if (taskData.status === 'failed') {
+        console.log('❌ 静态任务失败:', taskId, taskData.error)
+        ElMessage.error(`任务失败: ${taskData.error}`)
+      } else {
+        // 继续轮询
+        setTimeout(poll, 2000)  // 每2秒查询一次
+      }
+    } catch (error: any) {
+      console.error('查询静态任务状态失败:', error)
+      // 继续轮询，不中断
+      setTimeout(poll, 3000)
+    }
+  }
+  
+  // 开始轮询
+  poll()
+}
+
 // 下载任务文件到本地
 const downloadTask = async (task: any) => {
   try {
-    // 构建默认文件名：DECODED_ZZ-01_20251010 或 DECODED_ZZ-01_20251010_20251011
-    const datePart = task.startDate && task.endDate
-      ? (task.startDate === task.endDate ? task.startDate : `${task.startDate}_${task.endDate}`)
-      : 'alldate'
+    let defaultFileName: string
     
-    const defaultFileName = `DECODED_${task.messageType}_${datePart}.${task.format || 'csv'}`
+    // 根据任务类型构建默认文件名
+    if (task.type === 'static_download') {
+      // 静态数据：table_name_timestamp.format
+      defaultFileName = task.result?.file_name || `${task.tableName}_${Date.now()}.${task.format || 'csv'}`
+    } else {
+      // 行情数据：DECODED_ZZ-01_20251010
+      const datePart = task.startDate && task.endDate
+        ? (task.startDate === task.endDate ? task.startDate : `${task.startDate}_${task.endDate}`)
+        : 'alldate'
+      defaultFileName = `DECODED_${task.messageType}_${datePart}.${task.format || 'csv'}`
+    }
     
     // 弹出保存对话框让用户选择保存位置
     const result = await window.electronAPI.dialog.showSaveDialog({
@@ -210,8 +348,27 @@ const downloadTask = async (task: any) => {
       return
     }
     
-    // 下载任务文件到指定位置
-    await window.electronAPI.download.downloadTaskFile(task.id, result.filePath)
+    // 根据任务类型下载文件
+    if (task.type === 'static_download') {
+      // 静态数据：调用 staticDownload API
+      if (!task.result?.file_id) {
+        ElMessage.error('任务未完成或文件不存在')
+        return
+      }
+      
+      const savePath = result.filePath.substring(0, result.filePath.lastIndexOf('\\') || result.filePath.lastIndexOf('/'))
+      const fileName = result.filePath.substring((result.filePath.lastIndexOf('\\') || result.filePath.lastIndexOf('/')) + 1)
+      
+      await window.electronAPI.staticDownload.downloadFile(
+        task.result.file_id,
+        savePath,
+        fileName,
+        task.apiKey
+      )
+    } else {
+      // 行情数据：调用 download API
+      await window.electronAPI.download.downloadTaskFile(task.id, result.filePath)
+    }
     
     // 标记为已下载并持久化保存
     downloadedTasks.value.add(task.id)
@@ -250,10 +407,16 @@ const clearCompletedTasks = async () => {
       type: 'warning'
     })
     
-    // 清理7天前的任务
+    // 清理行情数据任务
     const count = await window.electronAPI.download.clearHistory(0)
     
-    // 清理已下载任务的记录（清理所有，因为任务都被删除了）
+    // 清理静态数据任务（本地存储）
+    staticTasks.value = staticTasks.value.filter(t => 
+      t.status !== 'completed' && t.status !== 'failed'
+    )
+    saveStaticTasks(staticTasks.value)
+    
+    // 清理已下载任务的记录
     downloadedTasks.value.clear()
     saveDownloadedTasks(downloadedTasks.value)
     
@@ -293,6 +456,17 @@ const stopAutoRefresh = () => {
 }
 
 onMounted(() => {
+  // 加载静态任务
+  staticTasks.value = loadStaticTasks()
+  
+  // 恢复正在进行中的静态任务的轮询
+  staticTasks.value.forEach(task => {
+    if (task.status === 'pending' || task.status === 'processing') {
+      console.log('🔄 恢复静态任务轮询:', task.id)
+      startStaticTaskPolling(task.id, task.apiKey)
+    }
+  })
+  
   startAutoRefresh()
   
   // 监听任务事件

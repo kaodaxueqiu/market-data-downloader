@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
 import downloadManager from './download'
+import staticDownloadManager from './staticDownload'
 import { ConfigManager } from './config'
 import { getDictionaryAPI } from './dictionary'
 import { getDbDictAPI } from './dbdict'
@@ -620,7 +621,7 @@ ipcMain.handle('dbdict:clearCache', async () => {
   }
 })
 
-// 下载静态数据
+// 下载静态数据（旧接口，保留兼容）
 ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: string) => {
   const fs = require('fs').promises
   
@@ -664,6 +665,41 @@ ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: stri
   } catch (error: any) {
     console.error('❌ 下载保存失败:', error)
     throw new Error(error.message || '下载静态数据失败')
+  }
+})
+
+// ========== 静态数据异步下载 ==========
+
+// 创建静态数据下载任务
+ipcMain.handle('staticDownload:createTask', async (_event, request: any, apiKey: string) => {
+  try {
+    const taskId = await staticDownloadManager.createTask(request, apiKey)
+    return taskId
+  } catch (error: any) {
+    console.error('创建静态数据下载任务失败:', error)
+    throw new Error(error.message || '创建任务失败')
+  }
+})
+
+// 查询静态数据下载任务状态
+ipcMain.handle('staticDownload:getTaskStatus', async (_event, taskId: string, apiKey: string) => {
+  try {
+    const task = await staticDownloadManager.getTaskStatus(taskId, apiKey)
+    return task
+  } catch (error: any) {
+    console.error('查询任务状态失败:', error)
+    throw new Error(error.message || '查询任务状态失败')
+  }
+})
+
+// 下载静态数据文件
+ipcMain.handle('staticDownload:downloadFile', async (_event, fileId: string, savePath: string, fileName: string, apiKey: string) => {
+  try {
+    const filePath = await staticDownloadManager.downloadFile(fileId, savePath, fileName, apiKey)
+    return filePath
+  } catch (error: any) {
+    console.error('下载文件失败:', error)
+    throw new Error(error.message || '下载文件失败')
   }
 })
 
