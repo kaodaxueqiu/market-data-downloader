@@ -256,6 +256,19 @@ export class DatabaseDictAPI {
       throw new Error(error.response?.data?.message || '下载静态数据失败')
     }
   }
+
+  // 🆕 预览表数据（最新10条）
+  async previewTable(tableName: string): Promise<{ code: number; table_name: string; preview_count: number; columns: string[]; data: any[] }> {
+    try {
+      console.log('📋 调用后端API: GET /tables/' + tableName + '/preview')
+      const response = await this.client.get(`/tables/${tableName}/preview`)
+      console.log('✅ 后端返回预览数据:', response.data.code, `${response.data.preview_count || 0} 条`)
+      return response.data
+    } catch (error: any) {
+      console.error(`预览表 ${tableName} 失败:`, error)
+      throw new Error(error.response?.data?.message || '预览表数据失败')
+    }
+  }
 }
 
 // 单例实例

@@ -22,14 +22,21 @@
         </el-descriptions>
 
         <div class="quick-actions">
-          <el-button type="primary" size="large" @click="showDetailDialog" style="width: 100%">
-            <el-icon><View /></el-icon>
-            查看完整详情
-          </el-button>
-        </div>
+          <div class="action-item">
+            <el-button type="primary" size="large" @click="showDetailDialog" style="width: 100%">
+              <el-icon><View /></el-icon>
+              查看字段详情
+            </el-button>
+            <div class="action-desc">查看字段列表、数据格式和解析代码</div>
+          </div>
 
-        <div class="hint-text">
-          💡 提示：点击查看完整的字段列表和格式文档
+          <div class="action-item">
+            <el-button type="success" size="large" @click="previewData" style="width: 100%">
+              <el-icon><View /></el-icon>
+              数据预览
+            </el-button>
+            <div class="action-desc">预览实时数据（最新10条消息）</div>
+          </div>
         </div>
       </div>
     </div>
@@ -222,22 +229,61 @@
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
+
+    <!-- 数据预览对话框 -->
+    <el-dialog
+      v-model="showPreviewDialog"
+      :title="`数据预览 - ${source?.name || source?.code || ''}`"
+      width="90%"
+      top="5vh"
+      destroy-on-close
+    >
+      <div v-loading="previewLoading">
+        <div v-if="previewData_result">
+          <el-alert type="info" :closable="false" style="margin-bottom: 15px">
+            <div style="font-size: 13px">
+              📡 消息类型：{{ previewData_result.message_type }} | 
+              📝 字段数：{{ previewData_result.columns?.length || 0 }} 个 | 
+              🔢 预览数据：{{ previewData_result.preview_count || 0 }} 条（随机抽样）
+            </div>
+          </el-alert>
+
+          <el-table :data="previewData_result.data" border stripe max-height="600" size="small">
+            <el-table-column type="index" label="#" width="50" />
+            <el-table-column
+              v-for="col in previewData_result.columns"
+              :key="col"
+              :prop="extractChineseFieldName(col)"
+              :label="col"
+              min-width="150"
+              show-overflow-tooltip
+            >
+              <template #default="scope">
+                <span style="font-family: monospace; font-size: 12px">
+                  {{ formatPreviewValue(scope.row[extractChineseFieldName(col)]) }}
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, View, CopyDocument } from '@element-plus/icons-vue'
+import { /* Search, */ View, CopyDocument } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   source: any
   selectedFields: string[]
 }>()
 
-const emit = defineEmits<{
-  fieldsChange: [fields: string[]]
-}>()
+// const emit = defineEmits<{
+//   fieldsChange: [fields: string[]]
+// }>()  // 已移除字段快速选择功能，暂不需要emit
 
 // 字段数据
 const fields = ref<any[]>([])
@@ -247,10 +293,10 @@ const fieldsLoading = ref(false)
 const tableRef1 = ref()
 const tableRef2 = ref()
 
-// 表格高度（自适应窗口，更大）
-const tableHeight = computed(() => {
-  return Math.max(700, window.innerHeight * 0.85 - 150)
-})
+// 表格高度（自适应窗口，更大）（暂未使用）
+// const tableHeight = computed(() => {
+//   return Math.max(700, window.innerHeight * 0.85 - 150)
+// })
 
 // 序号方法
 const indexMethod1 = (index: number) => {
@@ -376,21 +422,21 @@ const syncTableSelection = () => {
   })
 }
 
-// 左表格选择变化
-const handleLeftSelectionChange = (selection: any[]) => {
-  const leftSelected = selection.map(f => f.name)
-  const rightSelected = selectedFieldsLocal.value.filter(f => rightFields.value.some(r => r.name === f))
-  selectedFieldsLocal.value = [...leftSelected, ...rightSelected]
-  emit('fieldsChange', selectedFieldsLocal.value)
-}
+// 左表格选择变化（已移除字段快速选择功能，暂未使用）
+// const handleLeftSelectionChange = (selection: any[]) => {
+//   const leftSelected = selection.map(f => f.name)
+//   const rightSelected = selectedFieldsLocal.value.filter(f => rightFields.value.some(r => r.name === f))
+//   selectedFieldsLocal.value = [...leftSelected, ...rightSelected]
+//   emit('fieldsChange', selectedFieldsLocal.value)
+// }
 
-// 右表格选择变化
-const handleRightSelectionChange = (selection: any[]) => {
-  const rightSelected = selection.map(f => f.name)
-  const leftSelected = selectedFieldsLocal.value.filter(f => leftFields.value.some(l => l.name === f))
-  selectedFieldsLocal.value = [...leftSelected, ...rightSelected]
-  emit('fieldsChange', selectedFieldsLocal.value)
-}
+// 右表格选择变化（已移除字段快速选择功能，暂未使用）
+// const handleRightSelectionChange = (selection: any[]) => {
+//   const rightSelected = selection.map(f => f.name)
+//   const leftSelected = selectedFieldsLocal.value.filter(f => leftFields.value.some(l => l.name === f))
+//   selectedFieldsLocal.value = [...leftSelected, ...rightSelected]
+//   emit('fieldsChange', selectedFieldsLocal.value)
+// }
 
 // 加载JSON格式
 const loadDecodedFormat = async () => {
@@ -459,6 +505,62 @@ watch(activeTab, async (newTab) => {
     await loadParserCode()
   }
 })
+
+// 预览状态
+const showPreviewDialog = ref(false)
+const previewLoading = ref(false)
+const previewData_result = ref<any>(null)
+
+// 数据预览
+const previewData = async () => {
+  if (!props.source?.code) {
+    ElMessage.error('请先选择数据源')
+    return
+  }
+
+  previewLoading.value = true
+  showPreviewDialog.value = true
+  previewData_result.value = null
+  
+  try {
+    const result = await window.electronAPI.dictionary.previewSource(props.source.code)
+    console.log('📊 预览数据返回:', result)
+    
+    if (result.code === 200) {
+      previewData_result.value = result
+      console.log('✅ 预览成功:', result.preview_count, '条数据')
+    } else {
+      ElMessage.error('预览失败')
+      showPreviewDialog.value = false
+    }
+  } catch (error: any) {
+    console.error('❌ 预览失败:', error)
+    ElMessage.error(error.message || '预览失败')
+    showPreviewDialog.value = false
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+// 从"中文(英文)"格式中提取中文字段名（行情数据的key是中文！）
+const extractChineseFieldName = (columnHeader: string): string => {
+  const match = columnHeader.match(/^([^(]+)\(/)
+  return match ? match[1] : columnHeader
+}
+
+// 格式化显示值（处理数组和对象）
+const formatPreviewValue = (value: any): string => {
+  if (value === null || value === undefined) {
+    return '-'
+  }
+  if (Array.isArray(value)) {
+    return JSON.stringify(value)
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+  return String(value)
+}
 </script>
 
 <style lang="scss" scoped>
@@ -501,16 +603,25 @@ watch(activeTab, async (newTab) => {
 
       .quick-actions {
         margin-top: 15px;
-      }
 
-      .hint-text {
-        margin-top: 10px;
-        padding: 10px;
-        background: #f5f7fa;
-        border-radius: 4px;
-        color: #606266;
-        font-size: 12px;
-        text-align: center;
+        .action-item {
+          margin-bottom: 15px;
+
+          &:last-child {
+            margin-bottom: 0;
+          }
+
+          .action-desc {
+            margin-top: 8px;
+            padding: 8px;
+            background: #f5f7fa;
+            border-radius: 4px;
+            color: #606266;
+            font-size: 12px;
+            text-align: center;
+            line-height: 1.5;
+          }
+        }
       }
     }
   }

@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+// import { computed } from 'vue'  // 未使用
 import { DataLine, Document } from '@element-plus/icons-vue'
 
 const props = defineProps<{
@@ -92,7 +92,7 @@ const getFieldCount = (source: any) => {
 }
 
 // 获取图标
-const getIcon = (source: any) => {
+const getIcon = (_source: any) => {
   return props.activeTab === 'market' ? DataLine : Document
 }
 

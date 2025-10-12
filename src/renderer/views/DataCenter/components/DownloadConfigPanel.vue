@@ -287,8 +287,8 @@ import { Download, View, Search } from '@element-plus/icons-vue'
 import { 
   needsSymbolInput, 
   getSymbolInputHint, 
-  autoCompleteSymbols,
-  getMarketPrefix
+  autoCompleteSymbols
+  // getMarketPrefix  // 未使用
 } from '../../../config/sourceMarketMapping'
 
 const props = defineProps<{
@@ -358,10 +358,10 @@ const canDownload = computed(() => {
   return !!props.source
 })
 
-// 是否可以预览
-const canPreview = computed(() => {
-  return props.source && props.selectedFields.length > 0
-})
+// 是否可以预览（暂未使用）
+// const canPreview = computed(() => {
+//   return props.source && props.selectedFields.length > 0
+// })
 
 // 获取字段名（兼容行情和静态数据）
 const getFieldName = (field: any): string => {
@@ -791,7 +791,7 @@ const confirmDownloadFields = async () => {
       
       // 调用静态数据下载API（使用 JSON.parse(JSON.stringify()) 确保是纯对象）
       const pureRequest = JSON.parse(JSON.stringify(request))
-      const taskId = await window.electronAPI.staticDownload.createTask(pureRequest, fullApiKey)
+      const taskId = await window.electronAPI.staticDownload.createTask(pureRequest, fullApiKey!)
       console.log('✅ 任务创建成功, task_id:', taskId)
       
       // 保存任务到本地存储

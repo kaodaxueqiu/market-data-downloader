@@ -1,7 +1,7 @@
 {
   "name": "market-data-downloader",
   "productName": "Market Data Downloader",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "专业市场数据下载工具",
   "author": "Trading System Team",
   "license": "Commercial",
@@ -12,6 +12,7 @@
     "dev:all": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "vue-tsc --noEmit && vite build && electron-builder",
     "build:win": "vue-tsc --noEmit && vite build && electron-builder --win",
+    "build:win:dir": "vue-tsc --noEmit && vite build && electron-builder --win --dir",
     "build:mac": "vue-tsc --noEmit && vite build && electron-builder --mac",
     "build:linux": "vue-tsc --noEmit && vite build && electron-builder --linux",
     "build:release": "vue-tsc --noEmit && vite build && electron-builder --win --mac -p always",

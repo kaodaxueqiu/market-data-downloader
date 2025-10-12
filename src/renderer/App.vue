@@ -136,16 +136,16 @@ import { useRoute, useRouter } from 'vue-router'
 // import { ElMessage } from 'element-plus'  // 暂时未使用
 import { 
   House, 
-  Download, 
+  // Download,  // 隐藏菜单后不需要
   List, 
   Clock, 
   Setting, 
   Connection,
   Key,
-  Document,
-  Folder,
-  FolderOpened,
-  DataLine,
+  // Document,  // 隐藏菜单后不需要
+  // Folder,  // 隐藏菜单后不需要
+  // FolderOpened,  // 隐藏菜单后不需要
+  // DataLine,  // 隐藏菜单后不需要
   Box,
   DArrowLeft,
   DArrowRight
@@ -157,7 +157,7 @@ const router = useRouter()
 
 const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
-const appVersion = ref('1.5.0')
+const appVersion = ref('1.5.5')
 const sidebarCollapsed = ref(false)
 
 const pageTitle = computed(() => {

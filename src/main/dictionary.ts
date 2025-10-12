@@ -234,6 +234,19 @@ export class DataDictionaryAPI {
   clearCache() {
     this.cache.clear()
   }
+
+  // 🆕 预览数据源数据（随机10条）
+  async previewSource(code: string): Promise<{ code: number; message_type: string; preview_count: number; columns: string[]; data: any[] }> {
+    try {
+      console.log('📋 调用后端API: GET /sources/' + code + '/preview')
+      const response = await this.client.get(`/sources/${code}/preview`)
+      console.log('✅ 后端返回预览数据:', response.data.code, `${response.data.preview_count || 0} 条`)
+      return response.data
+    } catch (error: any) {
+      console.error(`预览数据源 ${code} 失败:`, error)
+      throw new Error(error.response?.data?.message || '预览数据失败')
+    }
+  }
 }
 
 // 单例实例

@@ -205,7 +205,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { FolderOpened, Refresh, Check } from '@element-plus/icons-vue'
 
 // 应用版本号
-const appVersion = ref('1.5.0')
+const appVersion = ref('1.5.5')
 
 // API Key配置（单一Key）
 const apiKeyConfig = reactive({
@@ -365,7 +365,7 @@ const loadDatabaseCredentials = async (apiKeyId?: string) => {
     }
     
     // 获取数据库凭证
-    const credentials = await window.electronAPI.config.getDatabaseCredentials(apiKeyId)
+    const credentials = await window.electronAPI.config.getDatabaseCredentials(apiKeyId!)
     
     if (credentials) {
       databaseInfo.hasCredentials = true
@@ -515,6 +515,13 @@ const setupUpdateListeners = () => {
   window.electronAPI.on('updater:start-download', (info: any) => {
     updateInfo.value = info
     downloadUpdate()
+  })
+  
+  // 🆕 定期检查发现更新（每10分钟）
+  window.electronAPI.on('updater:update-available', (info: any) => {
+    console.log('📢 定期检查发现新版本:', info)
+    updateInfo.value = info
+    // 静默提示，不弹窗，显示在页面上
   })
   
   window.electronAPI.on('updater:download-progress', (progress: any) => {

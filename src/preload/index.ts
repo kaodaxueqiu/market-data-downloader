@@ -80,7 +80,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFields: (code: string, enabledOnly?: boolean) => ipcRenderer.invoke('dictionary:getFields', code, enabledOnly),
     search: (keyword: string) => ipcRenderer.invoke('dictionary:search', keyword),
     compare: (sourceCodes: string[]) => ipcRenderer.invoke('dictionary:compare', sourceCodes),
-    getCode: (code: string, language: string) => ipcRenderer.invoke('dictionary:getCode', code, language)
+    getCode: (code: string, language: string) => ipcRenderer.invoke('dictionary:getCode', code, language),
+    previewSource: (code: string) => ipcRenderer.invoke('dictionary:previewSource', code)
   },
 
   // 数据库字典 (710张表)
@@ -95,7 +96,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStats: () => ipcRenderer.invoke('dbdict:getStats'),
     exportDict: (params: any) => ipcRenderer.invoke('dbdict:export', params),
     clearCache: () => ipcRenderer.invoke('dbdict:clearCache'),
-    downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath)
+    downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath),
+    previewTable: (tableName: string) => ipcRenderer.invoke('dbdict:previewTable', tableName)
   },
 
   // 静态数据下载 (异步任务系统)
@@ -203,6 +205,7 @@ declare global {
         search: (keyword: string) => Promise<any>
         compare: (sourceCodes: string[]) => Promise<any>
         getCode: (code: string, language: string) => Promise<any>
+        previewSource: (code: string) => Promise<any>
       }
       dbdict: {
         setApiKey: (apiKey: string) => Promise<boolean>
@@ -216,6 +219,7 @@ declare global {
         exportDict: (params: any) => Promise<any>
         clearCache: () => Promise<any>
         downloadData: (params: any, savePath: string) => Promise<any>
+        previewTable: (tableName: string) => Promise<any>
       }
       staticDownload: {
         createTask: (request: any, apiKey: string) => Promise<string>

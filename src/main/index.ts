@@ -18,6 +18,9 @@ let configManager: ConfigManager
 // 主窗口
 let mainWindow: BrowserWindow | null = null
 
+// 更新检查定时器
+let updateCheckTimer: NodeJS.Timeout | null = null
+
 // 初始化函数
 function initializeServices() {
   store = new Store()
@@ -102,11 +105,12 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
     
-    // 生产模式下启动时自动检查更新
+    // 生产模式下启动时自动检查更新，并启动定期检查
     if (process.env.NODE_ENV !== 'development') {
+      // 首次检查：5秒后
       setTimeout(async () => {
         try {
-          console.log('自动检查更新...')
+          console.log('🔍 启动时自动检查更新...')
           const updateInfo = await updater.checkForUpdates()
           
           if (updateInfo && mainWindow && !mainWindow.isDestroyed()) {
@@ -183,12 +187,37 @@ function createWindow() {
           // 静默失败，不打扰用户
         }
       }, 5000)
+      
+      // 🆕 启动定期检查：每10分钟检查一次
+      updateCheckTimer = setInterval(async () => {
+        try {
+          console.log('⏰ 定期检查更新（每10分钟）...')
+          const updateInfo = await updater.checkForUpdates()
+          
+          if (updateInfo && mainWindow && !mainWindow.isDestroyed()) {
+            // 发现新版本，静默记录（不弹窗打扰用户）
+            console.log('✅ 发现新版本:', updateInfo.version)
+            // 发送事件到渲染进程，让Settings页面显示提示
+            mainWindow.webContents.send('updater:update-available', updateInfo)
+          }
+        } catch (error) {
+          console.error('定期检查更新失败:', error)
+          // 静默失败
+        }
+      }, 10 * 60 * 1000)  // 每10分钟 = 600,000毫秒
     }
   })
 
   // 窗口关闭处理
   mainWindow.on('closed', () => {
     console.log('窗口已关闭')
+    
+    // 清理定时器
+    if (updateCheckTimer) {
+      clearInterval(updateCheckTimer)
+      updateCheckTimer = null
+    }
+    
     mainWindow = null
   })
 
@@ -507,6 +536,16 @@ ipcMain.handle('dictionary:getCode', async (_event, code: string, language: stri
   }
 })
 
+// 预览数据源数据
+ipcMain.handle('dictionary:previewSource', async (_event, code: string) => {
+  try {
+    const result = await dictionaryAPI.previewSource(code)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '预览数据失败')
+  }
+})
+
 // ========== 任务事件转发 ==========
 downloadManager.on('task-created', (data) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -628,6 +667,16 @@ ipcMain.handle('dbdict:clearCache', async () => {
     return result
   } catch (error: any) {
     throw new Error(error.message || '清除缓存失败')
+  }
+})
+
+// 预览表数据
+ipcMain.handle('dbdict:previewTable', async (_event, tableName: string) => {
+  try {
+    const result = await dbDictAPI.previewTable(tableName)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '预览表数据失败')
   }
 })
 

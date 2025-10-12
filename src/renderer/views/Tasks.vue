@@ -143,7 +143,7 @@ const loading = ref(false)
 const tasks = ref<any[]>([])
 const staticTasks = ref<any[]>([])  // 静态数据任务列表
 let refreshTimer: any = null
-let staticRefreshTimer: any = null  // 静态任务刷新定时器
+// let staticRefreshTimer: any = null  // 静态任务刷新定时器（暂未使用）
 
 // 从localStorage加载已下载的任务ID
 const loadDownloadedTasks = (): Set<string> => {
@@ -185,26 +185,26 @@ const saveStaticTasks = (tasks: any[]) => {
   }
 }
 
-// 添加静态任务
-const addStaticTask = (taskId: string, request: any, apiKey: string) => {
-  const newTask = {
-    id: taskId,
-    type: 'static_download',
-    tableName: request.table_name,
-    status: 'pending',
-    progress: 0,
-    request: request,
-    apiKey: apiKey,
-    format: request.format,
-    createdAt: new Date().toISOString()
-  }
-  
-  staticTasks.value = [newTask, ...staticTasks.value]
-  saveStaticTasks(staticTasks.value)
-  
-  // 启动轮询
-  startStaticTaskPolling(taskId, apiKey)
-}
+// 添加静态任务（暂未使用，在DownloadConfigPanel中直接处理）
+// const addStaticTask = (taskId: string, request: any, apiKey: string) => {
+//   const newTask = {
+//     id: taskId,
+//     type: 'static_download',
+//     tableName: request.table_name,
+//     status: 'pending',
+//     progress: 0,
+//     request: request,
+//     apiKey: apiKey,
+//     format: request.format,
+//     createdAt: new Date().toISOString()
+//   }
+//   
+//   staticTasks.value = [newTask, ...staticTasks.value]
+//   saveStaticTasks(staticTasks.value)
+//   
+//   // 启动轮询
+//   startStaticTaskPolling(taskId, apiKey)
+// }
 
 const getStatusType = (status: string) => {
   const types: Record<string, any> = {
