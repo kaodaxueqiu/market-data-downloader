@@ -26,7 +26,8 @@
               <el-tag type="danger" size="small" style="margin-left: 8px">新</el-tag>
             </el-menu-item>
             
-            <el-sub-menu index="download">
+            <!-- 🔒 隐藏：数据下载菜单（功能已整合到数据中心） -->
+            <!-- <el-sub-menu index="download">
               <template #title>
                 <el-icon><Download /></el-icon>
                 <span>数据下载</span>
@@ -39,7 +40,7 @@
                 <el-icon><FolderOpened /></el-icon>
                 <span>静态数据下载</span>
               </el-menu-item>
-            </el-sub-menu>
+            </el-sub-menu> -->
             
             <el-menu-item index="/tasks">
               <el-icon><List /></el-icon>
@@ -51,7 +52,8 @@
               <span>历史记录</span>
             </el-menu-item>
             
-            <el-sub-menu index="dictionary">
+            <!-- 🔒 隐藏：数据字典菜单（功能已整合到数据中心） -->
+            <!-- <el-sub-menu index="dictionary">
               <template #title>
                 <el-icon><Document /></el-icon>
                 <span>数据字典</span>
@@ -64,7 +66,7 @@
                 <el-icon><Folder /></el-icon>
                 <span>静态数据字典</span>
               </el-menu-item>
-            </el-sub-menu>
+            </el-sub-menu> -->
             
             <el-menu-item index="/sdk-download">
               <el-icon><Box /></el-icon>

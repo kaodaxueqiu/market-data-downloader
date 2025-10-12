@@ -31,6 +31,41 @@
         <div style="color: #909399; font-size: 12px; margin: 10px 0 0 120px">
           提示：API Key用于身份识别和权限验证，请妥善保管，不要泄露给他人
         </div>
+        
+        <!-- 🆕 数据库凭证信息显示 -->
+        <el-form-item label="数据库凭证" v-if="databaseInfo.hasCredentials">
+          <div style="width: 100%">
+            <div style="margin-bottom: 10px">
+              <el-button size="small" type="primary" @click="refreshDatabaseCredentials" :icon="Refresh">
+                更新数据库凭证
+              </el-button>
+              <span style="margin-left: 10px; color: #909399; font-size: 12px">
+                💡 如果数据库密码已变更，点击此按钮重新获取
+              </span>
+            </div>
+            <el-descriptions :column="1" border size="small">
+              <el-descriptions-item label="账户名称" v-if="databaseInfo.accountName">
+                <el-tag type="primary">{{ databaseInfo.accountName }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="PostgreSQL">
+                <el-tag type="success">✅ 凭证已获取</el-tag>
+                <span style="margin-left: 10px; color: #909399; font-size: 12px">
+                  用户名: {{ databaseInfo.postgresql?.username || '-' }}
+                </span>
+              </el-descriptions-item>
+              <el-descriptions-item label="ClickHouse">
+                <el-tag type="success">✅ 凭证已获取</el-tag>
+                <span style="margin-left: 10px; color: #909399; font-size: 12px">
+                  用户名: {{ databaseInfo.clickhouse?.username || '-' }}
+                </span>
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+        </el-form-item>
+        
+        <div v-if="!databaseInfo.hasCredentials" style="color: #E6A23C; font-size: 12px; margin: 10px 0 0 120px">
+          ⚠️ 未获取数据库凭证，请保存API Key以自动获取
+        </div>
       </el-form>
     </el-card>
     
@@ -177,6 +212,20 @@ const apiKeyConfig = reactive({
   apiKey: ''
 })
 
+// 🆕 数据库凭证信息
+const databaseInfo = reactive({
+  hasCredentials: false,
+  accountName: '',
+  postgresql: {
+    username: '',
+    password: ''
+  },
+  clickhouse: {
+    username: '',
+    password: ''
+  }
+})
+
 const appConfig = reactive({
   downloadDir: '',
   maxConcurrent: 3,
@@ -202,16 +251,50 @@ const saveApiKey = async () => {
     return
   }
   
+  const loading = ElMessage({
+    message: '正在验证API Key并获取数据库凭证...',
+    type: 'info',
+    duration: 0,
+    icon: Refresh
+  })
+  
   try {
-    // 保存为默认且唯一的Key
-    await window.electronAPI.config.saveApiKey(
+    // 🆕 使用新接口：保存API Key并获取数据库凭证
+    const result = await window.electronAPI.config.saveApiKeyWithCredentials(
       apiKeyConfig.apiKey,
       '默认',
       true
     )
     
-    ElMessage.success('API Key 保存成功')
+    loading.close()
+    
+    if (result.success) {
+      // 🆕 更新数据库凭证显示
+      await loadDatabaseCredentials()
+      
+      // 成功获取数据库凭证
+      const messages = [
+        '✅ API Key保存成功！',
+        result.accountName ? `👤 账户名称：${result.accountName}` : '',
+        '✅ PostgreSQL数据库凭证已获取',
+        '✅ ClickHouse数据库凭证已获取'
+      ].filter(Boolean)
+      
+      ElMessageBox.alert(
+        messages.join('<br>'),
+        '配置成功',
+        {
+          dangerouslyUseHTMLString: true,
+          type: 'success',
+          confirmButtonText: '确定'
+        }
+      )
+    } else {
+      // 失败
+      ElMessage.error(result.error || '保存失败')
+    }
   } catch (error: any) {
+    loading.close()
     ElMessage.error(error.message || '保存失败')
   }
 }
@@ -258,9 +341,94 @@ const loadApiKey = async () => {
       if (fullKey) {
         apiKeyConfig.apiKey = fullKey
       }
+      
+      // 🆕 加载数据库凭证
+      await loadDatabaseCredentials(defaultKey.id)
     }
   } catch (error) {
     console.error('加载API Key失败:', error)
+  }
+}
+
+// 🆕 加载数据库凭证信息
+const loadDatabaseCredentials = async (apiKeyId?: string) => {
+  try {
+    // 如果没有传入ID，获取默认Key的ID
+    if (!apiKeyId) {
+      const keys = await window.electronAPI.config.getApiKeys()
+      const defaultKey = keys.find((k: any) => k.isDefault)
+      if (!defaultKey) {
+        databaseInfo.hasCredentials = false
+        return
+      }
+      apiKeyId = defaultKey.id
+    }
+    
+    // 获取数据库凭证
+    const credentials = await window.electronAPI.config.getDatabaseCredentials(apiKeyId)
+    
+    if (credentials) {
+      databaseInfo.hasCredentials = true
+      databaseInfo.accountName = credentials.accountName || ''
+      databaseInfo.postgresql = credentials.postgresql || {}
+      databaseInfo.clickhouse = credentials.clickhouse || {}
+      
+      console.log('✅ 数据库凭证已加载:', databaseInfo)
+    } else {
+      databaseInfo.hasCredentials = false
+      console.log('ℹ️ 未找到数据库凭证')
+    }
+  } catch (error) {
+    console.error('加载数据库凭证失败:', error)
+    databaseInfo.hasCredentials = false
+  }
+}
+
+// 🆕 刷新数据库凭证
+const refreshDatabaseCredentials = async () => {
+  if (!apiKeyConfig.apiKey) {
+    ElMessage.error('请先配置API Key')
+    return
+  }
+  
+  const loading = ElMessage({
+    message: '正在重新获取数据库凭证...',
+    type: 'info',
+    duration: 0,
+    icon: Refresh
+  })
+  
+  try {
+    // 获取当前API Key的ID
+    const keys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = keys.find((k: any) => k.isDefault)
+    
+    if (!defaultKey) {
+      loading.close()
+      ElMessage.error('未找到API Key')
+      return
+    }
+    
+    // 重新调用后端接口
+    const result = await window.electronAPI.config.saveApiKeyWithCredentials(
+      apiKeyConfig.apiKey,
+      defaultKey.name || '默认',
+      true
+    )
+    
+    loading.close()
+    
+    if (result.success) {
+      // 重新加载凭证信息
+      await loadDatabaseCredentials()
+      
+      ElMessage.success('数据库凭证已更新！')
+    } else {
+      ElMessage.error(result.error || '更新失败')
+    }
+  } catch (error: any) {
+    loading.close()
+    ElMessage.error(error.message || '更新失败')
   }
 }
 

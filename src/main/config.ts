@@ -1,6 +1,7 @@
 import Store from 'electron-store'
 import { app } from 'electron'
 import path from 'path'
+import axios from 'axios'
 
 interface ApiKeyInfo {
   id: string
@@ -8,6 +9,18 @@ interface ApiKeyInfo {
   apiKey: string
   isDefault: boolean
   createdAt: string | number  // 改为字符串或时间戳
+  // 🆕 关联的数据库凭证
+  databaseCredentials?: {
+    accountName?: string  // 账户名称
+    postgresql?: {
+      username: string
+      password: string
+    }
+    clickhouse?: {
+      username: string
+      password: string
+    }
+  }
 }
 
 interface AppConfig {
@@ -137,7 +150,96 @@ export class ConfigManager {
     return null
   }
 
-  // 保存API Key
+  // 从后端获取数据库凭证
+  async fetchDatabaseCredentials(apiKey: string): Promise<any> {
+    try {
+      console.log('📋 获取数据库凭证...')
+      const response = await axios.get(
+        'http://61.151.241.233:8080/api/v1/account/config',
+        {
+          headers: {
+            'X-API-Key': apiKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 获取数据库凭证成功:', response.data)
+      
+      if (response.data.success && response.data.data) {
+        return {
+          success: true,
+          credentials: {
+            accountName: response.data.data.name,  // 账户名称
+            postgresql: {
+              username: response.data.data.database_config?.postgresql_username,
+              password: response.data.data.database_config?.postgresql_password
+            },
+            clickhouse: {
+              username: response.data.data.database_config?.clickhouse_username,
+              password: response.data.data.database_config?.clickhouse_password
+            }
+          },
+          accountName: response.data.data.name
+        }
+      } else {
+        return { success: false, error: '响应格式错误' }
+      }
+    } catch (error: any) {
+      console.error('❌ 获取数据库凭证失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足，无法获取数据库凭证' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 保存API Key（新版：同时获取并保存数据库凭证）
+  async saveApiKeyWithCredentials(apiKey: string, name: string, isDefault: boolean = false): Promise<{ success: boolean; id?: string; error?: string; accountName?: string }> {
+    try {
+      // 先调用后端接口获取数据库凭证
+      const credResult = await this.fetchDatabaseCredentials(apiKey)
+      
+      if (!credResult.success) {
+        return { success: false, error: credResult.error }
+      }
+      
+      const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
+      
+      // 如果设为默认，取消其他的默认状态
+      if (isDefault) {
+        keys.forEach(k => k.isDefault = false)
+      }
+
+      const newKey: ApiKeyInfo = {
+        id: `key_${Date.now()}`,
+        name: name || credResult.accountName || `API Key ${keys.length + 1}`,
+        apiKey: this.encrypt(apiKey),
+        isDefault,
+        createdAt: new Date().toISOString(),
+        databaseCredentials: credResult.credentials  // 保存数据库凭证
+      }
+
+      keys.push(newKey)
+      this.store.set('apiKeys', keys)
+      
+      console.log('✅ API Key和数据库凭证已保存')
+      
+      return { 
+        success: true, 
+        id: newKey.id,
+        accountName: credResult.accountName
+      }
+    } catch (error: any) {
+      console.error('❌ 保存失败:', error)
+      return { success: false, error: error.message || '保存失败' }
+    }
+  }
+
+  // 保存API Key（旧版：兼容）
   saveApiKey(apiKey: string, name: string, isDefault: boolean = false): string {
     const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
     
@@ -158,6 +260,13 @@ export class ConfigManager {
     this.store.set('apiKeys', keys)
     
     return newKey.id
+  }
+
+  // 获取数据库凭证
+  getDatabaseCredentials(apiKeyId: string): any {
+    const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
+    const key = keys.find(k => k.id === apiKeyId)
+    return key?.databaseCredentials || null
   }
 
   // 删除API Key

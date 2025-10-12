@@ -276,9 +276,19 @@ ipcMain.handle('config:getApiKeys', async () => {
   return configManager.getApiKeys()
 })
 
-// 保存API Key
+// 保存API Key（新版：同时获取数据库凭证）
+ipcMain.handle('config:saveApiKeyWithCredentials', async (_event, apiKey: string, name: string, isDefault: boolean) => {
+  return configManager.saveApiKeyWithCredentials(apiKey, name, isDefault)
+})
+
+// 保存API Key（旧版：兼容）
 ipcMain.handle('config:saveApiKey', async (_event, apiKey: string, name: string, isDefault: boolean) => {
   return configManager.saveApiKey(apiKey, name, isDefault)
+})
+
+// 获取数据库凭证
+ipcMain.handle('config:getDatabaseCredentials', async (_event, apiKeyId: string) => {
+  return configManager.getDatabaseCredentials(apiKeyId)
 })
 
 // 删除API Key

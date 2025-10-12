@@ -14,8 +14,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getApiKeys: () => ipcRenderer.invoke('config:getApiKeys'),
     saveApiKey: (apiKey: string, name: string, isDefault: boolean) => 
       ipcRenderer.invoke('config:saveApiKey', apiKey, name, isDefault),
+    saveApiKeyWithCredentials: (apiKey: string, name: string, isDefault: boolean) => 
+      ipcRenderer.invoke('config:saveApiKeyWithCredentials', apiKey, name, isDefault),
     deleteApiKey: (id: string) => ipcRenderer.invoke('config:deleteApiKey', id),
-    getFullApiKey: (id: string) => ipcRenderer.invoke('config:getFullApiKey', id)
+    getFullApiKey: (id: string) => ipcRenderer.invoke('config:getFullApiKey', id),
+    getDatabaseCredentials: (id: string) => ipcRenderer.invoke('config:getDatabaseCredentials', id)
   },
 
   // 对话框
@@ -158,8 +161,10 @@ declare global {
         set: (key: string, value: any) => Promise<void>
         getApiKeys: () => Promise<any[]>
         saveApiKey: (apiKey: string, name: string, isDefault: boolean) => Promise<string>
+        saveApiKeyWithCredentials: (apiKey: string, name: string, isDefault: boolean) => Promise<any>
         deleteApiKey: (id: string) => Promise<boolean>
         getFullApiKey: (id: string) => Promise<string | null>
+        getDatabaseCredentials: (id: string) => Promise<any>
       }
       dialog: {
         selectDirectory: () => Promise<string | null>
