@@ -2,8 +2,8 @@
   <div class="static-download-page">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h2>静态数据下载</h2>
-      <p class="subtitle">从PostgreSQL下载静态数据表，支持710张表的灵活查询和导出</p>
+      <h2>静态元数据下载</h2>
+      <p class="subtitle">从PostgreSQL下载静态元数据表，支持710张表的灵活查询和导出</p>
     </div>
 
     <div class="content-layout">

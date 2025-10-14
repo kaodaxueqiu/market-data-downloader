@@ -104,6 +104,7 @@ export class DatabaseDictAPI {
     category?: string
     page?: number
     size?: number
+    datasource?: 'postgresql' | 'clickhouse'  // 🆕 数据源参数
   }): Promise<{ code: number; data: TableInfo[]; total: number; page: number; size: number }> {
     try {
       console.log('📋 调用后端API: GET /tables', params)
@@ -117,10 +118,11 @@ export class DatabaseDictAPI {
   }
 
   // 2. 获取表详情（实时查询，不缓存）
-  async getTableDetail(tableName: string): Promise<{ code: number; data: TableDetail }> {
+  async getTableDetail(tableName: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: TableDetail }> {
     try {
-      console.log('📋 调用后端API: GET /tables/' + tableName)
-      const response = await this.client.get(`/tables/${tableName}`)
+      console.log('📋 调用后端API: GET /tables/' + tableName, datasource ? `[${datasource}]` : '')
+      const params = datasource ? { datasource } : {}
+      const response = await this.client.get(`/tables/${tableName}`, { params })
       console.log('✅ 后端返回表详情:', response.data.code)
       return response.data
     } catch (error: any) {
@@ -133,9 +135,10 @@ export class DatabaseDictAPI {
   }
 
   // 3. 获取表字段
-  async getTableFields(tableName: string): Promise<{ code: number; data: any[] }> {
+  async getTableFields(tableName: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: any[] }> {
     try {
-      const response = await this.client.get(`/tables/${tableName}/fields`)
+      const params = datasource ? { datasource } : {}
+      const response = await this.client.get(`/tables/${tableName}/fields`, { params })
       return response.data
     } catch (error: any) {
       console.error(`获取表 ${tableName} 字段失败:`, error)
@@ -144,10 +147,11 @@ export class DatabaseDictAPI {
   }
 
   // 4. 获取分类统计（实时查询，不缓存）
-  async getCategories(): Promise<{ code: number; data: Category[] }> {
+  async getCategories(datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: Category[] }> {
     try {
-      console.log('📋 调用后端API: GET /categories')
-      const response = await this.client.get('/categories')
+      console.log('📋 调用后端API: GET /categories', datasource ? `[${datasource}]` : '')
+      const params = datasource ? { datasource } : {}
+      const response = await this.client.get('/categories', { params })
       console.log('✅ 后端返回分类:', response.data.code, `${response.data.data?.length || 0} 个分类`)
       return response.data
     } catch (error: any) {
@@ -157,11 +161,11 @@ export class DatabaseDictAPI {
   }
 
   // 5. 搜索表和字段
-  async search(keyword: string): Promise<{ code: number; data: SearchResult[] }> {
+  async search(keyword: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: SearchResult[] }> {
     try {
-      const response = await this.client.get('/search', {
-        params: { keyword }
-      })
+      const params: any = { keyword }
+      if (datasource) params.datasource = datasource
+      const response = await this.client.get('/search', { params })
       return response.data
     } catch (error: any) {
       console.error('搜索失败:', error)
@@ -187,9 +191,10 @@ export class DatabaseDictAPI {
   }
 
   // 7. 获取数据库统计（实时查询，不缓存）
-  async getStats(): Promise<{ code: number; data: any }> {
+  async getStats(datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: any }> {
     try {
-      const response = await this.client.get('/stats')
+      const params = datasource ? { datasource } : {}
+      const response = await this.client.get('/stats', { params })
       return response.data
     } catch (error: any) {
       console.error('获取数据库统计失败:', error)
@@ -215,9 +220,10 @@ export class DatabaseDictAPI {
   }
 
   // 9. 清除缓存
-  async clearCache(): Promise<{ code: number; message: string }> {
+  async clearCache(datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; message: string }> {
     try {
-      const response = await this.client.post('/cache/clear')
+      const params = datasource ? { datasource } : {}
+      const response = await this.client.post('/cache/clear', {}, { params })
       // 同时清除本地缓存
       this.cache.clear()
       return response.data
@@ -258,10 +264,11 @@ export class DatabaseDictAPI {
   }
 
   // 🆕 预览表数据（最新10条）
-  async previewTable(tableName: string): Promise<{ code: number; table_name: string; preview_count: number; columns: string[]; data: any[] }> {
+  async previewTable(tableName: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; table_name: string; preview_count: number; columns: string[]; data: any[] }> {
     try {
-      console.log('📋 调用后端API: GET /tables/' + tableName + '/preview')
-      const response = await this.client.get(`/tables/${tableName}/preview`)
+      console.log('📋 调用后端API: GET /tables/' + tableName + '/preview', datasource ? `[${datasource}]` : '')
+      const params = datasource ? { datasource } : {}
+      const response = await this.client.get(`/tables/${tableName}/preview`, { params })
       console.log('✅ 后端返回预览数据:', response.data.code, `${response.data.preview_count || 0} 条`)
       return response.data
     } catch (error: any) {

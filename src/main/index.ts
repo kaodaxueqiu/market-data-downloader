@@ -594,9 +594,9 @@ ipcMain.handle('dbdict:getTables', async (_event, params?: any) => {
 })
 
 // 获取表详情
-ipcMain.handle('dbdict:getTableDetail', async (_event, tableName: string) => {
+ipcMain.handle('dbdict:getTableDetail', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const result = await dbDictAPI.getTableDetail(tableName)
+    const result = await dbDictAPI.getTableDetail(tableName, datasource)
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取表详情失败')
@@ -604,9 +604,9 @@ ipcMain.handle('dbdict:getTableDetail', async (_event, tableName: string) => {
 })
 
 // 获取表字段
-ipcMain.handle('dbdict:getTableFields', async (_event, tableName: string) => {
+ipcMain.handle('dbdict:getTableFields', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const result = await dbDictAPI.getTableFields(tableName)
+    const result = await dbDictAPI.getTableFields(tableName, datasource)
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取表字段失败')
@@ -614,9 +614,9 @@ ipcMain.handle('dbdict:getTableFields', async (_event, tableName: string) => {
 })
 
 // 获取分类统计
-ipcMain.handle('dbdict:getCategories', async () => {
+ipcMain.handle('dbdict:getCategories', async (_event, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const result = await dbDictAPI.getCategories()
+    const result = await dbDictAPI.getCategories(datasource)
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取分类统计失败')
@@ -624,9 +624,9 @@ ipcMain.handle('dbdict:getCategories', async () => {
 })
 
 // 搜索表和字段
-ipcMain.handle('dbdict:search', async (_event, keyword: string) => {
+ipcMain.handle('dbdict:search', async (_event, keyword: string, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const result = await dbDictAPI.search(keyword)
+    const result = await dbDictAPI.search(keyword, datasource)
     return result
   } catch (error: any) {
     throw new Error(error.message || '搜索失败')
@@ -644,9 +644,9 @@ ipcMain.handle('dbdict:buildSQL', async (_event, params: any) => {
 })
 
 // 获取数据库统计
-ipcMain.handle('dbdict:getStats', async () => {
+ipcMain.handle('dbdict:getStats', async (_event, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const result = await dbDictAPI.getStats()
+    const result = await dbDictAPI.getStats(datasource)
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取数据库统计失败')
@@ -664,9 +664,9 @@ ipcMain.handle('dbdict:export', async (_event, params: any) => {
 })
 
 // 清除缓存
-ipcMain.handle('dbdict:clearCache', async () => {
+ipcMain.handle('dbdict:clearCache', async (_event, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const result = await dbDictAPI.clearCache()
+    const result = await dbDictAPI.clearCache(datasource)
     return result
   } catch (error: any) {
     throw new Error(error.message || '清除缓存失败')
@@ -674,9 +674,9 @@ ipcMain.handle('dbdict:clearCache', async () => {
 })
 
 // 预览表数据
-ipcMain.handle('dbdict:previewTable', async (_event, tableName: string) => {
+ipcMain.handle('dbdict:previewTable', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const result = await dbDictAPI.previewTable(tableName)
+    const result = await dbDictAPI.previewTable(tableName, datasource)
     return result
   } catch (error: any) {
     throw new Error(error.message || '预览表数据失败')
@@ -733,9 +733,9 @@ ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: stri
 // ========== 静态数据异步下载 ==========
 
 // 创建静态数据下载任务
-ipcMain.handle('staticDownload:createTask', async (_event, request: any, apiKey: string) => {
+ipcMain.handle('staticDownload:createTask', async (_event, request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse') => {
   try {
-    const taskId = await staticDownloadManager.createTask(request, apiKey)
+    const taskId = await staticDownloadManager.createTask(request, apiKey, datasource)
     return taskId
   } catch (error: any) {
     console.error('创建静态数据下载任务失败:', error)

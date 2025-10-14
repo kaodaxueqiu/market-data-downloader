@@ -63,8 +63,8 @@
             />
           </el-form-item>
 
-          <!-- 日期范围（可选，静态数据 - 支持单选） -->
-          <el-form-item v-if="activeTab === 'static'" label="日期范围（可选）">
+          <!-- 日期范围（可选，静态元数据 - 支持单选） -->
+          <el-form-item v-if="activeTab === 'static' || activeTab === 'processed'" label="日期范围（可选）">
             <el-date-picker
               v-model="downloadConfig.startDate"
               type="date"
@@ -127,7 +127,7 @@
             </el-radio-group>
           </el-form-item>
 
-          <!-- 操作按钮 - 行情数据：预览+下载；静态数据：直接下载 -->
+          <!-- 操作按钮 - 行情数据：预览+下载；静态元数据：直接下载 -->
           <el-form-item v-if="activeTab === 'market'">
             <el-button 
               type="primary" 
@@ -142,8 +142,8 @@
             </el-button>
           </el-form-item>
 
-          <!-- 静态数据：选择字段并下载 -->
-          <el-form-item v-if="activeTab === 'static'">
+          <!-- 静态元数据：选择字段并下载 -->
+          <el-form-item v-if="activeTab === 'static' || activeTab === 'processed'">
             <el-button 
               type="primary" 
               size="large"
@@ -294,7 +294,7 @@ import {
 const props = defineProps<{
   source: any
   selectedFields: string[]
-  activeTab: 'market' | 'static'
+  activeTab: 'market' | 'static' | 'processed'
 }>()
 
 const emit = defineEmits<{
@@ -310,8 +310,8 @@ const symbolsValidated = ref(false)
 // 下载配置
 const downloadConfig = ref({
   dateRange: [] as string[],  // 行情数据用
-  startDate: '',              // 静态数据用：开始日期
-  endDate: '',                // 静态数据用：结束日期
+  startDate: '',              // 静态元数据用：开始日期
+  endDate: '',                // 静态元数据用：结束日期
   startTime: '',
   endTime: '',
   format: 'csv'
@@ -363,12 +363,12 @@ const canDownload = computed(() => {
 //   return props.source && props.selectedFields.length > 0
 // })
 
-// 获取字段名（兼容行情和静态数据）
+// 获取字段名（兼容行情和静态元数据）
 const getFieldName = (field: any): string => {
   return field.name || field.column_name || ''
 }
 
-// 获取字段说明（兼容行情和静态数据）
+// 获取字段说明（兼容行情和静态元数据）
 const getFieldComment = (field: any): string => {
   return field.cn_name || field.column_comment || ''
 }
@@ -581,7 +581,7 @@ const handleQuery = async () => {
   }
 }
 
-// 显示静态数据字段选择器
+// 显示静态元数据字段选择器
 const showStaticFieldSelector = async () => {
   if (!props.source) {
     ElMessage.error('请先选择数据表')
@@ -590,7 +590,9 @@ const showStaticFieldSelector = async () => {
 
   // 加载表的所有字段
   try {
-    const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name)
+    // 根据当前Tab决定数据源
+    const datasource = props.activeTab === 'processed' ? 'clickhouse' : undefined
+    const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name, datasource)
     if (result.code === 200) {
       allFields.value = result.data?.columns || []
       // 默认全选所有字段
@@ -682,7 +684,7 @@ const selectAllDownloadFields = () => {
     // 行情数据：只选择已启用的字段
     selectedDownloadFields.value = allFields.value.filter(f => f.enabled).map(f => f.name)
   } else {
-    // 静态数据：全选所有字段
+    // 静态元数据：全选所有字段
     selectedDownloadFields.value = allFields.value.map(f => f.column_name)
   }
   nextTick(() => syncDownloadTableSelection())
@@ -761,7 +763,7 @@ const confirmDownloadFields = async () => {
       emit('download', { success: true, taskId })
       
     } else {
-      // ========== 静态数据下载 ==========
+      // ========== 静态元数据下载 ==========
       const request: any = {
         table_name: getSourceCode(),
         format: downloadConfig.value.format
@@ -786,12 +788,14 @@ const confirmDownloadFields = async () => {
         console.log('📅 日期范围（UPDATE_TIME）:', request.date_range)
       }
       
-      console.log('📋 创建静态数据下载任务')
+      console.log('📋 创建静态元数据下载任务')
       console.log('🔧 请求参数:', request)
       
-      // 调用静态数据下载API（使用 JSON.parse(JSON.stringify()) 确保是纯对象）
+      // 调用静态元数据/加工数据下载API（使用 JSON.parse(JSON.stringify()) 确保是纯对象）
       const pureRequest = JSON.parse(JSON.stringify(request))
-      const taskId = await window.electronAPI.staticDownload.createTask(pureRequest, fullApiKey!)
+      // 根据当前Tab决定数据源：static=postgresql, processed=clickhouse
+      const datasource = props.activeTab === 'processed' ? 'clickhouse' : undefined
+      const taskId = await window.electronAPI.staticDownload.createTask(pureRequest, fullApiKey!, datasource)
       console.log('✅ 任务创建成功, task_id:', taskId)
       
       // 保存任务到本地存储

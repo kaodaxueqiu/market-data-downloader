@@ -84,25 +84,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
     previewSource: (code: string) => ipcRenderer.invoke('dictionary:previewSource', code)
   },
 
-  // 数据库字典 (710张表)
+  // 数据库字典 (PostgreSQL 755张表 + ClickHouse)
   dbdict: {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('dbdict:setApiKey', apiKey),
     getTables: (params?: any) => ipcRenderer.invoke('dbdict:getTables', params),
-    getTableDetail: (tableName: string) => ipcRenderer.invoke('dbdict:getTableDetail', tableName),
-    getTableFields: (tableName: string) => ipcRenderer.invoke('dbdict:getTableFields', tableName),
-    getCategories: () => ipcRenderer.invoke('dbdict:getCategories'),
-    search: (keyword: string) => ipcRenderer.invoke('dbdict:search', keyword),
+    getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('dbdict:getTableDetail', tableName, datasource),
+    getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('dbdict:getTableFields', tableName, datasource),
+    getCategories: (datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('dbdict:getCategories', datasource),
+    search: (keyword: string, datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('dbdict:search', keyword, datasource),
     buildSQL: (params: any) => ipcRenderer.invoke('dbdict:buildSQL', params),
-    getStats: () => ipcRenderer.invoke('dbdict:getStats'),
+    getStats: (datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('dbdict:getStats', datasource),
     exportDict: (params: any) => ipcRenderer.invoke('dbdict:export', params),
-    clearCache: () => ipcRenderer.invoke('dbdict:clearCache'),
+    clearCache: (datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('dbdict:clearCache', datasource),
     downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath),
-    previewTable: (tableName: string) => ipcRenderer.invoke('dbdict:previewTable', tableName)
+    previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('dbdict:previewTable', tableName, datasource)
   },
 
-  // 静态数据下载 (异步任务系统)
+  // 静态数据下载 (异步任务系统 - PostgreSQL + ClickHouse)
   staticDownload: {
-    createTask: (request: any, apiKey: string) => ipcRenderer.invoke('staticDownload:createTask', request, apiKey),
+    createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse') => 
+      ipcRenderer.invoke('staticDownload:createTask', request, apiKey, datasource),
     getTaskStatus: (taskId: string, apiKey: string) => ipcRenderer.invoke('staticDownload:getTaskStatus', taskId, apiKey),
     downloadFile: (fileId: string, savePath: string, fileName: string, apiKey: string) => 
       ipcRenderer.invoke('staticDownload:downloadFile', fileId, savePath, fileName, apiKey)
@@ -210,19 +218,19 @@ declare global {
       dbdict: {
         setApiKey: (apiKey: string) => Promise<boolean>
         getTables: (params?: any) => Promise<any>
-        getTableDetail: (tableName: string) => Promise<any>
-        getTableFields: (tableName: string) => Promise<any>
-        getCategories: () => Promise<any>
-        search: (keyword: string) => Promise<any>
+        getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+        getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+        getCategories: (datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+        search: (keyword: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
         buildSQL: (params: any) => Promise<any>
-        getStats: () => Promise<any>
+        getStats: (datasource?: 'postgresql' | 'clickhouse') => Promise<any>
         exportDict: (params: any) => Promise<any>
-        clearCache: () => Promise<any>
+        clearCache: (datasource?: 'postgresql' | 'clickhouse') => Promise<any>
         downloadData: (params: any, savePath: string) => Promise<any>
-        previewTable: (tableName: string) => Promise<any>
+        previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
       }
       staticDownload: {
-        createTask: (request: any, apiKey: string) => Promise<string>
+        createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse') => Promise<string>
         getTaskStatus: (taskId: string, apiKey: string) => Promise<any>
         downloadFile: (fileId: string, savePath: string, fileName: string, apiKey: string) => Promise<string>
       }

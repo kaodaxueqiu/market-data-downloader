@@ -218,6 +218,7 @@ import { /* Search, */ View, Edit, CopyDocument, Check, Close } from '@element-p
 const props = defineProps<{
   source: any
   selectedFields: string[]
+  datasource?: 'postgresql' | 'clickhouse'  // 🆕 数据源类型
 }>()
 
 // const emit = defineEmits<{
@@ -295,8 +296,9 @@ watch(() => props.selectedFields, (newFields) => {
 const loadFields = async () => {
   fieldsLoading.value = true
   try {
-    const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name)
-    console.log('静态数据详情返回结果:', result)
+    // 使用传入的 datasource 参数
+    const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name, props.datasource)
+    console.log('静态元数据详情返回结果:', result, props.datasource ? `[${props.datasource}]` : '')
     if (result.code === 200) {
       // 保存完整的表详情数据
       tableDetailData.value = result.data
@@ -398,8 +400,9 @@ const previewData = async () => {
   previewData_result.value = null
 
   try {
-    const result = await window.electronAPI.dbdict.previewTable(props.source.table_name)
-    console.log('📊 预览数据返回:', result)
+    // 使用传入的 datasource 参数
+    const result = await window.electronAPI.dbdict.previewTable(props.source.table_name, props.datasource)
+    console.log('📊 预览数据返回:', result, props.datasource ? `[${props.datasource}]` : '')
     
     if (result.code === 200) {
       previewData_result.value = result

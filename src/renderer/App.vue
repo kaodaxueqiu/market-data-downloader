@@ -38,7 +38,7 @@
               </el-menu-item>
               <el-menu-item index="/static-data-download">
                 <el-icon><FolderOpened /></el-icon>
-                <span>静态数据下载</span>
+                <span>静态元数据下载</span>
               </el-menu-item>
             </el-sub-menu> -->
             
@@ -64,7 +64,7 @@
               </el-menu-item>
               <el-menu-item index="/database-dictionary">
                 <el-icon><Folder /></el-icon>
-                <span>静态数据字典</span>
+                <span>静态元数据字典</span>
               </el-menu-item>
             </el-sub-menu> -->
             
@@ -157,7 +157,7 @@ const router = useRouter()
 
 const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
-const appVersion = ref('1.5.5')
+const appVersion = ref('1.5.6')
 const sidebarCollapsed = ref(false)
 
 const pageTitle = computed(() => {
@@ -168,8 +168,8 @@ const pageTitle = computed(() => {
     '/tasks': '任务管理',
     '/history': '历史记录',
     '/dictionary': '行情数据字典',
-    '/database-dictionary': '静态数据字典',
-    '/static-data-download': '静态数据下载',
+    '/database-dictionary': '静态元数据字典',
+    '/static-data-download': '静态元数据下载',
     '/sdk-download': 'SDK下载',
     '/settings': '系统设置'
   }

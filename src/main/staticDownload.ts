@@ -81,11 +81,17 @@ class StaticDownloadManager {
   /**
    * 创建下载任务
    */
-  async createTask(request: StaticDownloadRequest, apiKey: string): Promise<string> {
+  async createTask(request: StaticDownloadRequest, apiKey: string, datasource?: 'postgresql' | 'clickhouse'): Promise<string> {
     try {
-      console.log('📋 创建静态数据下载任务')
+      const dbType = datasource || 'postgresql'
+      console.log(`📋 创建${dbType === 'clickhouse' ? 'ClickHouse' : 'PostgreSQL'}下载任务`)
       console.log('🔧 请求参数:', request)
-      console.log('🌐 API URL:', `${this.apiBaseUrl}/download-task`)
+      
+      // 构建URL，添加 datasource 参数
+      const url = datasource 
+        ? `${this.apiBaseUrl}/download-task?datasource=${datasource}`
+        : `${this.apiBaseUrl}/download-task`
+      console.log('🌐 API URL:', url)
       
       // 严格按照后端文档的参数格式
       const requestBody: any = {
@@ -120,7 +126,7 @@ class StaticDownloadManager {
       console.log('📤 发送请求体:', JSON.stringify(requestBody, null, 2))
       
       const response = await axios.post(
-        `${this.apiBaseUrl}/download-task`,
+        url,
         requestBody,
         {
           headers: {

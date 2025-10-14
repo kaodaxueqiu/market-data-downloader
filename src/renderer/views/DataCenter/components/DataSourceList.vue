@@ -30,7 +30,7 @@
               <el-tag v-if="activeTab === 'market'" size="small" type="primary">
                 {{ source.market || '未知' }}
               </el-tag>
-              <el-tag v-if="activeTab === 'static'" size="small" type="success">
+              <el-tag v-if="activeTab === 'static' || activeTab === 'processed'" size="small" :type="activeTab === 'processed' ? 'warning' : 'success'">
                 {{ source.category || '未分类' }}
               </el-tag>
               <el-tag size="small" class="field-count">
@@ -61,7 +61,7 @@ import { DataLine, Document } from '@element-plus/icons-vue'
 const props = defineProps<{
   dataSources: any[]
   selectedSource: any
-  activeTab: 'market' | 'static'
+  activeTab: 'market' | 'static' | 'processed'
 }>()
 
 const emit = defineEmits<{

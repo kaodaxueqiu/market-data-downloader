@@ -24,7 +24,7 @@
         <el-table-column label="类型" width="150">
           <template #default="scope">
             <el-tag v-if="scope.row.type === 'static_download'" type="success">
-              静态数据
+              静态元数据
             </el-tag>
             <el-tag v-else type="primary">
               行情数据
@@ -56,7 +56,7 @@
                 </div>
               </template>
               
-              <!-- 静态数据条件 -->
+              <!-- 静态元数据条件 -->
               <template v-else>
                 <div v-if="scope.row.request?.columns && scope.row.request.columns.length > 0" style="margin-bottom: 4px">
                   <el-tag size="small" type="primary">字段</el-tag> 
@@ -141,7 +141,7 @@ import {
 
 const loading = ref(false)
 const tasks = ref<any[]>([])
-const staticTasks = ref<any[]>([])  // 静态数据任务列表
+const staticTasks = ref<any[]>([])  // 静态元数据任务列表
 let refreshTimer: any = null
 // let staticRefreshTimer: any = null  // 静态任务刷新定时器（暂未使用）
 
@@ -239,7 +239,7 @@ const refreshTasks = async (showLoading = false) => {
     // 获取行情数据任务
     const marketTasks = await window.electronAPI.download.getHistory()
     
-    // 获取静态数据任务（从本地）
+    // 获取静态元数据任务（从本地）
     const localStaticTasks = loadStaticTasks()
     
     // 合并所有任务
@@ -325,7 +325,7 @@ const downloadTask = async (task: any) => {
     
     // 根据任务类型构建默认文件名
     if (task.type === 'static_download') {
-      // 静态数据：table_name_timestamp.format
+      // 静态元数据：table_name_timestamp.format
       defaultFileName = task.result?.file_name || `${task.tableName}_${Date.now()}.${task.format || 'csv'}`
     } else {
       // 行情数据：DECODED_ZZ-01_20251010
@@ -350,7 +350,7 @@ const downloadTask = async (task: any) => {
     
     // 根据任务类型下载文件
     if (task.type === 'static_download') {
-      // 静态数据：调用 staticDownload API
+      // 静态元数据：调用 staticDownload API
       if (!task.result?.file_id) {
         ElMessage.error('任务未完成或文件不存在')
         return
@@ -410,7 +410,7 @@ const clearCompletedTasks = async () => {
     // 清理行情数据任务
     const count = await window.electronAPI.download.clearHistory(0)
     
-    // 清理静态数据任务（本地存储）
+    // 清理静态元数据任务（本地存储）
     staticTasks.value = staticTasks.value.filter(t => 
       t.status !== 'completed' && t.status !== 'failed'
     )
