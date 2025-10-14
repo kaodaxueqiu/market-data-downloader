@@ -157,7 +157,7 @@ const router = useRouter()
 
 const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
-const appVersion = ref('1.5.6')
+const appVersion = ref('1.5.7')
 const sidebarCollapsed = ref(false)
 
 const pageTitle = computed(() => {

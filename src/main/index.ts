@@ -362,6 +362,93 @@ ipcMain.handle('shell:showItemInFolder', async (_event, filePath: string) => {
   shell.showItemInFolder(filePath)
 })
 
+// 下载文件
+ipcMain.handle('shell:downloadFile', async (event, url: string, savePath: string) => {
+  const https = require('https')
+  const http = require('http')
+  const fs = require('fs')
+  
+  return new Promise((resolve, reject) => {
+    console.log('📥 开始下载文件:', url)
+    console.log('💾 保存路径:', savePath)
+    
+    const protocol = url.startsWith('https') ? https : http
+    const file = fs.createWriteStream(savePath)
+    
+    protocol.get(url, (response: any) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`下载失败，HTTP状态码: ${response.statusCode}`))
+        return
+      }
+      
+      const totalSize = parseInt(response.headers['content-length'] || '0', 10)
+      let downloadedSize = 0
+      
+      response.on('data', (chunk: Buffer) => {
+        downloadedSize += chunk.length
+        file.write(chunk)
+        
+        // 计算进度并发送到渲染进程
+        if (totalSize > 0) {
+          const percent = (downloadedSize / totalSize) * 100
+          event.sender.send('shell:download-progress', {
+            url,
+            percent: Math.floor(percent),
+            downloaded: downloadedSize,
+            total: totalSize
+          })
+        }
+      })
+      
+      response.on('end', () => {
+        file.end()
+        console.log('✅ 文件下载完成:', savePath)
+        resolve({ path: savePath, size: downloadedSize })
+      })
+      
+      response.on('error', (err: Error) => {
+        file.close()
+        fs.unlinkSync(savePath)
+        reject(err)
+      })
+    }).on('error', (err: Error) => {
+      file.close()
+      if (fs.existsSync(savePath)) {
+        fs.unlinkSync(savePath)
+      }
+      reject(err)
+    })
+  })
+})
+
+// 计算文件MD5
+ipcMain.handle('shell:calculateMD5', async (_event, filePath: string) => {
+  const crypto = require('crypto')
+  const fs = require('fs')
+  
+  return new Promise((resolve, reject) => {
+    console.log('🔐 计算文件MD5:', filePath)
+    
+    const hash = crypto.createHash('md5')
+    const stream = fs.createReadStream(filePath)
+    
+    stream.on('data', (data: Buffer) => {
+      hash.update(data)
+    })
+    
+    stream.on('end', () => {
+      const md5 = hash.digest('hex')
+      console.log('✅ MD5计算完成:', md5)
+      resolve(md5)
+    })
+    
+    stream.on('error', (err: Error) => {
+      console.error('❌ MD5计算失败:', err)
+      reject(err)
+    })
+  })
+})
+
 // ========== 下载管理 - 基于异步任务系统 ==========
 
 // 步骤1: 查询数据（预览）
