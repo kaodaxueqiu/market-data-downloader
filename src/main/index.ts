@@ -84,8 +84,8 @@ function createWindow() {
         console.log(`🔄 尝试加载页面... (第${retryCount}次)`)
         await mainWindow!.loadURL('http://localhost:5173')
         console.log('✅ 页面加载成功！')
-        // DevTools会导致崩溃，保持禁用
-        // mainWindow!.webContents.openDevTools()
+        // 开发模式下启用DevTools
+        mainWindow!.webContents.openDevTools()
       } catch (error: any) {
         console.error(`❌ 页面加载失败 (第${retryCount}次):`, error.message)
         if (retryCount < maxRetries) {
@@ -331,6 +331,71 @@ ipcMain.handle('config:deleteApiKey', async (_event, id: string) => {
 // 获取完整的API Key（用于下载）
 ipcMain.handle('config:getFullApiKey', async (_event, id: string) => {
   return configManager.getFullApiKey(id)
+})
+
+// 🆕 获取指定Key的菜单权限
+ipcMain.handle('config:getMenuPermissions', async (_event, apiKeyId: string) => {
+  return configManager.getMenuPermissions(apiKeyId)
+})
+
+// 🆕 刷新指定Key的菜单权限
+ipcMain.handle('config:refreshMenuPermissions', async (_event, apiKeyId: string) => {
+  return configManager.refreshMenuPermissions(apiKeyId)
+})
+
+// 🆕 刷新默认Key的菜单权限
+ipcMain.handle('config:refreshDefaultKeyPermissions', async () => {
+  return configManager.refreshDefaultKeyPermissions()
+})
+
+// 🆕 获取所有API Keys（管理接口）
+ipcMain.handle('config:fetchAllApiKeys', async () => {
+  return configManager.fetchAllApiKeys()
+})
+
+// 🆕 吊销API Key（管理接口）
+ipcMain.handle('config:revokeApiKey', async (_event, key: string) => {
+  return configManager.revokeApiKey(key)
+})
+
+// 🆕 激活API Key（管理接口）
+ipcMain.handle('config:reactivateApiKey', async (_event, key: string) => {
+  return configManager.reactivateApiKey(key)
+})
+
+// 🆕 获取API Key详情（管理接口）
+ipcMain.handle('config:fetchApiKeyDetail', async (_event, key: string) => {
+  return configManager.fetchApiKeyDetail(key)
+})
+
+// 🆕 更新API Key基本信息（管理接口）
+ipcMain.handle('config:updateApiKey', async (_event, key: string, data: any) => {
+  return configManager.updateApiKey(key, data)
+})
+
+// 🆕 创建API Key（管理接口）
+ipcMain.handle('config:createApiKey', async (_event, data: any) => {
+  return configManager.createApiKey(data)
+})
+
+// 🆕 删除API Key（管理接口）
+ipcMain.handle('config:deleteApiKeyAdmin', async (_event, key: string) => {
+  return configManager.deleteApiKeyAdmin(key)
+})
+
+// 🆕 获取权限配置（管理接口）
+ipcMain.handle('config:fetchPermissionConfig', async (_event, key: string) => {
+  return configManager.fetchPermissionConfig(key)
+})
+
+// 🆕 获取权限注册表（管理接口）
+ipcMain.handle('config:fetchPermissionRegistry', async () => {
+  return configManager.fetchPermissionRegistry()
+})
+
+// 🆕 更新权限配置（PATCH部分更新）
+ipcMain.handle('config:patchPermissionConfig', async (_event, key: string, updates: any) => {
+  return configManager.patchPermissionConfig(key, updates)
 })
 
 // 获取应用版本号

@@ -18,7 +18,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('config:saveApiKeyWithCredentials', apiKey, name, isDefault),
     deleteApiKey: (id: string) => ipcRenderer.invoke('config:deleteApiKey', id),
     getFullApiKey: (id: string) => ipcRenderer.invoke('config:getFullApiKey', id),
-    getDatabaseCredentials: (id: string) => ipcRenderer.invoke('config:getDatabaseCredentials', id)
+    getDatabaseCredentials: (id: string) => ipcRenderer.invoke('config:getDatabaseCredentials', id),
+    // 🆕 菜单权限相关
+    getMenuPermissions: (apiKeyId: string) => ipcRenderer.invoke('config:getMenuPermissions', apiKeyId),
+    refreshMenuPermissions: (apiKeyId: string) => ipcRenderer.invoke('config:refreshMenuPermissions', apiKeyId),
+    refreshDefaultKeyPermissions: () => ipcRenderer.invoke('config:refreshDefaultKeyPermissions'),
+    // 🆕 管理接口
+    fetchAllApiKeys: () => ipcRenderer.invoke('config:fetchAllApiKeys'),
+    fetchApiKeyDetail: (key: string) => ipcRenderer.invoke('config:fetchApiKeyDetail', key),
+    createApiKey: (data: any) => ipcRenderer.invoke('config:createApiKey', data),
+    updateApiKey: (key: string, data: any) => ipcRenderer.invoke('config:updateApiKey', key, data),
+    deleteApiKeyAdmin: (key: string) => ipcRenderer.invoke('config:deleteApiKeyAdmin', key),
+    revokeApiKey: (key: string) => ipcRenderer.invoke('config:revokeApiKey', key),
+    reactivateApiKey: (key: string) => ipcRenderer.invoke('config:reactivateApiKey', key),
+    fetchPermissionConfig: (key: string) => ipcRenderer.invoke('config:fetchPermissionConfig', key),
+    fetchPermissionRegistry: () => ipcRenderer.invoke('config:fetchPermissionRegistry'),
+    patchPermissionConfig: (key: string, updates: any) => ipcRenderer.invoke('config:patchPermissionConfig', key, updates)
   },
 
   // 对话框
@@ -175,6 +190,21 @@ declare global {
         deleteApiKey: (id: string) => Promise<boolean>
         getFullApiKey: (id: string) => Promise<string | null>
         getDatabaseCredentials: (id: string) => Promise<any>
+        // 🆕 菜单权限相关
+        getMenuPermissions: (apiKeyId: string) => Promise<string[]>
+        refreshMenuPermissions: (apiKeyId: string) => Promise<{ success: boolean; menuPermissions?: string[]; error?: string }>
+        refreshDefaultKeyPermissions: () => Promise<{ success: boolean; menuPermissions?: string[]; error?: string }>
+        // 🆕 管理接口
+        fetchAllApiKeys: () => Promise<{ success: boolean; data?: any[]; total?: number; error?: string }>
+        fetchApiKeyDetail: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        createApiKey: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        updateApiKey: (key: string, data: any) => Promise<{ success: boolean; error?: string }>
+        deleteApiKeyAdmin: (key: string) => Promise<{ success: boolean; error?: string }>
+        revokeApiKey: (key: string) => Promise<{ success: boolean; error?: string }>
+        reactivateApiKey: (key: string) => Promise<{ success: boolean; error?: string }>
+        fetchPermissionConfig: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        fetchPermissionRegistry: () => Promise<{ success: boolean; data?: any; error?: string }>
+        patchPermissionConfig: (key: string, updates: any) => Promise<{ success: boolean; error?: string }>
       }
       dialog: {
         selectDirectory: () => Promise<string | null>

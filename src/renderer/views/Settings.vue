@@ -205,7 +205,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { FolderOpened, Refresh, Check } from '@element-plus/icons-vue'
 
 // 应用版本号
-const appVersion = ref('1.5.5')
+const appVersion = ref('1.6.0')
 
 // API Key配置（单一Key）
 const apiKeyConfig = reactive({
@@ -288,7 +288,10 @@ const saveApiKey = async () => {
           type: 'success',
           confirmButtonText: '确定'
         }
-      )
+      ).then(() => {
+        // 配置成功后刷新页面，让菜单根据权限显示
+        window.location.reload()
+      })
     } else {
       // 失败
       ElMessage.error(result.error || '保存失败')

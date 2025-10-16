@@ -21,6 +21,9 @@ interface ApiKeyInfo {
       password: string
     }
   }
+  // 🆕 菜单权限
+  menu_permissions?: string[]
+  permissions_updated_at?: string
 }
 
 interface AppConfig {
@@ -197,14 +200,465 @@ export class ConfigManager {
     }
   }
 
-  // 保存API Key（新版：同时获取并保存数据库凭证）
+  // 🆕 从后端获取菜单权限
+  async fetchMenuPermissions(apiKey: string): Promise<any> {
+    try {
+      console.log('🔑 获取菜单权限...')
+      const response = await axios.get(
+        'http://61.151.241.233:8080/api/v1/account/my-menus',
+        {
+          headers: {
+            'X-API-Key': apiKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 获取菜单权限成功:', response.data)
+      
+      if (response.data.success && response.data.data) {
+        return {
+          success: true,
+          menuPermissions: response.data.data.menu_permissions || []
+        }
+      } else {
+        return { success: false, error: '响应格式错误' }
+      }
+    } catch (error: any) {
+      console.error('❌ 获取菜单权限失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 从后端获取所有API Keys（管理接口）
+  async fetchAllApiKeys(): Promise<any> {
+    try {
+      // 获取当前用户的API Key（用于认证）
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('📋 获取所有API Keys（管理接口）...')
+      const response = await axios.get(
+        'http://61.151.241.233:8080/api/v1/admin/apikeys',
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 获取所有API Keys成功:', response.data)
+      
+      if (response.data.success) {
+        return {
+          success: true,
+          data: response.data.data || [],
+          total: response.data.total || 0
+        }
+      } else {
+        return { success: false, error: '响应格式错误' }
+      }
+    } catch (error: any) {
+      console.error('❌ 获取所有API Keys失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足，需要管理员权限' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 吊销API Key（管理接口）
+  async revokeApiKey(key: string): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('🚫 吊销API Key:', key)
+      const response = await axios.post(
+        `http://61.151.241.233:8080/api/v1/admin/apikeys/${key}/revoke`,
+        {},
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 吊销成功:', response.data)
+      
+      if (response.data.success) {
+        return { success: true }
+      } else {
+        return { success: false, error: response.data.error || '吊销失败' }
+      }
+    } catch (error: any) {
+      console.error('❌ 吊销失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 激活API Key（管理接口）
+  async reactivateApiKey(key: string): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('✅ 激活API Key:', key)
+      const response = await axios.post(
+        `http://61.151.241.233:8080/api/v1/admin/apikeys/${key}/reactivate`,
+        {},
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 激活成功:', response.data)
+      
+      if (response.data.success) {
+        return { success: true }
+      } else {
+        return { success: false, error: response.data.error || '激活失败' }
+      }
+    } catch (error: any) {
+      console.error('❌ 激活失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 获取API Key详情（管理接口）
+  async fetchApiKeyDetail(key: string): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('🔍 获取API Key详情:', key)
+      const response = await axios.get(
+        `http://61.151.241.233:8080/api/v1/admin/apikeys/${key}`,
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 获取详情成功:', response.data)
+      
+      if (response.data.success && response.data.data) {
+        return { success: true, data: response.data.data }
+      } else {
+        return { success: false, error: '响应格式错误' }
+      }
+    } catch (error: any) {
+      console.error('❌ 获取详情失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 404) {
+        return { success: false, error: 'API Key不存在' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 更新API Key基本信息（管理接口）
+  async updateApiKey(key: string, data: any): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('📝 更新API Key:', key, data)
+      const response = await axios.put(
+        `http://61.151.241.233:8080/api/v1/admin/apikeys/${key}`,
+        data,
+        {
+          headers: {
+            'X-API-Key': defaultKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 更新成功:', response.data)
+      
+      if (response.data.success) {
+        return { success: true }
+      } else {
+        return { success: false, error: response.data.error || '更新失败' }
+      }
+    } catch (error: any) {
+      console.error('❌ 更新失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 404) {
+        return { success: false, error: 'API Key不存在' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 创建API Key（管理接口）
+  async createApiKey(data: any): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('➕ 创建API Key:', data)
+      const response = await axios.post(
+        'http://61.151.241.233:8080/api/v1/admin/apikeys',
+        data,
+        {
+          headers: {
+            'X-API-Key': defaultKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 创建成功:', response.data)
+      
+      if (response.data.success) {
+        return { success: true, data: response.data.data }
+      } else {
+        return { success: false, error: response.data.error || '创建失败' }
+      }
+    } catch (error: any) {
+      console.error('❌ 创建失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 删除API Key（管理接口）
+  async deleteApiKeyAdmin(key: string): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('🗑️ 删除API Key:', key)
+      const response = await axios.delete(
+        `http://61.151.241.233:8080/api/v1/admin/apikeys/${key}`,
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 删除成功:', response.data)
+      
+      if (response.data.success) {
+        return { success: true }
+      } else {
+        return { success: false, error: response.data.error || '删除失败' }
+      }
+    } catch (error: any) {
+      console.error('❌ 删除失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 404) {
+        return { success: false, error: 'API Key不存在' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 获取权限配置（管理接口）
+  async fetchPermissionConfig(key: string): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('🔐 获取权限配置:', key)
+      const response = await axios.get(
+        `http://61.151.241.233:8080/api/v1/admin/permissions/${key}`,
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 获取权限配置成功:', response.data)
+      
+      if (response.data.success && response.data.data) {
+        return { success: true, data: response.data.data }
+      } else {
+        return { success: false, error: '响应格式错误' }
+      }
+    } catch (error: any) {
+      console.error('❌ 获取权限配置失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 404) {
+        return { success: false, error: '权限配置不存在' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 更新权限配置（PATCH部分更新）
+  async patchPermissionConfig(key: string, updates: any): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('🔄 部分更新权限配置:', key, updates)
+      const response = await axios.patch(
+        `http://61.151.241.233:8080/api/v1/admin/permissions/${key}`,
+        updates,
+        {
+          headers: {
+            'X-API-Key': defaultKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 权限配置更新成功:', response.data)
+      
+      if (response.data.success) {
+        return { success: true }
+      } else {
+        return { success: false, error: response.data.error || '更新失败' }
+      }
+    } catch (error: any) {
+      console.error('❌ 更新权限配置失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 404) {
+        return { success: false, error: 'API Key不存在' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 获取权限注册表（所有系统权限）
+  async fetchPermissionRegistry(): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('📚 获取权限注册表...')
+      const response = await axios.get(
+        'http://61.151.241.233:8080/api/v1/admin/permission-registry',
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 获取权限注册表成功:', response.data)
+      
+      // 注意：这个接口返回的是 code/data/message 格式
+      if (response.data.code === 'SUCCESS' && response.data.data) {
+        return { success: true, data: response.data.data }
+      } else if (response.data.success && response.data.data) {
+        return { success: true, data: response.data.data }
+      } else {
+        return { success: false, error: response.data.message || '响应格式错误' }
+      }
+    } catch (error: any) {
+      console.error('❌ 获取权限注册表失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 保存API Key（新版：同时获取并保存数据库凭证和菜单权限）
   async saveApiKeyWithCredentials(apiKey: string, name: string, isDefault: boolean = false): Promise<{ success: boolean; id?: string; error?: string; accountName?: string }> {
     try {
-      // 先调用后端接口获取数据库凭证
-      const credResult = await this.fetchDatabaseCredentials(apiKey)
+      // 并行调用后端接口获取数据库凭证和菜单权限
+      const [credResult, permResult] = await Promise.all([
+        this.fetchDatabaseCredentials(apiKey),
+        this.fetchMenuPermissions(apiKey)
+      ])
       
       if (!credResult.success) {
         return { success: false, error: credResult.error }
+      }
+      
+      // 菜单权限获取失败不影响保存，只是不设置权限
+      const menuPermissions = permResult.success ? permResult.menuPermissions : []
+      if (!permResult.success) {
+        console.warn('⚠️ 获取菜单权限失败，将使用空权限:', permResult.error)
       }
       
       const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
@@ -220,13 +674,15 @@ export class ConfigManager {
         apiKey: this.encrypt(apiKey),
         isDefault,
         createdAt: new Date().toISOString(),
-        databaseCredentials: credResult.credentials  // 保存数据库凭证
+        databaseCredentials: credResult.credentials,  // 保存数据库凭证
+        menu_permissions: menuPermissions,  // 🆕 保存菜单权限
+        permissions_updated_at: new Date().toISOString()  // 🆕 权限更新时间
       }
 
       keys.push(newKey)
       this.store.set('apiKeys', keys)
       
-      console.log('✅ API Key和数据库凭证已保存')
+      console.log('✅ API Key、数据库凭证和菜单权限已保存')
       
       return { 
         success: true, 
@@ -267,6 +723,62 @@ export class ConfigManager {
     const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
     const key = keys.find(k => k.id === apiKeyId)
     return key?.databaseCredentials || null
+  }
+
+  // 🆕 获取指定Key的菜单权限
+  getMenuPermissions(apiKeyId: string): string[] {
+    const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
+    const key = keys.find(k => k.id === apiKeyId)
+    return key?.menu_permissions || []
+  }
+
+  // 🆕 刷新指定Key的菜单权限
+  async refreshMenuPermissions(apiKeyId: string): Promise<{ success: boolean; menuPermissions?: string[]; error?: string }> {
+    try {
+      const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
+      const key = keys.find(k => k.id === apiKeyId)
+      
+      if (!key) {
+        return { success: false, error: 'API Key不存在' }
+      }
+      
+      // 获取完整API Key
+      const fullApiKey = this.decrypt(key.apiKey)
+      
+      // 从后端获取最新权限
+      const permResult = await this.fetchMenuPermissions(fullApiKey)
+      
+      if (!permResult.success) {
+        return { success: false, error: permResult.error }
+      }
+      
+      // 更新本地存储
+      key.menu_permissions = permResult.menuPermissions
+      key.permissions_updated_at = new Date().toISOString()
+      this.store.set('apiKeys', keys)
+      
+      console.log(`✅ 菜单权限已刷新 (${apiKeyId}):`, permResult.menuPermissions)
+      
+      return { 
+        success: true, 
+        menuPermissions: permResult.menuPermissions 
+      }
+    } catch (error: any) {
+      console.error('❌ 刷新菜单权限失败:', error)
+      return { success: false, error: error.message || '刷新失败' }
+    }
+  }
+
+  // 🆕 刷新默认Key的菜单权限
+  async refreshDefaultKeyPermissions(): Promise<{ success: boolean; menuPermissions?: string[]; error?: string }> {
+    const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
+    const defaultKey = keys.find(k => k.isDefault)
+    
+    if (!defaultKey) {
+      return { success: false, error: '未找到默认API Key' }
+    }
+    
+    return this.refreshMenuPermissions(defaultKey.id)
   }
 
   // 删除API Key
