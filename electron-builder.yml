@@ -3,7 +3,7 @@ productName: ZiZhou-Quant-Platform
 publish:
   provider: github
   owner: kaodaxueqiu
-  repo: zizhou-quant-platform
+  repo: market-data-downloader
 directories:
   output: dist
   buildResources: build
