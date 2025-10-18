@@ -178,7 +178,13 @@
                 :type="activePermissionCategory === 'menu' ? 'primary' : ''"
                 @click="activePermissionCategory = 'menu'"
               >
-                菜单权限 ({{ selectedMenuPermissions.length }}/7)
+                菜单权限 ({{ selectedMenuPermissions.length }}/8)
+              </el-button>
+              <el-button
+                :type="activePermissionCategory === 'factor' ? 'primary' : ''"
+                @click="activePermissionCategory = 'factor'"
+              >
+                因子库权限 ({{ getSelectedInCategory('factor_api') }}/{{ getCategoryPermissions('factor_api').length }})
               </el-button>
               <el-button
                 :type="activePermissionCategory === 'admin' ? 'primary' : ''"
@@ -220,6 +226,55 @@
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: right;">
                   <el-button @click="resetMenuPermissions">重置</el-button>
                   <el-button type="primary" @click="saveMenuPermissions">保存菜单权限</el-button>
+                </div>
+              </div>
+              
+              <!-- 因子库权限 -->
+              <div v-else-if="activePermissionCategory === 'factor'" style="padding: 20px;">
+                <div style="margin-bottom: 15px;">
+                  <el-button size="small" @click="selectAllCategoryPermissions('factor_api')">全选</el-button>
+                  <el-button size="small" @click="unselectAllCategoryPermissions('factor_api')">全不选</el-button>
+                </div>
+                
+                <el-table :data="getCategoryPermissions('factor_api')" style="width: 100%">
+                  <el-table-column width="60">
+                    <template #default="{ row }">
+                      <el-checkbox 
+                        :model-value="selectedApiPermissions.includes(row.resource)"
+                        @change="togglePermission(row.resource)"
+                      />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="权限名称" min-width="150">
+                    <template #default="{ row }">
+                      <div style="font-weight: 500;">{{ row.name }}</div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="接口" min-width="200">
+                    <template #default="{ row }">
+                      <el-text type="info" style="font-family: monospace; font-size: 12px;">{{ row.resource }}</el-text>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="风险等级" width="100">
+                    <template #default="{ row }">
+                      <el-tag 
+                        :type="row.risk_level === 'high' ? 'danger' : row.risk_level === 'medium' ? 'warning' : 'info'" 
+                        size="small"
+                      >
+                        {{ row.risk_level }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="说明" min-width="200">
+                    <template #default="{ row }">
+                      <el-text size="small">{{ row.description }}</el-text>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                
+                <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
+                  <el-button @click="resetApiPermissions">重置</el-button>
+                  <el-button type="primary" @click="saveApiPermissions">保存因子库权限</el-button>
                 </div>
               </div>
               
@@ -713,20 +768,6 @@
       </template>
     </el-dialog>
     
-    <!-- 权限配置对话框 -->
-    <el-dialog 
-      v-model="permissionDialogVisible" 
-      title="权限配置"
-      width="800px"
-      :close-on-click-modal="false"
-    >
-      <el-empty description="权限配置功能开发中..." :image-size="200" />
-      
-      <template #footer>
-        <el-button @click="permissionDialogVisible = false">取消</el-button>
-        <el-button type="primary">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -775,7 +816,6 @@ const submitting = ref(false)
 const formRef = ref<FormInstance>()
 const detailsVisible = ref(false)
 const selectedKey = ref<ApiKeyItem | null>(null)
-const permissionDialogVisible = ref(false)
 const createDialogVisible = ref(false)
 const creating = ref(false)
 const createFormRef = ref<FormInstance>()
@@ -801,6 +841,7 @@ const originalDatabaseConfig = ref<any>(null)
 const allMenusConfig = [
   { id: 'home', name: '首页' },
   { id: 'data_center', name: '数据中心' },
+  { id: 'factor_library', name: '因子库' },
   { id: 'task_management', name: '任务管理' },
   { id: 'history', name: '历史记录' },
   { id: 'sdk_download', name: 'SDK下载' },
@@ -1073,8 +1114,12 @@ const handleEdit = async (row: ApiKeyItem) => {
 
 // 权限配置
 const handlePermissionConfig = (row: ApiKeyItem) => {
-  selectedKey.value = row
-  permissionDialogVisible.value = true
+  // 切换到权限配置Tab
+  activeTab.value = 'permissions'
+  // 选中该用户
+  selectedPermissionKey.value = row.id
+  // 加载该用户的权限配置
+  loadUserPermissions()
 }
 
 // 吊销Key

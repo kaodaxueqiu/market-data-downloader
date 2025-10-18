@@ -233,7 +233,7 @@
               max-height="500"
               @selection-change="handleDownloadLeftSelectionChange"
             >
-              <el-table-column type="selection" width="50" />
+              <el-table-column type="selection" width="50" :selectable="isRowSelectable" />
               <el-table-column label="字段名" width="200">
                 <template #default="scope">
                   <el-text style="font-family: monospace">{{ getFieldName(scope.row) }}</el-text>
@@ -254,7 +254,7 @@
               height="400"
               @selection-change="handleDownloadRightSelectionChange"
             >
-              <el-table-column type="selection" width="50" />
+              <el-table-column type="selection" width="50" :selectable="isRowSelectable" />
               <el-table-column label="字段名" width="200">
                 <template #default="scope">
                   <el-text style="font-family: monospace">{{ getFieldName(scope.row) }}</el-text>
@@ -330,6 +330,7 @@ const selectedDownloadFields = ref<string[]>([])  // 存储选中的字段name
 const allFields = ref<any[]>([])  // 所有可用字段
 const downloadTableRef1 = ref()
 const downloadTableRef2 = ref()
+const isSyncing = ref(false)  // 标记是否正在同步选择状态
 
 // 获取数据源代码
 const getSourceCode = () => {
@@ -373,16 +374,30 @@ const getFieldComment = (field: any): string => {
   return field.cn_name || field.column_comment || ''
 }
 
-// 过滤后的字段（用于下载选择）- 显示全部字段
+// 过滤后的字段（用于下载选择）
 const filteredDownloadFields = computed(() => {
-  if (!fieldSearchKeyword.value) return allFields.value
-  const keyword = fieldSearchKeyword.value.toLowerCase()
-  return allFields.value.filter(f => {
-    const name = getFieldName(f).toLowerCase()
-    const comment = getFieldComment(f).toLowerCase()
-    return name.includes(keyword) || comment.includes(keyword)
-  })
+  let fields = allFields.value
+  
+  // 搜索过滤
+  if (fieldSearchKeyword.value) {
+    const keyword = fieldSearchKeyword.value.toLowerCase()
+    fields = fields.filter(f => {
+      const name = getFieldName(f).toLowerCase()
+      const comment = getFieldComment(f).toLowerCase()
+      return name.includes(keyword) || comment.includes(keyword)
+    })
+  }
+  
+  return fields
 })
+
+// 判断行是否可选（行情数据只能选已启用字段）
+const isRowSelectable = (row: any) => {
+  if (props.activeTab === 'market') {
+    return row.enabled === true
+  }
+  return true  // 静态元数据和加工数据全部可选
+}
 
 // 左右分栏字段
 const leftDownloadFields = computed(() => {
@@ -595,13 +610,15 @@ const showStaticFieldSelector = async () => {
     const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name, datasource)
     if (result.code === 200) {
       allFields.value = result.data?.columns || []
-      // 默认全选所有字段
-      selectedDownloadFields.value = allFields.value.map(f => f.column_name)
+      // 默认全选所有字段（使用getFieldName保持一致）
+      selectedDownloadFields.value = allFields.value.map(f => getFieldName(f))
       showFieldSelector.value = true
       
-      // 等待对话框打开后同步选择状态
+      // 等待对话框和表格完全渲染后同步选择状态
       await nextTick()
-      syncDownloadTableSelection()
+      setTimeout(() => {
+        syncDownloadTableSelection()
+      }, 200)
     } else {
       ElMessage.error('加载字段失败')
     }
@@ -623,13 +640,15 @@ const handleDownload = async () => {
     const result = await window.electronAPI.dictionary.getFields(sourceCode, false)
     if (result.code === 200) {
       allFields.value = result.data || []
-      // 默认全选已启用的字段
-      selectedDownloadFields.value = allFields.value.filter(f => f.enabled).map(f => f.name)
+      // 默认全选已启用的字段（使用getFieldName保持一致）
+      selectedDownloadFields.value = allFields.value.filter(f => f.enabled).map(f => getFieldName(f))
       showFieldSelector.value = true
       
-      // 等待对话框打开后同步选择状态
+      // 等待对话框和表格完全渲染后同步选择状态
       await nextTick()
-      syncDownloadTableSelection()
+      setTimeout(() => {
+        syncDownloadTableSelection()
+      }, 200)
     } else {
       ElMessage.error('加载字段失败')
     }
@@ -642,26 +661,37 @@ const handleDownload = async () => {
 const syncDownloadTableSelection = () => {
   if (!downloadTableRef1.value || !downloadTableRef2.value) return
   
-  downloadTableRef1.value.clearSelection()
-  downloadTableRef2.value.clearSelection()
+  // 先设置标记，然后在nextTick中操作表格
+  isSyncing.value = true
   
-  leftDownloadFields.value.forEach((row: any) => {
-    const fieldName = getFieldName(row)
-    if (selectedDownloadFields.value.includes(fieldName)) {
-      downloadTableRef1.value.toggleRowSelection(row, true)
-    }
-  })
-  
-  rightDownloadFields.value.forEach((row: any) => {
-    const fieldName = getFieldName(row)
-    if (selectedDownloadFields.value.includes(fieldName)) {
-      downloadTableRef2.value.toggleRowSelection(row, true)
-    }
+  nextTick(() => {
+    downloadTableRef1.value.clearSelection()
+    downloadTableRef2.value.clearSelection()
+    
+    leftDownloadFields.value.forEach((row: any) => {
+      const fieldName = getFieldName(row)
+      if (selectedDownloadFields.value.includes(fieldName)) {
+        downloadTableRef1.value.toggleRowSelection(row, true)
+      }
+    })
+    
+    rightDownloadFields.value.forEach((row: any) => {
+      const fieldName = getFieldName(row)
+      if (selectedDownloadFields.value.includes(fieldName)) {
+        downloadTableRef2.value.toggleRowSelection(row, true)
+      }
+    })
+    
+    // 同步完成后解除标记
+    isSyncing.value = false
   })
 }
 
 // 左表格选择变化
 const handleDownloadLeftSelectionChange = (selection: any[]) => {
+  // 如果正在同步选择状态，忽略此事件
+  if (isSyncing.value) return
+  
   const leftSelected = selection.map(f => getFieldName(f))
   const rightSelected = selectedDownloadFields.value.filter(f => 
     rightDownloadFields.value.some(r => getFieldName(r) === f)
@@ -671,6 +701,9 @@ const handleDownloadLeftSelectionChange = (selection: any[]) => {
 
 // 右表格选择变化
 const handleDownloadRightSelectionChange = (selection: any[]) => {
+  // 如果正在同步选择状态，忽略此事件
+  if (isSyncing.value) return
+  
   const rightSelected = selection.map(f => getFieldName(f))
   const leftSelected = selectedDownloadFields.value.filter(f => 
     leftDownloadFields.value.some(l => getFieldName(l) === f)
@@ -680,12 +713,13 @@ const handleDownloadRightSelectionChange = (selection: any[]) => {
 
 // 全选字段
 const selectAllDownloadFields = () => {
+  // 统一使用 getFieldName 获取字段名
   if (props.activeTab === 'market') {
     // 行情数据：只选择已启用的字段
-    selectedDownloadFields.value = allFields.value.filter(f => f.enabled).map(f => f.name)
+    selectedDownloadFields.value = allFields.value.filter(f => f.enabled).map(f => getFieldName(f))
   } else {
     // 静态元数据：全选所有字段
-    selectedDownloadFields.value = allFields.value.map(f => f.column_name)
+    selectedDownloadFields.value = allFields.value.map(f => getFieldName(f))
   }
   nextTick(() => syncDownloadTableSelection())
 }

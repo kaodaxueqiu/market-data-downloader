@@ -107,7 +107,7 @@ const router = useRouter()
 
 const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
-const appVersion = ref('1.6.0')
+const appVersion = ref('1.6.1')
 const sidebarCollapsed = ref(false)
 
 // 🆕 菜单权限相关
@@ -126,6 +126,7 @@ interface MenuItem {
 const allMenus: MenuItem[] = [
   { id: 'home', name: '首页', path: '/', icon: House },
   { id: 'data_center', name: '数据中心', path: '/data-center', icon: Connection },
+  { id: 'factor_library', name: '因子库', path: '/factor-library', icon: Box },
   { id: 'task_management', name: '任务管理', path: '/tasks', icon: List },
   { id: 'history', name: '历史记录', path: '/history', icon: Clock },
   { id: 'sdk_download', name: 'SDK下载', path: '/sdk-download', icon: Box },
@@ -157,6 +158,7 @@ const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     '/': '首页',
     '/data-center': '数据中心',
+    '/factor-library': '因子库',
     '/download': '行情数据下载',
     '/tasks': '任务管理',
     '/history': '历史记录',

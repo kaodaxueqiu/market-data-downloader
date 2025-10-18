@@ -205,7 +205,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { FolderOpened, Refresh, Check } from '@element-plus/icons-vue'
 
 // 应用版本号
-const appVersion = ref('1.6.0')
+const appVersion = ref('1.6.1')
 
 // API Key配置（单一Key）
 const apiKeyConfig = reactive({

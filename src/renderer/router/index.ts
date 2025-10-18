@@ -13,6 +13,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/DataCenter/index.vue')
   },
   {
+    path: '/factor-library',
+    name: 'FactorLibrary',
+    component: () => import('../views/FactorLibrary.vue')
+  },
+  {
     path: '/download',
     name: 'Download',
     component: () => import('../views/QueryAndExport.vue')

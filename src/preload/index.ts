@@ -121,6 +121,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => 
       ipcRenderer.invoke('dbdict:previewTable', tableName, datasource)
   },
+  
+  // 因子库API
+  factor: {
+    setApiKey: (apiKey: string) => ipcRenderer.invoke('factor:setApiKey', apiKey),
+    getCategories: () => ipcRenderer.invoke('factor:getCategories'),
+    getTags: (tagType?: string) => ipcRenderer.invoke('factor:getTags', tagType),
+    getFactorList: (params: any) => ipcRenderer.invoke('factor:getFactorList', params),
+    getFactorDetail: (factorId: number) => ipcRenderer.invoke('factor:getFactorDetail', factorId),
+    downloadFactorData: (params: any) => ipcRenderer.invoke('factor:downloadFactorData', params),
+    getFactorPerformance: (factorId: number, days?: number) => ipcRenderer.invoke('factor:getFactorPerformance', factorId, days)
+  },
 
   // 静态数据下载 (异步任务系统 - PostgreSQL + ClickHouse)
   staticDownload: {
@@ -258,6 +269,15 @@ declare global {
         clearCache: (datasource?: 'postgresql' | 'clickhouse') => Promise<any>
         downloadData: (params: any, savePath: string) => Promise<any>
         previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+      }
+      factor: {
+        setApiKey: (apiKey: string) => Promise<boolean>
+        getCategories: () => Promise<any>
+        getTags: (tagType?: string) => Promise<any>
+        getFactorList: (params: any) => Promise<any>
+        getFactorDetail: (factorId: number) => Promise<any>
+        downloadFactorData: (params: any) => Promise<any>
+        getFactorPerformance: (factorId: number, days?: number) => Promise<any>
       }
       staticDownload: {
         createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse') => Promise<string>

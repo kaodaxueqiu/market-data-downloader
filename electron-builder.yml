@@ -1,9 +1,9 @@
-appId: com.tradingsystem.market-downloader
-productName: Market Data Downloader
+appId: com.zizhou.quant-platform
+productName: ZiZhou-Quant-Platform
 publish:
   provider: github
   owner: kaodaxueqiu
-  repo: market-data-downloader
+  repo: zizhou-quant-platform
 directories:
   output: dist
   buildResources: build
@@ -54,7 +54,7 @@ linux:
     - target: AppImage
       arch:
         - x64
-  maintainer: Trading System Team
+  maintainer: ZiZhou Quant Team
   category: Finance
   icon: public/icon.png
 nsis:
@@ -67,5 +67,5 @@ nsis:
   installerHeaderIcon: public/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Market Data Downloader
+  shortcutName: 资舟量化研究平台
 forceCodeSigning: false

@@ -4,8 +4,8 @@
     <el-card class="welcome-card">
       <div class="welcome-content">
         <div class="welcome-text">
-          <h1>欢迎使用市场数据下载工具 ✨</h1>
-          <p>专业的金融市场数据获取解决方案，支持53种消息类型，覆盖股票、期货、期权、港股通全市场 📊</p>
+          <h1>欢迎使用资舟量化研究平台 ✨</h1>
+          <p>专业的量化研究与数据管理平台，提供因子库管理、市场数据获取、数据字典查询等全方位量化研究工具 📊</p>
           <div class="quick-actions">
             <el-button type="primary" size="large" @click="goToDownload">
               <el-icon><Download /></el-icon>

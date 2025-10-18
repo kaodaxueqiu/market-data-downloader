@@ -6,6 +6,7 @@ import staticDownloadManager from './staticDownload'
 import { ConfigManager } from './config'
 import { getDictionaryAPI } from './dictionary'
 import { getDbDictAPI } from './dbdict'
+import { factorAPI } from './factor'
 import * as updater from './updater'
 
 // 禁用GPU加速，避免Windows上的GPU崩溃问题
@@ -879,6 +880,74 @@ ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: stri
   } catch (error: any) {
     console.error('❌ 下载保存失败:', error)
     throw new Error(error.message || '下载静态数据失败')
+  }
+})
+
+// ========== 因子库API ==========
+
+// 设置因子库API Key
+ipcMain.handle('factor:setApiKey', async (_event, apiKey: string) => {
+  factorAPI.setApiKey(apiKey)
+  return true
+})
+
+// 获取因子分类树
+ipcMain.handle('factor:getCategories', async () => {
+  try {
+    const result = await factorAPI.getCategories()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取因子分类树失败')
+  }
+})
+
+// 获取因子标签列表
+ipcMain.handle('factor:getTags', async (_event, tagType?: string) => {
+  try {
+    const result = await factorAPI.getTags(tagType)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取因子标签失败')
+  }
+})
+
+// 获取因子列表
+ipcMain.handle('factor:getFactorList', async (_event, params: any) => {
+  try {
+    const result = await factorAPI.getFactorList(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取因子列表失败')
+  }
+})
+
+// 获取因子详情
+ipcMain.handle('factor:getFactorDetail', async (_event, factorId: number) => {
+  try {
+    const result = await factorAPI.getFactorDetail(factorId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取因子详情失败')
+  }
+})
+
+// 下载因子数据
+ipcMain.handle('factor:downloadFactorData', async (_event, params: any) => {
+  try {
+    const result = await factorAPI.downloadFactorData(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '创建因子下载任务失败')
+  }
+})
+
+// 获取因子性能数据
+ipcMain.handle('factor:getFactorPerformance', async (_event, factorId: number, days?: number) => {
+  try {
+    const result = await factorAPI.getFactorPerformance(factorId, days)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取因子性能数据失败')
   }
 })
 
