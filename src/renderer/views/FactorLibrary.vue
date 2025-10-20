@@ -1,8 +1,8 @@
 <template>
   <div class="factor-library-page">
     <!-- 一级Tab：大功能模块 -->
-    <el-tabs v-model="activeMainTab" class="main-tabs">
-      <el-tab-pane label="因子广场" name="plaza">
+    <el-tabs v-model="activeMainTab" class="main-tabs" @tab-change="handleMainTabChange">
+      <el-tab-pane label="📚 因子广场" name="plaza">
         <!-- 二级Tab：视图切换 -->
         <el-tabs v-model="activeViewTab" class="view-tabs" @tab-change="handleViewTabChange">
           <el-tab-pane name="category">
@@ -326,15 +326,381 @@
         </div>
       </el-tab-pane>
 
-      <!-- 其他Tab占位 -->
-      <el-tab-pane label="因子提交" name="submit" disabled>
-        <el-empty description="功能开发中..." />
+      <!-- Tab2: 因子回测与提交 -->
+      <el-tab-pane label="🧪 因子回测与提交" name="backtest">
+        <div class="backtest-submit-container">
+          <!-- 三步流程 -->
+          <el-steps :active="currentStep" align-center class="steps-container">
+            <el-step title="定义因子" description="填写因子信息" icon="Edit" />
+            <el-step title="推送回测" description="查看回测结果" icon="TrendCharts" />
+            <el-step title="提交审核" description="满意后提交入库" icon="Upload" />
+          </el-steps>
+
+          <!-- 步骤1: 定义因子（左右分栏布局） -->
+          <el-card v-show="currentStep === 0" class="step-card" shadow="never">
+            <template #header>
+              <div class="card-header">
+                <span>📝 第一步：定义因子</span>
+              </div>
+            </template>
+            
+            <div class="define-layout">
+              <!-- 左侧导航 -->
+              <div class="define-nav">
+                <div 
+                  v-for="section in defineSections" 
+                  :key="section.key"
+                  :class="['nav-item', { active: activeDefineSection === section.key }]"
+                  @click="activeDefineSection = section.key"
+                >
+                  <span class="nav-icon">{{ section.icon }}</span>
+                  <span class="nav-label">{{ section.label }}</span>
+                  <span v-if="isSectionCompleted(section.key)" class="check-icon">✓</span>
+                </div>
+              </div>
+
+              <!-- 右侧内容区 -->
+              <div class="define-content">
+                <!-- 基本信息 -->
+                <div v-show="activeDefineSection === 'basic'" class="section-panel">
+                  <h3 class="section-title">📝 基本信息</h3>
+                  <el-form :model="factorForm" label-width="100px">
+                    <el-form-item label="因子名称" required>
+                      <el-input 
+                        v-model="factorForm.name" 
+                        placeholder="例如: 5日动能因子"
+                        size="large"
+                      />
+                    </el-form-item>
+                    <el-form-item label="因子描述">
+                      <el-input
+                        v-model="factorForm.description"
+                        type="textarea"
+                        :rows="4"
+                        placeholder="简要描述因子的含义、用途和特点..."
+                      />
+                    </el-form-item>
+                    <el-form-item label="因子作者">
+                      <el-input v-model="factorForm.author" disabled size="large">
+                        <template #prepend>
+                          <el-icon><User /></el-icon>
+                        </template>
+                      </el-input>
+                      <div class="form-tip">
+                        <el-text type="info" size="small">作者信息从当前API Key自动获取</el-text>
+                      </div>
+                    </el-form-item>
+                  </el-form>
+                </div>
+
+                <!-- 分类信息 -->
+                <div v-show="activeDefineSection === 'category'" class="section-panel">
+                  <h3 class="section-title">📁 分类信息</h3>
+                  <el-form :model="factorForm" label-width="100px">
+                    <el-form-item label="因子分类" required>
+                      <el-cascader
+                        v-model="factorForm.categoryPath"
+                        :options="treeDataWithUniqueKeys"
+                        :props="{ label: 'name', value: 'id', children: 'children', emitPath: true }"
+                        placeholder="请选择分类"
+                        size="large"
+                        style="width: 100%"
+                      />
+                      <div class="form-tip">
+                        <el-text type="info" size="small">请选择最具体的三级分类</el-text>
+                      </div>
+                    </el-form-item>
+                    <el-form-item label="已选分类">
+                      <el-tag v-if="getSelectedCategoryName()" type="primary" size="large">
+                        {{ getSelectedCategoryName() }}
+                      </el-tag>
+                      <el-text v-else type="info">未选择</el-text>
+                    </el-form-item>
+                  </el-form>
+                </div>
+
+                <!-- 标签信息 -->
+                <div v-show="activeDefineSection === 'tags'" class="section-panel">
+                  <h3 class="section-title">🏷️ 标签信息</h3>
+                  <div class="tags-section">
+                    <el-alert 
+                      title="标签说明" 
+                      type="info" 
+                      :closable="false"
+                      style="margin-bottom: 20px"
+                    >
+                      <div>标签用于更精确地描述因子特征，便于后续检索和筛选</div>
+                    </el-alert>
+                    
+                    <div v-for="(tags, tagType) in tagGroups" :key="tagType" class="tag-group-block">
+                      <div class="tag-group-header">
+                        <span class="tag-type-title">{{ getTagTypeLabel(tagType) }}</span>
+                        <el-text type="info" size="small">已选 {{ getSelectedTagCountByType(tagType) }} 个</el-text>
+                      </div>
+                      <div class="tag-items-block">
+                        <el-check-tag
+                          v-for="tag in tags"
+                          :key="tag.id"
+                          :checked="factorForm.tags.includes(tag.tag_value)"
+                          @change="toggleFactorTag(tag.tag_value)"
+                        >
+                          {{ tag.tag_name }}
+                        </el-check-tag>
+                      </div>
+                    </div>
+                    
+                    <div v-if="Object.keys(tagGroups).length === 0" class="no-tags">
+                      <el-empty description="暂无可选标签" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 代码信息 -->
+                <div v-show="activeDefineSection === 'code'" class="section-panel">
+                  <h3 class="section-title">💻 代码信息</h3>
+                  <el-form :model="factorForm" label-width="100px">
+                    <el-form-item label="实现方式">
+                      <el-radio-group v-model="factorForm.codeType" size="large">
+                        <el-radio-button value="formula">📐 公式表达式</el-radio-button>
+                        <el-radio-button value="python">🐍 Python代码</el-radio-button>
+                        <el-radio-button value="cpp">⚡ C++代码</el-radio-button>
+                      </el-radio-group>
+                    </el-form-item>
+                    
+                    <el-form-item label="因子代码" required>
+                      <el-input
+                        v-model="factorForm.formula"
+                        type="textarea"
+                        :autosize="{ minRows: 6, maxRows: 30 }"
+                        :placeholder="getCodePlaceholder()"
+                        class="code-editor"
+                      />
+                      <div class="form-tip">
+                        <el-text type="info" size="small">{{ getCodeTip() }}</el-text>
+                      </div>
+                    </el-form-item>
+                    
+                    <el-form-item label="回测周期">
+                      <el-date-picker
+                        v-model="factorForm.backtestRange"
+                        type="daterange"
+                        range-separator="至"
+                        start-placeholder="开始日期"
+                        end-placeholder="结束日期"
+                        value-format="YYYY-MM-DD"
+                        size="large"
+                        style="width: 100%"
+                      />
+                    </el-form-item>
+                  </el-form>
+                </div>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <el-button type="primary" size="large" @click="goToBacktest" :disabled="!canGoToBacktest">
+                完成定义，推送回测
+                <el-icon class="el-icon--right"><ArrowRight /></el-icon>
+              </el-button>
+            </div>
+          </el-card>
+
+          <!-- 步骤2: 推送回测 -->
+          <el-card v-show="currentStep === 1" class="step-card" shadow="never">
+            <template #header>
+              <div class="card-header">
+                <span>📊 第二步：推送回测</span>
+              </div>
+            </template>
+            <div class="backtest-section">
+              <el-alert
+                title="回测说明"
+                type="info"
+                :closable="false"
+                show-icon
+                class="backtest-alert"
+              >
+                <div>此步骤仅进行回测验证，<strong>不会将因子写入数据库</strong>。只有第三步"提交审核"后才会入库。</div>
+              </el-alert>
+
+              <!-- 因子信息展示 -->
+              <div class="factor-info">
+                <el-descriptions title="因子信息" :column="2" border>
+                  <el-descriptions-item label="因子名称">{{ factorForm.name }}</el-descriptions-item>
+                  <el-descriptions-item label="因子公式">{{ factorForm.formula }}</el-descriptions-item>
+                  <el-descriptions-item label="回测周期" :span="2">
+                    {{ factorForm.backtestRange?.[0] }} 至 {{ factorForm.backtestRange?.[1] }}
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
+
+              <!-- 回测进度 -->
+              <div v-if="backtestStatus === 'running'" class="backtest-progress">
+                <el-progress :percentage="backtestProgress" :stroke-width="20" :text-inside="true">
+                  <span>回测中... {{ backtestProgress }}%</span>
+                </el-progress>
+              </div>
+
+              <!-- 回测结果 -->
+              <div v-if="backtestStatus === 'completed'" class="backtest-result">
+                <el-result icon="success" title="回测完成" sub-title="以下是回测结果">
+                  <template #extra>
+                    <div class="result-metrics">
+                      <el-statistic title="IC均值" :value="backtestResult.icMean" :precision="4" />
+                      <el-statistic title="IC IR" :value="backtestResult.icIr" :precision="2" />
+                      <el-statistic title="Rank IC" :value="backtestResult.rankIcMean" :precision="4" />
+                      <el-statistic title="换手率" :value="backtestResult.turnover" :precision="2" suffix="%" />
+                    </div>
+                  </template>
+                </el-result>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <el-button @click="currentStep = 0">
+                <el-icon class="el-icon--left"><ArrowLeft /></el-icon>
+                上一步
+              </el-button>
+              <el-button
+                type="primary"
+                @click="startBacktest"
+                :loading="backtestStatus === 'running'"
+                v-if="backtestStatus !== 'completed'"
+              >
+                <el-icon class="el-icon--left"><TrendCharts /></el-icon>
+                开始回测
+              </el-button>
+              <el-button
+                type="success"
+                @click="currentStep = 2"
+                v-if="backtestStatus === 'completed'"
+              >
+                下一步：提交审核
+                <el-icon class="el-icon--right"><ArrowRight /></el-icon>
+              </el-button>
+            </div>
+          </el-card>
+
+          <!-- 步骤3: 提交审核 -->
+          <el-card v-show="currentStep === 2" class="step-card" shadow="never">
+            <template #header>
+              <div class="card-header">
+                <span>✅ 第三步：提交审核</span>
+              </div>
+            </template>
+            <div class="submit-section">
+              <el-alert
+                title="提交说明"
+                type="warning"
+                :closable="false"
+                show-icon
+                class="submit-alert"
+              >
+                <div>提交后因子将进入审核队列，状态为 <el-tag type="warning" size="small">pending</el-tag>，审核通过后状态变为 <el-tag type="success" size="small">production</el-tag></div>
+              </el-alert>
+
+              <!-- 最终确认信息 -->
+              <div class="final-review">
+                <el-descriptions title="因子完整信息" :column="1" border>
+                  <el-descriptions-item label="因子名称">{{ factorForm.name }}</el-descriptions-item>
+                  <el-descriptions-item label="因子公式">{{ factorForm.formula }}</el-descriptions-item>
+                  <el-descriptions-item label="因子分类">{{ getSelectedCategoryName() }}</el-descriptions-item>
+                  <el-descriptions-item label="因子标签">
+                    <el-tag v-for="tag in getSelectedTagNames()" :key="tag" size="small" style="margin-right: 5px">
+                      {{ tag }}
+                    </el-tag>
+                    <span v-if="factorForm.tags.length === 0">-</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="因子作者">{{ factorForm.author || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="IC IR">
+                    <el-tag :type="getIRTagType(backtestResult.icIr)">{{ backtestResult.icIr }}</el-tag>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Rank IC">{{ backtestResult.rankIcMean }}</el-descriptions-item>
+                  <el-descriptions-item label="换手率">{{ backtestResult.turnover }}%</el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <el-button @click="currentStep = 1">
+                <el-icon class="el-icon--left"><ArrowLeft /></el-icon>
+                上一步
+              </el-button>
+              <el-button type="success" @click="submitFactor" :loading="submitting">
+                <el-icon class="el-icon--left"><Upload /></el-icon>
+                提交到审核队列
+              </el-button>
+            </div>
+          </el-card>
+        </div>
       </el-tab-pane>
-      <el-tab-pane label="因子回测" name="backtest" disabled>
-        <el-empty description="功能开发中..." />
-      </el-tab-pane>
-      <el-tab-pane label="因子管理" name="manage" disabled>
-        <el-empty description="功能开发中..." />
+
+      <!-- Tab3: 因子管理 -->
+      <el-tab-pane label="⚙️ 因子管理" name="manage">
+        <div class="manage-container">
+          <el-alert
+            title="因子管理"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 20px"
+          >
+            <div>查看和管理你提交的所有因子</div>
+          </el-alert>
+          
+          <!-- 筛选器 -->
+          <div class="manage-filters">
+            <el-select v-model="manageFilter" placeholder="筛选状态" style="width: 200px">
+              <el-option label="全部因子" value="all" />
+              <el-option label="待审核" value="pending" />
+              <el-option label="测试中" value="testing" />
+              <el-option label="生产环境" value="production" />
+              <el-option label="已废弃" value="deprecated" />
+            </el-select>
+          </div>
+
+          <!-- 我的因子列表 -->
+          <el-table :data="myFactors" style="width: 100%; margin-top: 20px" v-loading="loadingMyFactors">
+            <el-table-column prop="factor_code" label="因子代码" width="150" />
+            <el-table-column prop="factor_name" label="因子名称" width="200" />
+            <el-table-column prop="category_l3_name" label="分类" width="150" />
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="scope">
+                <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+                  {{ getStatusLabel(scope.row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="ic_ir" label="IC IR" width="100">
+              <template #default="scope">
+                <el-tag :type="getIRTagType(scope.row.ic_ir)" size="small">
+                  {{ scope.row.ic_ir?.toFixed(2) || '-' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="创建时间" width="180">
+              <template #default="scope">
+                {{ formatDate(scope.row.created_at) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" fixed="right" width="200">
+              <template #default="scope">
+                <el-button link type="primary" size="small" @click="viewFactorDetail(scope.row)">
+                  查看详情
+                </el-button>
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  @click="deprecateFactor(scope.row)"
+                  v-if="scope.row.status !== 'deprecated'"
+                >
+                  废弃
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </el-tab-pane>
     </el-tabs>
 
@@ -410,12 +776,55 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Search, Refresh, Download, TrendCharts, Expand } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Search, Refresh, Download, TrendCharts, Expand,
+  ArrowRight, ArrowLeft, Upload, User
+} from '@element-plus/icons-vue'
 
 // Tab状态
 const activeMainTab = ref('plaza')
 const activeViewTab = ref('category')
+
+// 回测与提交相关状态
+const currentStep = ref(0)  // 当前步骤: 0-定义 1-回测 2-提交
+const backtestStatus = ref('idle')  // idle | running | completed | failed
+const backtestProgress = ref(0)
+const submitting = ref(false)
+
+// 定义因子 - 左侧导航
+const activeDefineSection = ref('basic')  // 当前激活的定义区域
+const defineSections = [
+  { key: 'basic', label: '基本信息', icon: '📝' },
+  { key: 'category', label: '分类信息', icon: '📁' },
+  { key: 'tags', label: '标签信息', icon: '🏷️' },
+  { key: 'code', label: '代码信息', icon: '💻' }
+]
+
+// 因子表单数据
+const factorForm = ref({
+  name: '',
+  formula: '',
+  codeType: 'formula',  // formula | python | cpp
+  categoryPath: [],
+  tags: [] as string[],  // 选中的标签值
+  backtestRange: [],
+  description: '',
+  author: ''  // 从API Key自动提取
+})
+
+// 回测结果
+const backtestResult = ref({
+  icMean: 0,
+  icIr: 0,
+  rankIcMean: 0,
+  turnover: 0
+})
+
+// 因子管理相关
+const manageFilter = ref('all')
+const myFactors = ref<any[]>([])
+const loadingMyFactors = ref(false)
 
 // 数据状态
 const loadingCategories = ref(false)
@@ -686,6 +1095,361 @@ const handleViewTabChange = () => {
   selectedStatus.value = 'all'
   pagination.value.page = 1
   loadFactors()
+}
+
+// 一级Tab切换
+const handleMainTabChange = async (tabName: string) => {
+  if (tabName === 'backtest') {
+    // 切换到回测Tab时，重置表单并加载作者信息
+    await resetFactorForm()
+    // 确保分类树和标签已加载
+    if (categoryTree.value.length === 0) {
+      await loadCategories()
+    }
+    if (Object.keys(tagGroups.value).length === 0) {
+      await loadTags()
+    }
+  } else if (tabName === 'manage') {
+    // 切换到管理Tab时，加载我的因子
+    loadMyFactors()
+  }
+}
+
+// ========== 回测与提交相关方法 ==========
+
+// 重置因子表单
+const resetFactorForm = async () => {
+  currentStep.value = 0
+  backtestStatus.value = 'idle'
+  backtestProgress.value = 0
+  
+  // 获取作者信息
+  const author = await getAuthorFromApiKey()
+  
+  factorForm.value = {
+    name: '',
+    formula: '',
+    codeType: 'formula',
+    categoryPath: [],
+    tags: [],
+    backtestRange: [],
+    description: '',
+    author: author
+  }
+  
+  // 重置定义区域导航
+  activeDefineSection.value = 'basic'
+  backtestResult.value = {
+    icMean: 0,
+    icIr: 0,
+    rankIcMean: 0,
+    turnover: 0
+  }
+}
+
+// 从API Key获取作者信息
+const getAuthorFromApiKey = async () => {
+  try {
+    const apiKeys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = apiKeys.find((k: any) => k.isDefault)
+    if (defaultKey && defaultKey.name) {
+      return defaultKey.name  // 使用API Key的名称作为作者
+    }
+    return '未知作者'
+  } catch (error) {
+    console.error('获取作者信息失败:', error)
+    return '未知作者'
+  }
+}
+
+// 切换因子标签
+const toggleFactorTag = (tagValue: string) => {
+  const index = factorForm.value.tags.indexOf(tagValue)
+  if (index > -1) {
+    factorForm.value.tags.splice(index, 1)
+  } else {
+    factorForm.value.tags.push(tagValue)
+  }
+}
+
+// 获取选中标签的名称
+const getSelectedTagNames = () => {
+  const selectedNames: string[] = []
+  Object.values(tagGroups.value).forEach(tags => {
+    tags.forEach(tag => {
+      if (factorForm.value.tags.includes(tag.tag_value)) {
+        selectedNames.push(tag.tag_name)
+      }
+    })
+  })
+  return selectedNames
+}
+
+// 检查定义区域是否完成
+const isSectionCompleted = (sectionKey: string) => {
+  switch (sectionKey) {
+    case 'basic':
+      return !!factorForm.value.name
+    case 'category':
+      return factorForm.value.categoryPath.length > 0
+    case 'tags':
+      return factorForm.value.tags.length > 0
+    case 'code':
+      return !!factorForm.value.formula
+    default:
+      return false
+  }
+}
+
+// 获取某类型已选标签数量
+const getSelectedTagCountByType = (tagType: string) => {
+  const tags = tagGroups.value[tagType] || []
+  const tagValues = tags.map(t => t.tag_value)
+  return factorForm.value.tags.filter(v => tagValues.includes(v)).length
+}
+
+// 获取代码编辑器占位符
+const getCodePlaceholder = () => {
+  const placeholders: Record<string, string> = {
+    formula: '例如: (close - Ref(close, 5)) / Ref(close, 5)',
+    python: `# Python 因子实现示例
+def calculate_factor(data):
+    """
+    参数:
+        data: pandas.DataFrame，包含 open, high, low, close, volume 等字段
+    返回:
+        pandas.Series，因子值
+    """
+    # 计算5日收益率
+    ret_5d = data['close'] / data['close'].shift(5) - 1
+    return ret_5d`,
+    cpp: `// C++ 因子实现示例
+#include <vector>
+#include <cmath>
+
+// 因子计算函数
+double calculate_factor(const std::vector<double>& close, int index) {
+    if (index < 5) return NAN;
+    
+    // 计算5日收益率
+    double ret_5d = (close[index] - close[index - 5]) / close[index - 5];
+    
+    return ret_5d;
+}
+
+// 或者使用完整的市场数据结构
+/*
+struct MarketData {
+    double open, high, low, close, volume;
+    long long timestamp;
+};
+
+double calculate_factor(const std::vector<MarketData>& data, int index) {
+    // 实现因子计算逻辑
+    return 0.0;
+}
+*/`
+  }
+  return placeholders[factorForm.value.codeType] || ''
+}
+
+// 获取代码提示
+const getCodeTip = () => {
+  const tips: Record<string, string> = {
+    formula: '支持常用算子：Ref(引用), Mean(均值), Std(标准差), Sum(求和), Max(最大), Min(最小)等',
+    python: '函数名必须为 calculate_factor，参数为 DataFrame，返回 Series。可使用 pandas、numpy 等常用库',
+    cpp: 'C++代码提交后将由服务端编译（编译时间约30-60秒）。编译成功后才能回测。适用于高性能计算场景'
+  }
+  return tips[factorForm.value.codeType] || ''
+}
+
+// 检查是否可以进入回测步骤
+const canGoToBacktest = computed(() => {
+  return factorForm.value.name &&
+         factorForm.value.formula &&
+         factorForm.value.categoryPath.length > 0
+})
+
+// 进入回测步骤
+const goToBacktest = () => {
+  if (!canGoToBacktest.value) {
+    ElMessage.warning('请填写完整的因子信息')
+    return
+  }
+  currentStep.value = 1
+}
+
+// 开始回测
+const startBacktest = async () => {
+  backtestStatus.value = 'running'
+  backtestProgress.value = 0
+  
+  try {
+    // 模拟回测过程
+    const progressInterval = setInterval(() => {
+      if (backtestProgress.value < 100) {
+        backtestProgress.value += 10
+      } else {
+        clearInterval(progressInterval)
+      }
+    }, 300)
+    
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    
+    // 模拟回测结果
+    backtestResult.value = {
+      icMean: 0.045 + Math.random() * 0.01,
+      icIr: 1.5 + Math.random() * 0.5,
+      rankIcMean: 0.052 + Math.random() * 0.01,
+      turnover: 12 + Math.random() * 5
+    }
+    
+    backtestStatus.value = 'completed'
+    ElMessage.success('回测完成！')
+  } catch (error: any) {
+    backtestStatus.value = 'failed'
+    ElMessage.error('回测失败: ' + error.message)
+  }
+}
+
+// 提交因子
+const submitFactor = async () => {
+  submitting.value = true
+  try {
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    ElMessage.success('因子提交成功！已进入审核队列')
+    
+    // 重置表单并切换到管理Tab
+    resetFactorForm()
+    activeMainTab.value = 'manage'
+    loadMyFactors()
+  } catch (error: any) {
+    ElMessage.error('提交失败: ' + error.message)
+  } finally {
+    submitting.value = false
+  }
+}
+
+// 获取选中分类的名称
+const getSelectedCategoryName = () => {
+  if (!factorForm.value.categoryPath || factorForm.value.categoryPath.length === 0) {
+    return '-'
+  }
+  
+  // 递归查找分类名称
+  const findCategory = (tree: any[], path: number[], index: number = 0): string => {
+    if (index >= path.length) return ''
+    
+    const node = tree.find(n => n.id === path[index])
+    if (!node) return ''
+    
+    if (index === path.length - 1) {
+      return node.name
+    }
+    
+    if (node.children && node.children.length > 0) {
+      return findCategory(node.children, path, index + 1)
+    }
+    
+    return node.name
+  }
+  
+  return findCategory(categoryTree.value, factorForm.value.categoryPath)
+}
+
+// 获取IR Tag类型
+const getIRTagType = (ir: number) => {
+  if (ir >= 2) return 'success'
+  if (ir >= 1.5) return 'primary'
+  if (ir >= 1) return 'warning'
+  return 'danger'
+}
+
+// ========== 因子管理相关方法 ==========
+
+// 加载我的因子列表
+const loadMyFactors = async () => {
+  loadingMyFactors.value = true
+  try {
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // 模拟数据
+    myFactors.value = [
+      {
+        factor_id: 1,
+        factor_code: 'MOMENTUM_5D',
+        factor_name: '5日动能因子',
+        category_l3_name: '短期动量',
+        status: 'production',
+        ic_ir: 1.67,
+        created_at: '2025-10-15T10:00:00Z'
+      },
+      {
+        factor_id: 2,
+        factor_code: 'VOL_STD_20D',
+        factor_name: '20日波动率',
+        category_l3_name: '历史波动率',
+        status: 'pending',
+        ic_ir: 1.2,
+        created_at: '2025-10-18T14:30:00Z'
+      }
+    ]
+  } catch (error: any) {
+    ElMessage.error('加载因子列表失败: ' + error.message)
+  } finally {
+    loadingMyFactors.value = false
+  }
+}
+
+// 获取状态Tag类型
+const getStatusTagType = (status: string) => {
+  const types: Record<string, any> = {
+    pending: 'warning',
+    testing: 'info',
+    production: 'success',
+    deprecated: 'danger'
+  }
+  return types[status] || 'info'
+}
+
+// 查看因子详情
+const viewFactorDetail = (factor: any) => {
+  selectedFactor.value = factor
+  selectedFactorDetail.value = factor
+  // 详情直接在右侧面板显示，不需要弹窗
+}
+
+// 废弃因子
+const deprecateFactor = async (factor: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要废弃因子"${factor.factor_name}"吗？`,
+      '警告',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    ElMessage.success('因子已废弃')
+    loadMyFactors()
+  } catch {
+    // 用户取消
+  }
+}
+
+// 格式化日期
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleString('zh-CN')
 }
 
 // 清空所有标签
@@ -1174,6 +1938,197 @@ onMounted(async () => {
     background: #f5f7fa;
     border-radius: 8px;
     border: 2px dashed #dcdfe6;
+  }
+
+  // ========== 回测与提交样式 ==========
+  .backtest-submit-container {
+    padding: 20px;
+
+    .steps-container {
+      margin-bottom: 30px;
+    }
+
+    .step-card {
+      margin-top: 20px;
+      
+      .card-header {
+        font-weight: 500;
+        font-size: 16px;
+      }
+    }
+
+    // 定义因子 - 左右分栏布局
+    .define-layout {
+      display: flex;
+      gap: 20px;
+      min-height: 500px;
+      margin: 20px 0;
+
+      .define-nav {
+        width: 200px;
+        min-width: 200px;
+        border: 1px solid #e4e7ed;
+        border-radius: 8px;
+        padding: 10px;
+        background: #fafafa;
+        flex-shrink: 0;
+
+        .nav-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 15px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.3s;
+          margin-bottom: 8px;
+          position: relative;
+
+          &:hover {
+            background: #e8f4ff;
+          }
+
+          &.active {
+            background: #409eff;
+            color: white;
+
+            .nav-label {
+              font-weight: 500;
+            }
+          }
+
+          .nav-icon {
+            font-size: 20px;
+          }
+
+          .nav-label {
+            flex: 1;
+            font-size: 14px;
+          }
+
+          .check-icon {
+            color: #67C23A;
+            font-weight: bold;
+            font-size: 16px;
+          }
+        }
+      }
+
+      .define-content {
+        flex: 1;
+        border: 1px solid #e4e7ed;
+        border-radius: 8px;
+        padding: 30px;
+        background: white;
+        overflow-y: auto;
+        max-height: 600px;
+
+        .section-panel {
+          .section-title {
+            font-size: 18px;
+            margin: 0 0 20px 0;
+            color: #303133;
+            border-bottom: 2px solid #409eff;
+            padding-bottom: 10px;
+          }
+
+          .form-tip {
+            margin-top: 8px;
+          }
+
+          .code-editor {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+          }
+        }
+
+        .tags-section {
+          .tag-group-block {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #e4e7ed;
+            border-radius: 6px;
+            background: #fafafa;
+
+            &:last-child {
+              margin-bottom: 0;
+            }
+
+            .tag-group-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 12px;
+
+              .tag-type-title {
+                font-size: 14px;
+                font-weight: 500;
+                color: #303133;
+              }
+            }
+
+            .tag-items-block {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+            }
+          }
+        }
+      }
+    }
+
+    .step-actions {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #e4e7ed;
+    }
+
+    .backtest-section {
+      .backtest-alert {
+        margin-bottom: 20px;
+      }
+
+      .factor-info {
+        margin: 20px 0;
+      }
+
+      .backtest-progress {
+        margin: 30px 0;
+      }
+
+      .backtest-result {
+        margin: 20px 0;
+
+        .result-metrics {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 20px;
+          margin-top: 20px;
+        }
+      }
+    }
+
+    .submit-section {
+      .submit-alert {
+        margin-bottom: 20px;
+      }
+
+      .final-review {
+        margin: 20px 0;
+      }
+    }
+  }
+
+  // ========== 因子管理样式 ==========
+  .manage-container {
+    padding: 20px;
+
+    .manage-filters {
+      margin-bottom: 20px;
+    }
   }
 }
 </style>
