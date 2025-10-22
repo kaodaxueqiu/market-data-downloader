@@ -85,6 +85,15 @@
           >
             陆港通 ({{ getMarketCount('陆港通') }})
           </el-tag>
+          <el-tag
+            type="info"
+            :effect="activeMarket === '沪深A股K线' ? 'dark' : 'plain'"
+            size="large"
+            class="market-tag"
+            @click="selectMarket('沪深A股K线')"
+          >
+            沪深A股K线 ({{ getMarketCount('沪深A股K线') }})
+          </el-tag>
         </div>
       </div>
 
@@ -205,7 +214,8 @@ const getMarketColorClass = (market: string) => {
     '上海市场': 'success',
     '期货市场': 'warning',
     '期权市场': 'danger',
-    '陆港通': 'info'
+    '陆港通': 'info',
+    '沪深A股K线': 'info'
   }
   return colorMap[market] || 'primary'
 }

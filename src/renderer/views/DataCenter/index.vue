@@ -114,6 +114,15 @@
         >
           陆港通 ({{ getMarketCount('陆港通') }})
         </el-tag>
+        <el-tag
+          type="success"
+          :effect="marketFilter === '沪深A股K线' ? 'dark' : 'plain'"
+          size="large"
+          class="market-tag"
+          @click="selectMarket('沪深A股K线')"
+        >
+          沪深A股K线 ({{ getMarketCount('沪深A股K线') }})
+        </el-tag>
       </div>
     </div>
 

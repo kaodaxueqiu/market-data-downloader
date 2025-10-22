@@ -244,7 +244,21 @@ export class DataDictionaryAPI {
       return response.data
     } catch (error: any) {
       console.error(`预览数据源 ${code} 失败:`, error)
-      throw new Error(error.response?.data?.message || '预览数据失败')
+      console.error('错误详情:', error.response?.data)
+      
+      // 提供更详细的错误信息
+      if (error.response?.status === 404) {
+        throw new Error(`数据源 ${code} 不存在或暂无数据`)
+      } else if (error.response?.status === 500) {
+        const msg = error.response?.data?.message || error.response?.data?.error || '服务器内部错误'
+        throw new Error(`后端错误: ${msg}`)
+      } else if (error.response?.data?.message) {
+        throw new Error(error.response.data.message)
+      } else if (error.message) {
+        throw new Error(error.message)
+      } else {
+        throw new Error('预览数据失败，请检查网络连接或联系管理员')
+      }
     }
   }
 }
