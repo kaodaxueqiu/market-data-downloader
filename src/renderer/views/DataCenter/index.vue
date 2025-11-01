@@ -57,71 +57,19 @@
       </el-button>
     </div>
 
-    <!-- 市场分类标签（行情数据） -->
+    <!-- 市场分类标签（行情数据） - 🆕 改为动态加载 -->
     <div v-if="activeTab === 'market'" class="market-section">
       <div class="market-tags">
         <el-tag
-          type="primary"
-          :effect="marketFilter === '' ? 'dark' : 'plain'"
+          v-for="(market, index) in marketCategories"
+          :key="market.market"
+          :type="getMarketTagType(index)"
+          :effect="marketFilter === market.market ? 'dark' : 'plain'"
           size="large"
           class="market-tag"
-          @click="selectMarket('')"
+          @click="selectMarket(market.market)"
         >
-          全部 ({{ marketSources.length }})
-        </el-tag>
-        <el-tag
-          type="primary"
-          :effect="marketFilter === '深圳市场' ? 'dark' : 'plain'"
-          size="large"
-          class="market-tag"
-          @click="selectMarket('深圳市场')"
-        >
-          深圳市场 ({{ getMarketCount('深圳市场') }})
-        </el-tag>
-        <el-tag
-          type="success"
-          :effect="marketFilter === '上海市场' ? 'dark' : 'plain'"
-          size="large"
-          class="market-tag"
-          @click="selectMarket('上海市场')"
-        >
-          上海市场 ({{ getMarketCount('上海市场') }})
-        </el-tag>
-        <el-tag
-          type="warning"
-          :effect="marketFilter === '期货市场' ? 'dark' : 'plain'"
-          size="large"
-          class="market-tag"
-          @click="selectMarket('期货市场')"
-        >
-          期货市场 ({{ getMarketCount('期货市场') }})
-        </el-tag>
-        <el-tag
-          type="danger"
-          :effect="marketFilter === '期权市场' ? 'dark' : 'plain'"
-          size="large"
-          class="market-tag"
-          @click="selectMarket('期权市场')"
-        >
-          期权市场 ({{ getMarketCount('期权市场') }})
-        </el-tag>
-        <el-tag
-          type="info"
-          :effect="marketFilter === '陆港通' ? 'dark' : 'plain'"
-          size="large"
-          class="market-tag"
-          @click="selectMarket('陆港通')"
-        >
-          陆港通 ({{ getMarketCount('陆港通') }})
-        </el-tag>
-        <el-tag
-          type="success"
-          :effect="marketFilter === '沪深A股K线' ? 'dark' : 'plain'"
-          size="large"
-          class="market-tag"
-          @click="selectMarket('沪深A股K线')"
-        >
-          沪深A股K线 ({{ getMarketCount('沪深A股K线') }})
+          {{ market.market }} ({{ market.count }})
         </el-tag>
       </div>
     </div>
@@ -232,21 +180,28 @@ const processedSources = ref<any[]>([])  // 🆕 加工数据源（ClickHouse）
 const selectedSource = ref<any>(null)
 const selectedFields = ref<string[]>([])
 
+// 🆕 行情数据市场分类（动态加载）
+const marketCategories = ref<any[]>([])
 // 静态元数据分类（包含 'all' 分类）
 const staticCategories = ref<any[]>([])
 // 加工数据分类（包含 'all' 分类）
 const processedCategories = ref<any[]>([])
 
 // 数据源数量
-const marketSourceCount = computed(() => marketSources.value.length)
+const marketSourceCount = computed(() => {
+  // 从 marketCategories 中查找 '全部' 分类
+  const allCat = marketCategories.value.find((c: any) => c.market === '全部')
+  return allCat ? allCat.count : 0
+})
 const staticSourceCount = computed(() => {
   // 从 staticCategories 中查找 code='all' 的分类
   const allCat = staticCategories.value.find((c: any) => c.code === 'all')
   return allCat ? allCat.table_count : 0
 })
 const processedSourceCount = computed(() => {
-  // 直接返回实际加载的表数量（因为后端分类统计可能不准确）
-  return processedSources.value.length
+  // 从 processedCategories 中查找 code='all' 的分类
+  const allCat = processedCategories.value.find((c: any) => c.code === 'all')
+  return allCat ? allCat.table_count : 0
 })
 
 // 当前数据源列表
@@ -275,7 +230,7 @@ const filteredDataSources = computed(() => {
   }
 
   // 市场过滤（行情数据）
-  if (activeTab.value === 'market' && marketFilter.value) {
+  if (activeTab.value === 'market' && marketFilter.value && marketFilter.value !== '全部') {
     sources = sources.filter((source: any) => 
       source.market === marketFilter.value
     )
@@ -314,9 +269,10 @@ const selectMarket = (market: string) => {
   console.log('选择市场:', market)
 }
 
-// 获取市场数量
-const getMarketCount = (market: string) => {
-  return marketSources.value.filter((s: any) => s.market === market).length
+// 🆕 获取市场标签颜色（循环使用不同颜色）
+const getMarketTagType = (index: number) => {
+  const types = ['primary', 'success', 'warning', 'danger', 'info']
+  return types[index % types.length]
 }
 
 // 选择分类
@@ -336,6 +292,7 @@ const selectCategory = async (category: string) => {
 // 刷新
 const handleRefresh = async () => {
   if (activeTab.value === 'market') {
+    await loadMarketCategories()
     await loadMarketSources()
   } else if (activeTab.value === 'static') {
     await loadStaticCategories()
@@ -411,6 +368,30 @@ const setupApiKey = async () => {
   } catch (error) {
     console.error('❌ 设置API Key失败:', error)
     return false
+  }
+}
+
+// 🆕 加载行情数据市场分类
+const loadMarketCategories = async () => {
+  try {
+    console.log('📋 开始加载行情数据市场分类...')
+    const result = await window.electronAPI.dictionary.getMarkets()
+    console.log('✅ 市场分类返回结果:', result)
+    
+    if (result.code === 200) {
+      // 添加"全部"分类
+      const allCount = result.data.reduce((sum: number, m: any) => sum + m.count, 0)
+      marketCategories.value = [
+        { market: '全部', count: allCount, description: '所有市场' },
+        ...result.data
+      ]
+      console.log(`✅ 加载市场分类成功: 总数据源 ${allCount}, ${result.data.length} 个市场`)
+    } else {
+      ElMessage.error(result.msg || '加载市场分类失败')
+    }
+  } catch (error: any) {
+    console.error('❌ 加载市场分类失败:', error)
+    ElMessage.error('加载市场分类失败')
   }
 }
 
@@ -569,6 +550,8 @@ onMounted(async () => {
   // 先设置API Key
   const hasApiKey = await setupApiKey()
   if (hasApiKey) {
+    // 🆕 加载行情数据市场分类
+    await loadMarketCategories()
     await loadMarketSources()
     await loadStaticCategories()
     await loadStaticSources()

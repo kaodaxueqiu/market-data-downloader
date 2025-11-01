@@ -86,6 +86,14 @@ interface CompareResult {
   }>>
 }
 
+interface Market {
+  market: string
+  count: number
+  description: string
+  exchanges: string[]
+  message_types: string[]
+}
+
 export class DataDictionaryAPI {
   private client: AxiosInstance
   private cache: Map<string, any> = new Map()
@@ -117,6 +125,19 @@ export class DataDictionaryAPI {
   // 设置API Key
   setApiKey(apiKey: string) {
     this.client.defaults.headers['X-API-Key'] = apiKey
+  }
+
+  // 🆕 获取市场分类
+  async getMarkets(): Promise<{ code: number; data: Market[]; total: number }> {
+    try {
+      console.log('📋 调用后端API: GET /markets')
+      const response = await this.client.get('/markets')
+      console.log('✅ 后端返回市场分类:', response.data.code, `${response.data.total || 0} 个市场`)
+      return response.data
+    } catch (error: any) {
+      console.error('获取市场分类失败:', error)
+      throw new Error(error.response?.data?.message || '获取市场分类失败')
+    }
   }
 
   // 获取所有数据源（实时查询，不缓存）

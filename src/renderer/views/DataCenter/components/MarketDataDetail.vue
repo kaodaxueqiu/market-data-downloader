@@ -253,14 +253,13 @@
             <el-table-column
               v-for="col in previewData_result.columns"
               :key="col"
-              :prop="extractChineseFieldName(col)"
               :label="col"
               min-width="150"
               show-overflow-tooltip
             >
               <template #default="scope">
                 <span style="font-family: monospace; font-size: 12px">
-                  {{ formatPreviewValue(scope.row[extractChineseFieldName(col)]) }}
+                  {{ formatPreviewValue(getFieldValue(scope.row, col)) }}
                 </span>
               </template>
             </el-table-column>
@@ -527,8 +526,20 @@ const previewData = async () => {
     console.log('📊 预览数据返回:', result)
     
     if (result.code === 200) {
+      // 🆕 过滤掉空对象，只保留有数据的记录
+      if (result.data && Array.isArray(result.data)) {
+        result.data = result.data.filter((row: any) => {
+          return row && Object.keys(row).length > 0
+        })
+        console.log(`✅ 过滤后剩余 ${result.data.length} 条有效数据`)
+      }
+      
       previewData_result.value = result
       console.log('✅ 预览成功:', result.preview_count, '条数据')
+      
+      if (result.data.length === 0) {
+        ElMessage.warning('后端返回的预览数据为空，请联系后端检查接口')
+      }
     } else {
       ElMessage.error('预览失败')
       showPreviewDialog.value = false
@@ -546,6 +557,34 @@ const previewData = async () => {
 const extractChineseFieldName = (columnHeader: string): string => {
   const match = columnHeader.match(/^([^(]+)\(/)
   return match ? match[1] : columnHeader
+}
+
+const extractEnglishFieldName = (columnHeader: string): string => {
+  const match = columnHeader.match(/\(([^)]+)\)$/)
+  return match ? match[1] : columnHeader
+}
+
+// 🆕 智能获取字段值，兼容不同的后端数据格式
+const getFieldValue = (row: any, columnHeader: string): any => {
+  // 1. 先尝试用完整的 column 名（如 "接收时间(local_time)"）
+  if (row.hasOwnProperty(columnHeader)) {
+    return row[columnHeader]
+  }
+  
+  // 2. 尝试用中文部分（如 "接收时间"）
+  const chineseName = extractChineseFieldName(columnHeader)
+  if (row.hasOwnProperty(chineseName)) {
+    return row[chineseName]
+  }
+  
+  // 3. 尝试用英文部分（如 "local_time" 或 "stockCode"）
+  const englishName = extractEnglishFieldName(columnHeader)
+  if (row.hasOwnProperty(englishName)) {
+    return row[englishName]
+  }
+  
+  // 4. 都找不到，返回 undefined
+  return undefined
 }
 
 // 格式化显示值（处理数组和对象）

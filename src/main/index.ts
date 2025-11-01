@@ -612,6 +612,16 @@ ipcMain.handle('dictionary:setApiKey', async (_event, apiKey: string) => {
   return true
 })
 
+// 🆕 获取市场分类
+ipcMain.handle('dictionary:getMarkets', async () => {
+  try {
+    const result = await dictionaryAPI.getMarkets()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取市场分类失败')
+  }
+})
+
 // 获取所有数据源
 ipcMain.handle('dictionary:getSources', async (_event, market?: string) => {
   try {

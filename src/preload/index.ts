@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 数据字典 (53个数据源)
   dictionary: {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('dictionary:setApiKey', apiKey),
+    getMarkets: () => ipcRenderer.invoke('dictionary:getMarkets'),
     getSources: (market?: string) => ipcRenderer.invoke('dictionary:getSources', market),
     getSourceDetail: (code: string) => ipcRenderer.invoke('dictionary:getSourceDetail', code),
     getDecodedFormat: (code: string) => ipcRenderer.invoke('dictionary:getDecodedFormat', code),
@@ -246,6 +247,7 @@ declare global {
       }
       dictionary: {
         setApiKey: (apiKey: string) => Promise<boolean>
+        getMarkets: () => Promise<any>
         getSources: (market?: string) => Promise<any>
         getSourceDetail: (code: string) => Promise<any>
         getDecodedFormat: (code: string) => Promise<any>

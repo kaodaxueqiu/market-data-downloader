@@ -74,7 +74,11 @@ export const SOURCE_MARKET_MAP: Record<string, string> = {
   'ZZ-104': 'UNKNOWN',       // 港股通市场资金流向
   'ZZ-105': 'UNKNOWN',       // 港股通北向实时额度
   'ZZ-106': 'UNKNOWN',       // 港股通南向-上交所
-  'ZZ-107': 'UNKNOWN'        // 港股通南向-深交所
+  'ZZ-107': 'UNKNOWN',       // 港股通南向-深交所
+  
+  // K线数据（2个）- 需要完整格式代码（不自动补全前缀）
+  'ZZ-5001': 'KLINE_STOCK',   // 沪深A股1分钟K线（需要 SZ.XXXXXX 或 SH.XXXXXX）
+  'ZZ-6001': 'KLINE_FUTURES'  // 期货1分钟K线（需要 交易所.合约代码，如 SHFE.FU2609）
 }
 
 // 获取数据源的市场前缀
@@ -94,6 +98,15 @@ export function getSymbolInputHint(sourceCode: string): string {
   
   if (!prefix) {
     return '此数据源不需要输入代码'
+  }
+  
+  // K线数据源特殊处理
+  if (prefix === 'KLINE_STOCK') {
+    return `输入股票代码即可，如：000001, 600000（自动补全为 SH.XXXXXX）`
+  }
+  
+  if (prefix === 'KLINE_FUTURES') {
+    return `输入期货合约代码，如：FU2609, MA608（自动补全交易所前缀）`
   }
   
   if (prefix === 'SZ' || prefix === 'SH') {
@@ -137,7 +150,39 @@ export function autoCompleteSymbols(input: string, sourceCode: string): string[]
       return
     }
     
-    // 自动补全市场前缀
+    // K线股票数据：根据代码开头判断市场
+    if (prefix === 'KLINE_STOCK') {
+      if (/^\d+$/.test(code)) {
+        const paddedCode = code.padStart(6, '0')
+        // 根据代码前缀判断市场
+        if (paddedCode.startsWith('60') || paddedCode.startsWith('688') || paddedCode.startsWith('689')) {
+          result.push(`SH.${paddedCode}`)
+        } else if (paddedCode.startsWith('00') || paddedCode.startsWith('30')) {
+          result.push(`SZ.${paddedCode}`)
+        } else {
+          // 无法判断，默认上海
+          result.push(`SH.${paddedCode}`)
+        }
+      } else {
+        result.push(code) // 格式错误，保留原样
+      }
+      return
+    }
+    
+    // K线期货数据：要求用户输入完整格式（交易所.合约）
+    if (prefix === 'KLINE_FUTURES') {
+      // 如果用户输入不带点的期货代码，需要猜测交易所
+      // 这里简化处理：常见品种映射
+      const futuresExchange = guessFuturesExchange(code)
+      if (futuresExchange) {
+        result.push(`${futuresExchange}.${code}`)
+      } else {
+        result.push(code) // 无法判断，保留原样让用户手动输入完整格式
+      }
+      return
+    }
+    
+    // 普通股票代码
     if (prefix === 'SZ' || prefix === 'SH') {
       // 股票代码：纯数字，补齐到6位
       if (/^\d+$/.test(code)) {
@@ -154,5 +199,36 @@ export function autoCompleteSymbols(input: string, sourceCode: string): string[]
   
   // 去重
   return [...new Set(result)]
+}
+
+// 根据期货合约代码猜测交易所
+function guessFuturesExchange(code: string): string | null {
+  // 品种代码映射表（常见品种）
+  const exchangeMap: Record<string, string> = {
+    // 上期所 SHFE
+    'CU': 'SHFE', 'AL': 'SHFE', 'ZN': 'SHFE', 'PB': 'SHFE', 'NI': 'SHFE', 'SN': 'SHFE', 'AU': 'SHFE', 'AG': 'SHFE',
+    'RB': 'SHFE', 'WR': 'SHFE', 'HC': 'SHFE', 'SS': 'SHFE', 'BU': 'SHFE', 'RU': 'SHFE', 'NR': 'SHFE', 'SP': 'SHFE', 'FU': 'SHFE',
+    // 大商所 DCE
+    'C': 'DCE', 'CS': 'DCE', 'A': 'DCE', 'B': 'DCE', 'M': 'DCE', 'Y': 'DCE', 'P': 'DCE', 'L': 'DCE', 'V': 'DCE',
+    'PP': 'DCE', 'J': 'DCE', 'JM': 'DCE', 'I': 'DCE', 'EG': 'DCE', 'EB': 'DCE', 'PG': 'DCE', 'LH': 'DCE', 'RR': 'DCE',
+    // 郑商所 CZCE
+    'SR': 'CZCE', 'CF': 'CZCE', 'TA': 'CZCE', 'MA': 'CZCE', 'FG': 'CZCE', 'RM': 'CZCE', 'OI': 'CZCE', 'ZC': 'CZCE',
+    'SF': 'CZCE', 'SM': 'CZCE', 'UR': 'CZCE', 'SA': 'CZCE', 'CY': 'CZCE', 'AP': 'CZCE', 'CJ': 'CZCE', 'PF': 'CZCE',
+    // 中金所 CFFEX
+    'IF': 'CFFEX', 'IC': 'CFFEX', 'IH': 'CFFEX', 'IM': 'CFFEX', 'T': 'CFFEX', 'TF': 'CFFEX', 'TS': 'CFFEX',
+    // 能源所 INE
+    'SC': 'INE', 'LU': 'INE', 'BC': 'INE',
+    // 广期所 GFEX
+    'SI': 'GFEX', 'LC': 'GFEX', 'PX': 'GFEX'
+  }
+  
+  // 提取品种代码（字母部分）
+  const match = code.match(/^([A-Z]+)/)
+  if (match) {
+    const variety = match[1]
+    return exchangeMap[variety] || null
+  }
+  
+  return null
 }
 
