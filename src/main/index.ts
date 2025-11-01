@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
+import axios from 'axios'
 import downloadManager from './download'
 import staticDownloadManager from './staticDownload'
 import { ConfigManager } from './config'
@@ -606,9 +607,13 @@ ipcMain.handle('download:clearHistory', async (_event, olderThanDays: number) =>
 // ========== 数据字典API ==========
 const dictionaryAPI = getDictionaryAPI()
 
+// 全局API Key存储（用于全局搜索等接口）
+let globalApiKey = ''
+
 // 初始化数据字典API Key
 ipcMain.handle('dictionary:setApiKey', async (_event, apiKey: string) => {
   dictionaryAPI.setApiKey(apiKey)
+  globalApiKey = apiKey  // 同时存储到全局变量
   return true
 })
 
@@ -619,6 +624,22 @@ ipcMain.handle('dictionary:getMarkets', async () => {
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取市场分类失败')
+  }
+})
+
+// 🆕 全局搜索
+ipcMain.handle('search:global', async (_event, keyword: string, limit?: number) => {
+  try {
+    const response = await axios.get('http://61.151.241.233:8080/api/v1/search/global', {
+      params: { keyword, limit: limit || 20 },
+      headers: {
+        'X-API-Key': globalApiKey
+      }
+    })
+    return response.data
+  } catch (error: any) {
+    console.error('全局搜索失败:', error)
+    throw new Error(error.message || '全局搜索失败')
   }
 })
 

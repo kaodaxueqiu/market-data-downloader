@@ -100,6 +100,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     previewSource: (code: string) => ipcRenderer.invoke('dictionary:previewSource', code)
   },
 
+  // 🆕 全局搜索
+  search: {
+    global: (keyword: string, limit?: number) => ipcRenderer.invoke('search:global', keyword, limit)
+  },
+
   // 数据库字典 (PostgreSQL 755张表 + ClickHouse)
   dbdict: {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('dbdict:setApiKey', apiKey),
@@ -257,6 +262,9 @@ declare global {
         compare: (sourceCodes: string[]) => Promise<any>
         getCode: (code: string, language: string) => Promise<any>
         previewSource: (code: string) => Promise<any>
+      }
+      search: {
+        global: (keyword: string, limit?: number) => Promise<any>
       }
       dbdict: {
         setApiKey: (apiKey: string) => Promise<boolean>

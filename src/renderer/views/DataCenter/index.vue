@@ -33,17 +33,33 @@
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索数据源..."
-          clearable
-          style="width: 300px"
-          @input="handleSearch"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
+        <!-- 🆕 全局搜索框 -->
+        <div class="global-search-wrapper">
+          <el-input
+            v-model="globalSearchKeyword"
+            placeholder="全局搜索数据源、表名、字段..."
+            clearable
+            style="width: 450px"
+            @input="handleGlobalSearch"
+            @clear="handleSearchClear"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+            <template #suffix v-if="searchLoading">
+              <el-icon class="is-loading"><Loading /></el-icon>
+            </template>
+          </el-input>
+
+          <!-- 搜索结果下拉框 -->
+          <GlobalSearchDropdown
+            :visible="showSearchResults"
+            :results="searchResults"
+            :loading="searchLoading"
+            @select="handleSearchResultSelect"
+            @close="showSearchResults = false"
+          />
+        </div>
 
         <el-button @click="handleRefresh" style="margin-left: 10px">
           <el-icon><Refresh /></el-icon>
@@ -154,11 +170,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Document, Operation, Search, Refresh, List, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
+import { DataLine, Document, Operation, Search, Refresh, List, DArrowLeft, DArrowRight, Loading } from '@element-plus/icons-vue'
 import DataSourceList from './components/DataSourceList.vue'
 import MarketDataDetail from './components/MarketDataDetail.vue'
 import StaticDataDetail from './components/StaticDataDetail.vue'
 import DownloadConfigPanel from './components/DownloadConfigPanel.vue'
+import GlobalSearchDropdown from '../../components/GlobalSearchDropdown.vue'
 
 const router = useRouter()
 
@@ -167,6 +184,13 @@ const activeTab = ref<'market' | 'static' | 'processed'>('market')
 
 // 左侧面板显示状态
 const showLeftPanel = ref(true)
+
+// 🆕 全局搜索相关状态
+const globalSearchKeyword = ref('')
+const searchResults = ref<any>(null)
+const searchLoading = ref(false)
+const showSearchResults = ref(false)
+let searchTimer: NodeJS.Timeout | null = null
 
 // 搜索和筛选
 const searchKeyword = ref('')
@@ -257,9 +281,107 @@ const handleTabChange = (tabName: string) => {
   categoryFilter.value = ''
 }
 
-// 搜索
-const handleSearch = () => {
-  console.log('搜索:', searchKeyword.value)
+// 🆕 全局搜索（防抖）
+const handleGlobalSearch = () => {
+  // 清除之前的定时器
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+  
+  const keyword = globalSearchKeyword.value.trim()
+  
+  // 如果搜索词为空或太短，隐藏结果
+  if (!keyword || keyword.length < 2) {
+    showSearchResults.value = false
+    searchResults.value = null
+    return
+  }
+  
+  // 防抖300ms后执行搜索
+  searchTimer = setTimeout(async () => {
+    searchLoading.value = true
+    showSearchResults.value = true
+    
+    try {
+      console.log('🔍 执行全局搜索:', keyword)
+      const result = await window.electronAPI.search.global(keyword, 20)
+      console.log('✅ 搜索结果:', result)
+      searchResults.value = result
+      
+      if (result.total === 0) {
+        ElMessage.info('未找到匹配结果')
+      }
+    } catch (error: any) {
+      console.error('❌ 全局搜索失败:', error)
+      ElMessage.error(error.message || '搜索失败')
+      showSearchResults.value = false
+    } finally {
+      searchLoading.value = false
+    }
+  }, 300)
+}
+
+// 🆕 清空搜索
+const handleSearchClear = () => {
+  showSearchResults.value = false
+  searchResults.value = null
+}
+
+// 🆕 选择搜索结果
+const handleSearchResultSelect = async (result: any, dataType: 'market' | 'static' | 'processed') => {
+  console.log('选择搜索结果:', result, dataType)
+  
+  // 1. 切换到对应的Tab
+  activeTab.value = dataType
+  
+  // 2. 清除筛选条件，确保能看到搜索结果
+  marketFilter.value = ''
+  categoryFilter.value = ''
+  
+  // 3. 如果是静态/加工数据，需要重新加载全部表（清除分类筛选）
+  if (dataType === 'static') {
+    await loadStaticSources() // 加载所有静态数据表
+  } else if (dataType === 'processed') {
+    await loadProcessedSources() // 加载所有加工数据表
+  }
+  
+  // 4. 等待数据加载完成
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
+  // 5. 根据数据类型选中对应的数据源/表
+  if (dataType === 'market') {
+    // 行情数据：根据 source_code 查找
+    const source = marketSources.value.find((s: any) => s.code === result.source_code)
+    if (source) {
+      selectedSource.value = source
+      console.log('✅ 已选中行情数据源:', source.code)
+    } else {
+      ElMessage.warning(`未找到数据源 ${result.source_code}`)
+    }
+  } else if (dataType === 'static') {
+    // 静态元数据：根据 table_name 查找
+    const table = staticSources.value.find((t: any) => t.table_name === result.table_name)
+    if (table) {
+      selectedSource.value = table
+      console.log('✅ 已选中静态数据表:', table.table_name)
+    } else {
+      ElMessage.warning(`未找到数据表 ${result.table_name}`)
+    }
+  } else if (dataType === 'processed') {
+    // 加工数据：根据 table_name 查找
+    const table = processedSources.value.find((t: any) => t.table_name === result.table_name)
+    if (table) {
+      selectedSource.value = table
+      console.log('✅ 已选中加工数据表:', table.table_name)
+    } else {
+      ElMessage.warning(`未找到数据表 ${result.table_name}`)
+    }
+  }
+  
+  // 6. 关闭搜索下拉框并清空搜索词
+  showSearchResults.value = false
+  globalSearchKeyword.value = ''
+  searchResults.value = null
 }
 
 // 选择市场
@@ -599,6 +721,10 @@ onMounted(async () => {
     .toolbar-left {
       display: flex;
       align-items: center;
+      
+      .global-search-wrapper {
+        position: relative;
+      }
     }
   }
 
