@@ -37,6 +37,14 @@
             </el-button>
             <div class="action-desc">预览实时数据（最新10条消息）</div>
           </div>
+
+          <div class="action-item">
+            <el-button type="warning" size="large" @click="showRealtimeSubscription" style="width: 100%">
+              <el-icon><Connection /></el-icon>
+              实时订阅
+            </el-button>
+            <div class="action-desc">WebSocket实时推送并导出到Excel</div>
+          </div>
         </div>
       </div>
     </div>
@@ -267,13 +275,22 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 🆕 实时订阅对话框 -->
+    <RealtimeSubscriptionDialog
+      v-model="showSubscriptionDialog"
+      :source-code="source?.code || ''"
+      :source-name="source?.name || ''"
+      :fields="fields"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { /* Search, */ View, CopyDocument } from '@element-plus/icons-vue'
+import { /* Search, */ View, CopyDocument, Connection } from '@element-plus/icons-vue'
+import RealtimeSubscriptionDialog from '../../../components/RealtimeSubscriptionDialog.vue'
 
 const props = defineProps<{
   source: any
@@ -509,6 +526,19 @@ watch(activeTab, async (newTab) => {
 const showPreviewDialog = ref(false)
 const previewLoading = ref(false)
 const previewData_result = ref<any>(null)
+
+// 🆕 实时订阅对话框
+const showSubscriptionDialog = ref(false)
+
+// 🆕 显示实时订阅对话框
+const showRealtimeSubscription = () => {
+  if (!props.source?.code) {
+    ElMessage.error('请先选择数据源')
+    return
+  }
+  
+  showSubscriptionDialog.value = true
+}
 
 // 数据预览
 const previewData = async () => {

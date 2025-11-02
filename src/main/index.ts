@@ -9,6 +9,7 @@ import { getDictionaryAPI } from './dictionary'
 import { getDbDictAPI } from './dbdict'
 import { factorAPI } from './factor'
 import * as updater from './updater'
+import { SubscriptionTaskManager } from './subscriptionTaskManager'
 
 // 禁用GPU加速，避免Windows上的GPU崩溃问题
 app.disableHardwareAcceleration()
@@ -288,6 +289,28 @@ app.on('window-all-closed', () => {
   }
 })
 
+// 应用退出前清理订阅任务
+app.on('before-quit', async (event) => {
+  if (subscriptionTaskManager || wsManager) {
+    console.log('🛑 应用退出，清理资源...')
+    event.preventDefault()  // 阻止立即退出
+    
+    // 停止所有订阅任务
+    if (subscriptionTaskManager) {
+      await subscriptionTaskManager.stopAllTasks()
+      subscriptionTaskManager = null
+    }
+    
+    // 强制断开 WebSocket
+    if (wsManager) {
+      wsManager.forceDisconnect()
+      wsManager = null
+    }
+    
+    app.quit()  // 清理完成后退出
+  }
+})
+
 // ===== IPC通信处理 =====
 
 // 获取配置
@@ -405,6 +428,11 @@ ipcMain.handle('app:getVersion', async () => {
   return app.getVersion()
 })
 
+// 🆕 获取系统路径
+ipcMain.handle('app:getPath', async (_event, name: 'desktop' | 'downloads' | 'documents') => {
+  return app.getPath(name)
+})
+
 // 选择下载目录
 ipcMain.handle('dialog:selectDirectory', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
@@ -424,9 +452,21 @@ ipcMain.handle('dialog:showSaveDialog', async (_event, options) => {
   return result
 })
 
+// 🆕 打开文件/文件夹选择对话框
+ipcMain.handle('dialog:showOpenDialog', async (_event, options) => {
+  const result = await dialog.showOpenDialog(mainWindow!, options)
+  return result
+})
+
 // 打开文件所在目录
 ipcMain.handle('shell:showItemInFolder', async (_event, filePath: string) => {
   shell.showItemInFolder(filePath)
+})
+
+// 🆕 打开文件或文件夹
+ipcMain.handle('shell:openPath', async (_event, path: string) => {
+  const result = await shell.openPath(path)
+  return result  // 返回空字符串表示成功，否则返回错误信息
 })
 
 // 下载文件
@@ -607,13 +647,13 @@ ipcMain.handle('download:clearHistory', async (_event, olderThanDays: number) =>
 // ========== 数据字典API ==========
 const dictionaryAPI = getDictionaryAPI()
 
-// 全局API Key存储（用于全局搜索等接口）
-let globalApiKey = ''
+// 全局API Key存储（用于全局搜索、WebSocket 等接口）
+let dictGlobalApiKey = ''
 
 // 初始化数据字典API Key
 ipcMain.handle('dictionary:setApiKey', async (_event, apiKey: string) => {
   dictionaryAPI.setApiKey(apiKey)
-  globalApiKey = apiKey  // 同时存储到全局变量
+  dictGlobalApiKey = apiKey  // 同时存储到全局变量
   return true
 })
 
@@ -633,7 +673,7 @@ ipcMain.handle('search:global', async (_event, keyword: string, limit?: number) 
     const response = await axios.get('http://61.151.241.233:8080/api/v1/search/global', {
       params: { keyword, limit: limit || 20 },
       headers: {
-        'X-API-Key': globalApiKey
+        'X-API-Key': dictGlobalApiKey
       }
     })
     return response.data
@@ -911,6 +951,139 @@ ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: stri
   } catch (error: any) {
     console.error('❌ 下载保存失败:', error)
     throw new Error(error.message || '下载静态数据失败')
+  }
+})
+
+// ========== WebSocket 实时订阅任务管理 ==========
+import { WebSocketManager } from './websocketManager'
+
+let subscriptionTaskManager: SubscriptionTaskManager | null = null
+let wsManager: WebSocketManager | null = null
+
+// 获取 WebSocket 管理器
+function getWebSocketManager(): WebSocketManager {
+  if (!wsManager && mainWindow) {
+    wsManager = WebSocketManager.getInstance(mainWindow)
+  }
+  return wsManager!
+}
+
+// 初始化订阅任务管理器
+function getSubscriptionTaskManager(): SubscriptionTaskManager {
+  if (!subscriptionTaskManager && mainWindow) {
+    subscriptionTaskManager = new SubscriptionTaskManager(mainWindow)
+  }
+  return subscriptionTaskManager!
+}
+
+// 🆕 连接 WebSocket 总线
+ipcMain.handle('subscription:connect', async (_event, apiKey: string) => {
+  try {
+    if (!mainWindow) {
+      throw new Error('主窗口未初始化')
+    }
+
+    const manager = getWebSocketManager()
+    await manager.connect(apiKey)
+    
+    return { success: true, message: 'WebSocket 连接成功' }
+  } catch (error: any) {
+    console.error('❌ WebSocket 连接失败:', error)
+    throw new Error(error.message || '连接失败')
+  }
+})
+
+// 🆕 断开 WebSocket 总线
+ipcMain.handle('subscription:disconnect', async () => {
+  try {
+    if (wsManager) {
+      wsManager.disconnect()
+    }
+    return { success: true, message: 'WebSocket 已断开' }
+  } catch (error: any) {
+    console.error('❌ WebSocket 断开失败:', error)
+    throw new Error(error.message || '断开失败')
+  }
+})
+
+// 🆕 获取 WebSocket 状态
+ipcMain.handle('subscription:getWebSocketStatus', async () => {
+  try {
+    if (!wsManager) {
+      return { status: 'disconnected', stats: {} }
+    }
+    return {
+      status: wsManager.getStatus(),
+      stats: wsManager.getStats()
+    }
+  } catch (error: any) {
+    console.error('❌ 获取 WebSocket 状态失败:', error)
+    return { status: 'disconnected', stats: {} }
+  }
+})
+
+// 🆕 创建订阅任务（一步到位：连接+订阅）
+ipcMain.handle('subscription:createTask', async (_event, apiKey: string, config: any) => {
+  try {
+    if (!mainWindow) {
+      throw new Error('主窗口未初始化')
+    }
+
+    const manager = getSubscriptionTaskManager()
+    const taskId = await manager.createTask(apiKey, config)
+    
+    return { success: true, taskId, message: '订阅任务已创建' }
+  } catch (error: any) {
+    console.error('❌ 创建订阅任务失败:', error)
+    throw new Error(error.message || '创建订阅任务失败')
+  }
+})
+
+// 🆕 停止订阅任务
+ipcMain.handle('subscription:stopTask', async (_event, taskId: string) => {
+  try {
+    const manager = getSubscriptionTaskManager()
+    const savedPath = await manager.stopTask(taskId)
+
+    return { success: true, savedPath }
+  } catch (error: any) {
+    console.error('❌ 停止任务失败:', error)
+    throw new Error(error.message || '停止任务失败')
+  }
+})
+
+// 🆕 断开任务的连接
+ipcMain.handle('subscription:disconnectTask', async (_event, taskId: string) => {
+  try {
+    const manager = getSubscriptionTaskManager()
+    manager.disconnectTask(taskId)
+
+    return { success: true, message: '任务已断开' }
+  } catch (error: any) {
+    console.error('❌ 断开任务失败:', error)
+    throw new Error(error.message || '断开任务失败')
+  }
+})
+
+// 🆕 获取所有订阅任务
+ipcMain.handle('subscription:getAllTasks', async () => {
+  try {
+    const manager = getSubscriptionTaskManager()
+    return manager.getAllTasks()
+  } catch (error: any) {
+    console.error('❌ 获取任务列表失败:', error)
+    return []
+  }
+})
+
+// 🆕 获取单个任务详情
+ipcMain.handle('subscription:getTask', async (_event, taskId: string) => {
+  try {
+    const manager = getSubscriptionTaskManager()
+    return manager.getTask(taskId)
+  } catch (error: any) {
+    console.error('❌ 获取任务详情失败:', error)
+    return null
   }
 })
 

@@ -18,27 +18,45 @@
         style="width: 100%"
         empty-text="暂无任务"
         v-loading="loading"
-        :show-overflow-tooltip="false"
+        :show-overflow-tooltip="true"
       >
-        <el-table-column prop="id" label="任务ID" width="180" />
-        <el-table-column label="类型" width="150">
+        <el-table-column prop="id" label="任务ID" width="160" show-overflow-tooltip />
+        <el-table-column label="类型" width="130">
           <template #default="scope">
-            <el-tag v-if="scope.row.type === 'static_download'" type="success">
+            <el-tag v-if="scope.row.type === 'realtime_subscription'" type="warning">
+              实时订阅
+            </el-tag>
+            <el-tag v-else-if="scope.row.type === 'static_download'" type="success">
               静态元数据
             </el-tag>
             <el-tag v-else type="primary">
               行情数据
             </el-tag>
             <div style="font-size: 12px; margin-top: 5px; color: #909399">
-              {{ scope.row.messageType || scope.row.tableName }}
+              {{ scope.row.sourceName || scope.row.messageType || scope.row.tableName }}
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="下载条件" width="280">
+        <el-table-column label="下载条件" width="240" show-overflow-tooltip>
           <template #default="scope">
             <div style="font-size: 12px; line-height: 1.6">
+              <!-- 实时订阅条件 -->
+              <template v-if="scope.row.type === 'realtime_subscription'">
+                <div v-if="scope.row.symbols && scope.row.symbols.length > 0" style="margin-bottom: 4px">
+                  <el-tag size="small" type="primary">订阅股票</el-tag> 
+                  {{ scope.row.symbols.join(', ') }}
+                </div>
+                <div v-else style="margin-bottom: 4px">
+                  <el-tag size="small" type="warning">订阅全部</el-tag>
+                </div>
+                <div v-if="scope.row.fieldCount" style="margin-bottom: 4px">
+                  <el-tag size="small" type="success">字段</el-tag> 
+                  {{ scope.row.fieldCount }} 个
+                </div>
+              </template>
+              
               <!-- 行情数据条件 -->
-              <template v-if="scope.row.type !== 'static_download'">
+              <template v-else-if="scope.row.type !== 'static_download'">
                 <div v-if="scope.row.symbols && scope.row.symbols.length > 0" style="margin-bottom: 4px">
                   <el-tag size="small" type="primary">代码</el-tag> 
                   {{ scope.row.symbols.join(', ') }}
@@ -82,18 +100,31 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="progress" label="进度" width="200">
+        <el-table-column label="进度/统计" width="200">
           <template #default="scope">
+            <!-- 实时订阅显示统计信息 -->
+            <div v-if="scope.row.type === 'realtime_subscription'" style="font-size: 13px">
+              <div style="margin-bottom: 5px">
+                <el-icon><Tickets /></el-icon>
+                已接收: <el-tag type="success" size="small">{{ scope.row.totalReceived || 0 }} 条</el-tag>
+              </div>
+              <div style="color: #909399; font-size: 12px">
+                <el-icon><Timer /></el-icon>
+                {{ scope.row.dataRate || 0 }} 条/秒 · {{ formatTime(scope.row.runningTime) }}
+              </div>
+            </div>
+            <!-- 下载任务显示进度条 -->
             <el-progress
+              v-else
               :percentage="scope.row.progress"
               :status="scope.row.status === 'completed' ? 'success' : undefined"
             />
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="200">
+        <el-table-column prop="status" label="状态" width="120">
           <template #default="scope">
             <div>
-              <el-tag :type="getStatusType(scope.row.status)">
+              <el-tag :type="getStatusType(scope.row.status)" size="small">
                 {{ getStatusText(scope.row.status) }}
               </el-tag>
               <div v-if="scope.row.errorMessage" style="color: #f56c6c; font-size: 12px; margin-top: 5px">
@@ -102,26 +133,57 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="scope">
-            <el-button
-              v-if="scope.row.status === 'completed'"
-              size="small"
-              :type="downloadedTasks.has(scope.row.id) ? 'success' : 'primary'"
-              @click="downloadTask(scope.row)"
-              :icon="Download"
-            >
-              {{ downloadedTasks.has(scope.row.id) ? '已下载' : '下载' }}
-            </el-button>
-            <el-button
-              v-if="['downloading', 'processing'].includes(scope.row.status)"
-              size="small"
-              type="danger"
-              @click="cancelTask(scope.row.id)"
-              :icon="Close"
-            >
-              取消
-            </el-button>
+            <!-- 实时订阅任务操作 -->
+            <template v-if="scope.row.type === 'realtime_subscription'">
+              <el-button
+                v-if="scope.row.status === 'subscribing'"
+                size="small"
+                type="warning"
+                @click="stopSubscriptionTask(scope.row.id)"
+              >
+                停止订阅
+              </el-button>
+              <el-button
+                size="small"
+                type="primary"
+                @click="openSubscriptionFolder(scope.row.savePath)"
+              >
+                打开文件夹
+              </el-button>
+              <el-button
+                v-if="scope.row.status === 'stopped'"
+                size="small"
+                type="danger"
+                @click="deleteSubscriptionTask(scope.row.id)"
+                :icon="Delete"
+              >
+                删除
+              </el-button>
+            </template>
+            
+            <!-- 下载任务操作 -->
+            <template v-else>
+              <el-button
+                v-if="scope.row.status === 'completed'"
+                size="small"
+                :type="downloadedTasks.has(scope.row.id) ? 'success' : 'primary'"
+                @click="downloadTask(scope.row)"
+                :icon="Download"
+              >
+                {{ downloadedTasks.has(scope.row.id) ? '已下载' : '下载' }}
+              </el-button>
+              <el-button
+                v-if="['downloading', 'processing'].includes(scope.row.status)"
+                size="small"
+                type="danger"
+                @click="cancelTask(scope.row.id)"
+                :icon="Close"
+              >
+                取消
+              </el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -136,7 +198,9 @@ import {
   Refresh,
   Delete,
   Close,
-  Download
+  Download,
+  Tickets,
+  Timer
 } from '@element-plus/icons-vue'
 
 const loading = ref(false)
@@ -213,9 +277,23 @@ const getStatusType = (status: string) => {
     paused: 'warning',
     completed: 'success',
     failed: 'danger',
-    cancelled: 'info'
+    cancelled: 'info',
+    // 🆕 订阅任务状态
+    connecting: 'warning',
+    connected: 'info',
+    subscribing: 'success',
+    stopped: 'info',
+    error: 'danger'
   }
   return types[status] || 'info'
+}
+
+// 🆕 格式化时间（秒 → HH:MM:SS）
+const formatTime = (seconds: number = 0) => {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 const getStatusText = (status: string) => {
@@ -225,7 +303,13 @@ const getStatusText = (status: string) => {
     paused: '已暂停',
     completed: '已完成',
     failed: '失败',
-    cancelled: '已取消'
+    cancelled: '已取消',
+    // 🆕 订阅任务状态
+    connecting: '连接中',
+    connected: '已连接',
+    subscribing: '订阅中',
+    stopped: '已停止',
+    error: '错误'
   }
   return texts[status] || status
 }
@@ -239,15 +323,19 @@ const refreshTasks = async (showLoading = false) => {
     // 获取行情数据任务
     const marketTasks = await window.electronAPI.download.getHistory()
     
+    // 🆕 获取订阅任务
+    const subscriptionTasks = await window.electronAPI.subscription.getAllTasks()
+    console.log('📡 订阅任务:', subscriptionTasks)
+    
     // 获取静态元数据任务（从本地）
     const localStaticTasks = loadStaticTasks()
     
-    // 合并所有任务
-    tasks.value = [...marketTasks, ...localStaticTasks]
+    // 合并所有任务（包含订阅任务）
+    tasks.value = [...marketTasks, ...localStaticTasks, ...subscriptionTasks]
     
     // 检查是否有进行中的任务，决定是否继续自动刷新
     const hasActiveTasks = tasks.value.some((t: any) => 
-      ['pending', 'downloading', 'processing'].includes(t.status)
+      ['pending', 'downloading', 'processing', 'subscribing', 'connecting'].includes(t.status)
     )
     
     if (!hasActiveTasks && refreshTimer) {
@@ -395,6 +483,55 @@ const cancelTask = async (taskId: string) => {
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('取消失败')
+    }
+  }
+}
+
+// 🆕 停止订阅任务
+const stopSubscriptionTask = async (taskId: string) => {
+  try {
+    await ElMessageBox.confirm('确定要停止该订阅任务吗？数据将保存到 CSV 文件。', '提示', {
+      confirmButtonText: '确定停止',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    
+    const result = await window.electronAPI.subscription.stopTask(taskId)
+    ElMessage.success(`订阅已停止，数据已保存到：${result.savedPath}`)
+    refreshTasks(true)
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('停止订阅任务失败:', error)
+      ElMessage.error(error.message || '停止失败')
+    }
+  }
+}
+
+// 🆕 打开订阅文件夹
+const openSubscriptionFolder = (folderPath: string) => {
+  if (folderPath) {
+    window.electronAPI.shell.openPath(folderPath)
+  } else {
+    ElMessage.warning('文件夹路径不存在')
+  }
+}
+
+// 🆕 删除订阅任务
+const deleteSubscriptionTask = async (taskId: string) => {
+  try {
+    await ElMessageBox.confirm('确定要删除该订阅任务吗？', '提示', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    
+    await window.electronAPI.subscription.disconnectTask(taskId)
+    ElMessage.success('订阅任务已删除')
+    refreshTasks(true)
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('删除订阅任务失败:', error)
+      ElMessage.error(error.message || '删除失败')
     }
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "zizhou-quant-platform",
   "productName": "资舟量化研究平台",
-  "version": "1.6.5",
+  "version": "1.6.6",
   "description": "资舟量化研究平台 - 专业的量化研究与数据管理工具",
   "author": "ZiZhou Quant Team",
   "license": "Commercial",
@@ -25,14 +25,17 @@
     "electron-store": "^8.1.0",
     "electron-updater": "^6.6.2",
     "element-plus": "^2.4.3",
+    "exceljs": "^4.4.0",
     "papaparse": "^5.4.1",
     "pinia": "^2.1.7",
     "vue": "^3.3.10",
-    "vue-router": "^4.2.5"
+    "vue-router": "^4.2.5",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.4",
     "@types/papaparse": "^5.3.14",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-vue": "^4.5.2",
     "electron": "^27.1.3",
     "electron-builder": "^24.9.1",

@@ -51,23 +51,100 @@
               <h2>{{ pageTitle }}</h2>
             </div>
             <div class="header-right">
-              <el-button
-                v-if="hasApiKey"
-                type="success"
-                size="small"
-                circle
-                :icon="Connection"
+              <!-- 🆕 系统状态面板 -->
+              <el-popover
+                placement="bottom-end"
+                :width="320"
+                trigger="click"
               >
-              </el-button>
-              <el-button
-                v-else
-                type="warning"
-                size="small"
-                @click="goToSettings"
-              >
-                <el-icon><Key /></el-icon>
-                配置API Key
-              </el-button>
+                <template #reference>
+                  <el-button :type="overallStatusType" size="small">
+                    <el-icon><Connection /></el-icon>
+                    系统状态
+                    <el-badge
+                      v-if="activeSubscriptionCount > 0"
+                      :value="activeSubscriptionCount"
+                      type="success"
+                      style="margin-left: 5px"
+                    />
+                  </el-button>
+                </template>
+
+                <!-- 状态面板内容 -->
+                <div class="status-panel">
+                  <div class="panel-title">系统连接状态</div>
+
+                  <!-- API Key 状态 -->
+                  <div class="status-item">
+                    <el-icon :color="hasApiKey ? '#67C23A' : '#F56C6C'" :size="18">
+                      <Key />
+                    </el-icon>
+                    <span class="status-label">API Key:</span>
+                    <el-tag :type="hasApiKey ? 'success' : 'danger'" size="small">
+                      {{ hasApiKey ? '已配置' : '未配置' }}
+                    </el-tag>
+                    <el-button v-if="!hasApiKey" link type="primary" size="small" @click="goToSettings">
+                      去配置
+                    </el-button>
+                  </div>
+
+                  <!-- WebSocket 状态 -->
+                  <div class="status-item">
+                    <el-icon :color="wsStatusColor" :size="18">
+                      <Connection />
+                    </el-icon>
+                    <span class="status-label">WebSocket:</span>
+                    <el-tag :type="wsStatusTagType" size="small">
+                      {{ wsStatusText }}
+                    </el-tag>
+                    
+                    <!-- 连接/断开按钮 -->
+                    <el-button
+                      v-if="wsStatus === 'disconnected'"
+                      link
+                      type="primary"
+                      size="small"
+                      @click="connectWebSocket"
+                      :disabled="!hasApiKey"
+                    >
+                      连接
+                    </el-button>
+                    <el-button
+                      v-else-if="wsStatus === 'connected'"
+                      link
+                      type="danger"
+                      size="small"
+                      @click="disconnectWebSocket"
+                      :disabled="activeSubscriptionCount > 0"
+                    >
+                      断开
+                    </el-button>
+                  </div>
+
+                  <!-- 活跃订阅任务 -->
+                  <div class="status-item">
+                    <el-icon color="#409EFF" :size="18">
+                      <List />
+                    </el-icon>
+                    <span class="status-label">活跃订阅:</span>
+                    <el-tag type="primary" size="small">
+                      {{ activeSubscriptionCount }} 个任务
+                    </el-tag>
+                  </div>
+
+                  <!-- 操作按钮 -->
+                  <div class="panel-actions">
+                    <el-button size="small" @click="refreshStatus">
+                      <el-icon><Refresh /></el-icon>
+                      刷新状态
+                    </el-button>
+                    <el-button size="small" type="primary" @click="goToTasks">
+                      <el-icon><List /></el-icon>
+                      任务管理
+                    </el-button>
+                  </div>
+                </div>
+              </el-popover>
             </div>
           </el-header>
           
@@ -98,7 +175,8 @@ import {
   Key,
   Box,
   DArrowLeft,
-  DArrowRight
+  DArrowRight,
+  Refresh
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
@@ -109,6 +187,10 @@ const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
 const appVersion = ref('1.6.1')
 const sidebarCollapsed = ref(false)
+
+// 🆕 系统状态
+const wsStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
+const activeSubscriptionCount = ref(0)
 
 // 🆕 菜单权限相关
 const menuPermissions = ref<string[]>([])
@@ -174,6 +256,107 @@ const pageTitle = computed(() => {
 
 const handleMenuSelect = (index: string) => {
   console.log('Menu selected:', index)
+}
+
+// 🆕 WebSocket 状态计算属性
+const wsStatusColor = computed(() => {
+  if (wsStatus.value === 'connected') return '#67C23A'
+  if (wsStatus.value === 'connecting') return '#E6A23C'
+  return '#909399'
+})
+
+const wsStatusTagType = computed(() => {
+  if (wsStatus.value === 'connected') return 'success'
+  if (wsStatus.value === 'connecting') return 'warning'
+  return 'info'
+})
+
+const wsStatusText = computed(() => {
+  if (wsStatus.value === 'connected') return '已连接'
+  if (wsStatus.value === 'connecting') return '连接中'
+  return '未连接'
+})
+
+// 🆕 整体状态按钮类型
+const overallStatusType = computed(() => {
+  if (!hasApiKey.value) return 'danger'
+  if (activeSubscriptionCount.value > 0) return 'success'
+  if (wsStatus.value === 'connected') return 'success'
+  return 'primary'
+})
+
+// 🆕 刷新状态
+const refreshStatus = async () => {
+  try {
+    // 刷新订阅任务数量
+    const tasks = await window.electronAPI.subscription.getAllTasks()
+    activeSubscriptionCount.value = tasks.filter((t: any) => t.status === 'subscribing').length
+    
+    // 从 WebSocket 管理器获取连接状态
+    const wsInfo = await window.electronAPI.subscription.getWebSocketStatus()
+    if (wsInfo.status !== wsStatus.value) {
+      wsStatus.value = wsInfo.status
+    }
+  } catch (error) {
+    console.error('刷新状态失败:', error)
+  }
+}
+
+// 🆕 连接 WebSocket
+const connectWebSocket = async () => {
+  try {
+    // 获取 API Key
+    const apiKeys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = apiKeys.find((k: any) => k.isDefault)
+    
+    if (!defaultKey) {
+      ElMessage.error('请先配置 API Key')
+      goToSettings()
+      return
+    }
+    
+    const fullApiKey = await window.electronAPI.config.getFullApiKey(defaultKey.id)
+    if (!fullApiKey) {
+      ElMessage.error('无法获取完整的 API Key')
+      return
+    }
+
+    wsStatus.value = 'connecting'
+    
+    // 这里需要调用 WebSocket 管理器的连接接口
+    // TODO: 需要添加 subscription:connect 接口
+    await window.electronAPI.subscription.connect(fullApiKey)
+    
+    wsStatus.value = 'connected'
+    ElMessage.success('WebSocket 连接成功！')
+  } catch (error: any) {
+    console.error('❌ 连接失败:', error)
+    ElMessage.error(error.message || '连接失败')
+    wsStatus.value = 'disconnected'
+  }
+}
+
+// 🆕 断开 WebSocket
+const disconnectWebSocket = async () => {
+  try {
+    if (activeSubscriptionCount.value > 0) {
+      ElMessage.warning('仍有活跃订阅任务，无法断开连接')
+      return
+    }
+
+    await window.electronAPI.subscription.disconnect()
+    
+    wsStatus.value = 'disconnected'
+    ElMessage.success('WebSocket 已断开')
+  } catch (error: any) {
+    console.error('❌ 断开失败:', error)
+    ElMessage.error(error.message || '断开失败')
+  }
+}
+
+// 🆕 跳转到任务管理
+const goToTasks = () => {
+  router.push('/tasks')
 }
 
 const goToSettings = () => {
@@ -290,6 +473,30 @@ onMounted(async () => {
   } catch (error) {
     console.error('获取版本号失败:', error)
   }
+  
+  // 🆕 初始化状态
+  refreshStatus()
+  
+  // 🆕 监听 WebSocket 状态变化
+  window.electronAPI.subscription.onConnected(() => {
+    wsStatus.value = 'connected'
+    refreshStatus()
+  })
+  
+  window.electronAPI.subscription.onDisconnected(() => {
+    wsStatus.value = 'disconnected'
+    refreshStatus()
+  })
+  
+  // 🆕 定时刷新状态（每3秒）
+  const statusRefreshTimer = setInterval(() => {
+    refreshStatus()
+  }, 3000)
+  
+  // 清理时移除定时器
+  onUnmounted(() => {
+    clearInterval(statusRefreshTimer)
+  })
   
   // 使用setTimeout避免阻塞
   setTimeout(async () => {
@@ -493,6 +700,45 @@ onUnmounted(() => {
   .app-main {
     background: #f5f7fa;
     padding: 20px;
+  }
+}
+
+// 🆕 状态面板样式
+.status-panel {
+  .panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e4e7ed;
+  }
+
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+
+    &:last-of-type {
+      border-bottom: none;
+    }
+
+    .status-label {
+      font-size: 14px;
+      color: #606266;
+      min-width: 90px;
+    }
+  }
+
+  .panel-actions {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e4e7ed;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
   }
 }
 

@@ -4,7 +4,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('electronAPI', {
   // 应用信息
   app: {
-    getVersion: () => ipcRenderer.invoke('app:getVersion')
+    getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    getPath: (name: 'desktop' | 'downloads' | 'documents') => ipcRenderer.invoke('app:getPath', name)
   },
 
   // 配置管理
@@ -39,13 +40,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 对话框
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
-    showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options)
+    showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options),
+    showOpenDialog: (options: any) => ipcRenderer.invoke('dialog:showOpenDialog', options)
   },
 
   // Shell操作
   shell: {
     showItemInFolder: (filePath: string) => 
       ipcRenderer.invoke('shell:showItemInFolder', filePath),
+    openPath: (path: string) => 
+      ipcRenderer.invoke('shell:openPath', path),
     downloadFile: (url: string, savePath: string, onProgress?: (percent: number) => void) => {
       // 监听下载进度
       if (onProgress) {
@@ -103,6 +107,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 🆕 全局搜索
   search: {
     global: (keyword: string, limit?: number) => ipcRenderer.invoke('search:global', keyword, limit)
+  },
+
+  // 🆕 WebSocket 实时订阅（任务管理模式）
+  subscription: {
+    connect: (apiKey: string) => ipcRenderer.invoke('subscription:connect', apiKey),
+    disconnect: () => ipcRenderer.invoke('subscription:disconnect'),
+    getWebSocketStatus: () => ipcRenderer.invoke('subscription:getWebSocketStatus'),
+    createTask: (apiKey: string, config: any) => ipcRenderer.invoke('subscription:createTask', apiKey, config),
+    stopTask: (taskId: string) => ipcRenderer.invoke('subscription:stopTask', taskId),
+    disconnectTask: (taskId: string) => ipcRenderer.invoke('subscription:disconnectTask', taskId),
+    getAllTasks: () => ipcRenderer.invoke('subscription:getAllTasks'),
+    getTask: (taskId: string) => ipcRenderer.invoke('subscription:getTask', taskId),
+    // WebSocket 事件监听
+    onConnected: (callback: () => void) => ipcRenderer.on('ws:connected', callback),
+    onDisconnected: (callback: () => void) => ipcRenderer.on('ws:disconnected', callback),
+    onData: (callback: (event: any, data: any) => void) => ipcRenderer.on('ws:data', callback),
+    onError: (callback: (event: any, error: string) => void) => ipcRenderer.on('ws:error', callback),
+    onStats: (callback: (event: any, stats: any) => void) => ipcRenderer.on('ws:stats', callback),
+    onSubscribed: (callback: (event: any, data: any) => void) => ipcRenderer.on('ws:subscribed', callback),
+    // 移除监听器
+    removeListener: (channel: string, callback: any) => ipcRenderer.removeListener(channel, callback)
   },
 
   // 数据库字典 (PostgreSQL 755张表 + ClickHouse)
@@ -197,6 +222,7 @@ declare global {
     electronAPI: {
       app: {
         getVersion: () => Promise<string>
+        getPath: (name: 'desktop' | 'downloads' | 'documents') => Promise<string>
       }
       config: {
         get: (key?: string) => Promise<any>
@@ -226,9 +252,11 @@ declare global {
       dialog: {
         selectDirectory: () => Promise<string | null>
         showSaveDialog: (options: any) => Promise<{ canceled: boolean, filePath?: string }>
+        showOpenDialog: (options: any) => Promise<{ canceled: boolean, filePaths: string[] }>
       }
       shell: {
         showItemInFolder: (filePath: string) => Promise<void>
+        openPath: (path: string) => Promise<string>
         downloadFile: (url: string, savePath: string, onProgress?: (percent: number) => void) => Promise<{ path: string, size: number }>
         calculateMD5: (filePath: string) => Promise<string>
       }
@@ -265,6 +293,23 @@ declare global {
       }
       search: {
         global: (keyword: string, limit?: number) => Promise<any>
+      }
+      subscription: {
+        connect: (apiKey: string) => Promise<any>
+        disconnect: () => Promise<any>
+        getWebSocketStatus: () => Promise<any>
+        createTask: (apiKey: string, config: any) => Promise<any>
+        stopTask: (taskId: string) => Promise<any>
+        disconnectTask: (taskId: string) => Promise<any>
+        getAllTasks: () => Promise<any[]>
+        getTask: (taskId: string) => Promise<any>
+        onConnected: (callback: () => void) => void
+        onDisconnected: (callback: () => void) => void
+        onData: (callback: (event: any, data: any) => void) => void
+        onError: (callback: (event: any, error: string) => void) => void
+        onStats: (callback: (event: any, stats: any) => void) => void
+        onSubscribed: (callback: (event: any, data: any) => void) => void
+        removeListener: (channel: string, callback: any) => void
       }
       dbdict: {
         setApiKey: (apiKey: string) => Promise<boolean>
