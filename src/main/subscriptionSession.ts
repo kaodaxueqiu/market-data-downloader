@@ -23,6 +23,7 @@ export class SubscriptionSession {
   private startTime: number = 0
   private totalReceived = 0
   private dataRate = 0 // 数据接收速率（条/秒）
+  private fieldMapping: Map<string, string> = new Map()  // 🆕 英文名 → 中文名映射
   
   // 数据处理器（绑定到实例）
   private dataHandler = this.handleData.bind(this)
@@ -51,25 +52,23 @@ export class SubscriptionSession {
     await this.wsManager.connect(this.apiKey)
 
     // 2. 创建字段映射（英文名 → 中文名）
-    const fieldMapping = new Map<string, string>()
+    this.fieldMapping.clear()
     if (config.fieldObjects) {
       config.fieldObjects.forEach((field: any) => {
         if (field.name && field.cn_name) {
-          fieldMapping.set(field.name, field.cn_name)
+          this.fieldMapping.set(field.name, field.cn_name)
         }
       })
     }
-    // 接收时间字段
-    fieldMapping.set('接收时间', '接收时间')
 
-    // 3. 创建 CSV 写入器（表头包含"接收时间"）
-    const csvHeaders = [...config.fields, '接收时间']
+    // 3. 创建 CSV 写入器（不额外添加接收时间，用户可以自己选择）
+    const csvHeaders = [...config.fields]
     this.csvWriter = new RealtimeCSVWriter(config.savePath, csvHeaders, {
       sourceCode: config.sourceCode,
       sourceName: config.sourceName,
       symbols: config.symbols,
       startTime: new Date().toLocaleString('zh-CN'),
-      fieldMapping: fieldMapping  // 🔑 传递字段映射
+      fieldMapping: this.fieldMapping  // 🔑 传递字段映射
     })
 
     // 3. 构建订阅 patterns
@@ -134,6 +133,7 @@ export class SubscriptionSession {
   // 构建订阅模式
   private buildSubscriptionPatterns(sourceCode: string, symbols: string[]): string[] {
     // 🔑 K线数据特殊处理（Redis Key 格式：KLINE-1M/ZZ-XXXX/...）
+    // 注意：K线的channel没有日期时间后缀，所以不需要通配符
     if (sourceCode === 'ZZ-5001' || sourceCode === 'ZZ-6001') {
       if (symbols.length === 0) {
         // 订阅全部K线
@@ -141,34 +141,49 @@ export class SubscriptionSession {
         console.log('📊 K线数据订阅全部:', pattern)
         return [pattern]
       } else {
-        // 订阅指定股票/合约的K线
-        const patterns = symbols.map(symbol => `KLINE-1M/${sourceCode}/${symbol}/*`)
+        // 订阅指定股票/合约的K线（不带通配符后缀！）
+        const patterns = symbols.map(symbol => `KLINE-1M/${sourceCode}/${symbol}`)
         console.log('📊 K线数据订阅指定:', patterns)
         return patterns
       }
     }
     
     // 普通数据源（DECODED/ZZ-XX/...）
+    // 注意：后端会将订阅pattern规范化为 DECODED/ZZ-XX/SYMBOL/*
+    // 所以前端注册handler时也要使用相同的pattern，否则收不到数据
     if (symbols.length === 0) {
       // 订阅全部
-      return [sourceCode]
+      return [`DECODED/${sourceCode}/*`]
     } else {
-      // 订阅指定股票
-      return symbols.map(symbol => `${sourceCode}/${symbol}`)
+      // 订阅指定股票（使用通配符后缀，匹配所有时间戳的数据）
+      return symbols.map(symbol => `DECODED/${sourceCode}/${symbol}/*`)
     }
   }
 
   // 处理接收到的数据
   handleData(message: any) {
     if (!this.isSubscribing || !this.csvWriter || !this.config) {
+      console.log('⚠️ 跳过数据处理: isSubscribing=', this.isSubscribing, 'csvWriter=', !!this.csvWriter, 'config=', !!this.config)
       return
     }
 
     try {
+      console.log('\n📥 收到消息:', {
+        pattern: message.pattern,
+        channel: message.channel,
+        dataType: typeof message.data
+      })
+      
       let data = message.data
       
       // 🔑 检查数据嵌套结构
       if (data && typeof data === 'object') {
+        console.log('📦 数据是对象，检查嵌套结构...')
+        console.log('   有 payload?', !!data.payload)
+        console.log('   有 key?', !!data.key)
+        console.log('   有 data?', !!data.data)
+        console.log('   data.data类型:', typeof data.data)
+        
         // Stream 模式 1：有 payload 字段
         if (data.payload) {
           try {
@@ -181,8 +196,13 @@ export class SubscriptionSession {
         }
         // 嵌套结构：有 key 和 data 字段（实际数据在 data 对象中）
         else if (data.key && data.data && typeof data.data === 'object') {
+          console.log('📦 检测到K线嵌套结构，提取 data.data')
+          console.log('   原始data.key:', data.key)
+          console.log('   原始data.data字段:', Object.keys(data.data))
           data = data.data  // 🔑 提取嵌套的 data 对象
-          console.log('📦 嵌套 data 对象解析成功')
+          console.log('📦 提取后的数据字段:', Object.keys(data))
+        } else {
+          console.log('📦 没有嵌套，直接使用数据')
         }
       }
       
@@ -190,43 +210,49 @@ export class SubscriptionSession {
       const symbol = this.extractSymbol(data, message.channel || message.key)
       
       if (!symbol) {
-        console.warn('⚠️ 无法提取股票代码:', message)
+        console.error('❌ 无法提取股票代码!')
+        console.error('   Channel:', message.channel)
+        console.error('   Pattern:', message.pattern)
+        console.error('   数据字段:', Object.keys(data))
+        console.error('   stockCode:', data.stockCode)
+        console.error('   证券代码:', data.证券代码)
         return
       }
+      
+      console.log(`✅ 提取股票代码成功: ${symbol}，准备写入CSV`)
 
       // 🔍 调试：打印第一条数据的结构（只打印一次）
       if (this.totalReceived === 0) {
         console.log('📊 收到第一条数据，数据结构:', data)
         console.log('📋 数据字段:', Object.keys(data))
-        console.log('🎯 订阅字段:', this.config.fields)
+        console.log('🎯 订阅字段（英文名）:', this.config.fields)
+        console.log('🔤 字段映射（英文→中文）:', Array.from(this.fieldMapping.entries()))
       }
 
       // 提取字段数据（按用户选择的字段顺序）
       const rowData: Record<string, any> = {}
       
       this.config.fields.forEach(field => {
-        // 先直接查找字段名，找不到再用智能查找
-        const value = data[field] ?? this.findFieldValue(data, field)
+        // 🔑 关键修复：同时支持中文和英文字段名
+        // 1. 先尝试用英文名（ZZ-5001, ZZ-6001等K线数据用英文）
+        // 2. 再尝试用中文名（ZZ-01, ZZ-31等快照数据用中文）
+        // 3. 最后用智能查找
+        const chineseFieldName = this.fieldMapping.get(field) || field
+        const value = data[field] ?? data[chineseFieldName] ?? this.findFieldValue(data, field)
         rowData[field] = value ?? '-'
         
         // 调试：如果值是 undefined，打印日志
         if (value === undefined && this.totalReceived < 5) {
-          console.warn(`⚠️ 字段 "${field}" 未找到，数据keys:`, Object.keys(data))
+          console.warn(`⚠️ 字段 "${field}"（中文名："${chineseFieldName}"）未找到`)
+          console.warn('   数据keys:', Object.keys(data))
         }
       })
 
-      // 添加接收时间（本地时间）
-      const now = new Date()
-      const year = now.getFullYear()
-      const month = String(now.getMonth() + 1).padStart(2, '0')
-      const day = String(now.getDate()).padStart(2, '0')
-      const hour = String(now.getHours()).padStart(2, '0')
-      const minute = String(now.getMinutes()).padStart(2, '0')
-      const second = String(now.getSeconds()).padStart(2, '0')
-      rowData['接收时间'] = `${year}-${month}-${day} ${hour}:${minute}:${second}`
+      // 🔑 接收时间字段已在上面的字段提取中处理，不需要额外添加
 
       // 写入 CSV
       this.csvWriter.appendRow(symbol, rowData)
+      console.log(`📝 已写入CSV: ${symbol}, 第 ${this.totalReceived + 1} 条数据`)
 
       // 更新统计
       this.totalReceived++
@@ -275,21 +301,40 @@ export class SubscriptionSession {
     if (data.contractCode) return data.contractCode  // 驼峰
     if (data.contract_code) return data.contract_code  // 下划线
 
-    // 2. 从 channel/key 中提取
-    // channel 格式: KLINE-1M/ZZ-6001/SHFE.FU2609 或 DECODED/ZZ-01/SZ.000001/snapshot
-    const match = channel.match(/\/((?:SZ|SH|SZSE|SSE|SHFE|DCE|CZCE|CFFEX|INE|GFEX)\.[^/]+)/)
+    // 2. 从 channel 中提取（K线数据必定能从channel提取）
+    // channel 格式: 
+    //   KLINE-1M/ZZ-5001/SZ.000001/...
+    //   KLINE-1M/ZZ-6001/SHFE.FU2609/...
+    //   DECODED/ZZ-01/SZ.000001/...
+    
+    // 🔑 先尝试K线格式：KLINE-1M/ZZ-XXXX/SYMBOL/...
+    let match = channel.match(/KLINE-1M\/ZZ-\d+\/([^/]+)/)
     if (match) {
-      return match[1]  // 返回匹配的股票/合约代码
+      console.log(`✅ 从K线channel提取股票代码: ${match[1]}`)
+      return match[1]  // 返回 SZ.000001 或 SHFE.FU2609
+    }
+    
+    // 再尝试快照格式：DECODED/ZZ-XX/SYMBOL/...
+    match = channel.match(/DECODED\/ZZ-\d+\/([^/]+)/)
+    if (match) {
+      console.log(`✅ 从DECODED channel提取股票代码: ${match[1]}`)
+      return match[1]
+    }
+    
+    // 最后尝试通用格式
+    match = channel.match(/\/((?:SZ|SH|SZSE|SSE|SHFE|DCE|CZCE|CFFEX|INE|GFEX)\.[^/]+)/)
+    if (match) {
+      console.log(`✅ 从通用格式提取股票代码: ${match[1]}`)
+      return match[1]
     }
 
     // 3. 如果都没找到，打印详细日志
-    console.warn('⚠️ 无法提取合约代码，数据:', {
-      symbol: data.symbol,
-      contractCode: data.contractCode,
-      contract_code: data.contract_code,
-      channel: channel,
-      dataKeys: Object.keys(data)
-    })
+    console.error('❌ 无法提取股票代码!')
+    console.error('   Channel:', channel)
+    console.error('   数据字段:', Object.keys(data))
+    console.error('   stockCode:', data.stockCode)
+    console.error('   contractCode:', data.contractCode)
+    console.error('   证券代码:', data.证券代码)
 
     return null
   }

@@ -185,8 +185,25 @@ export class RealtimeCSVWriter {
           value = `${year}-${month}-${day} ${hour}:${minute}:${second}`
         }
         
+        // 🔑 处理数组和对象类型 - JSON序列化
+        if (typeof value === 'object' && value !== null) {
+          value = JSON.stringify(value)
+        }
+        
         // 转换为字符串
         value = String(value)
+        
+        // 🔑 修复时间格式：将点号时间转换为冒号时间
+        // 例如：11.12.09.123 → 11:12:09.123
+        if (/^\d{1,2}\.\d{2}\.\d{2}/.test(value)) {
+          value = value.replace(/\./g, ':')
+        }
+        
+        // 🔑 时间字段特殊处理：强制Excel识别为文本
+        // 对于 HH:MM:SS 格式的时间，在前面加上单引号撇号，让Excel保持原样显示
+        if (/^\d{1,2}:\d{2}:\d{2}/.test(value)) {
+          value = `'${value}`
+        }
         
         // 处理包含逗号、引号、换行的值（CSV 转义）
         if (value.includes(',') || value.includes('"') || value.includes('\n')) {

@@ -573,7 +573,7 @@ const startAutoRefreshTimer = () => {
   // 每500毫秒自动刷新一次
   refreshTimer = setInterval(() => {
     refreshTasks()
-  }, 500)
+  }, 3000)  // 改为3秒，减少闪烁
 }
 
 // 启动自动刷新

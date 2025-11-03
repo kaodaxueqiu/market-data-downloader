@@ -51,6 +51,7 @@ win:
   requestedExecutionLevel: asInvoker
   forceCodeSigning: false
   verifyUpdateCodeSignature: false
+  artifactName: ${productName}-${version}.${ext}
 linux:
   target:
     - target: AppImage

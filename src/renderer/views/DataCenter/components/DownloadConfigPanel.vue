@@ -20,10 +20,10 @@
             <div class="source-name">{{ getSourceName() }}</div>
           </el-form-item>
 
-          <!-- 股票/期货代码（仅行情数据且需要代码输入的数据源） -->
+          <!-- 股票/期货代码（行情数据 + 所有ClickHouse加工数据） -->
           <el-form-item 
-            v-if="activeTab === 'market' && needsSymbolInputComputed" 
-            label="股票/期货代码"
+            v-if="(activeTab === 'market' && needsSymbolInputComputed) || activeTab === 'processed'" 
+            label="股票/期货代码（可选）"
           >
             <el-input
               v-model="symbolsInput"
@@ -350,8 +350,20 @@ const needsSymbolInputComputed = computed(() => {
 
 // 代码输入提示
 const symbolInputHint = computed(() => {
-  const sourceCode = getSourceCode()
-  return getSymbolInputHint(sourceCode)
+  if (props.activeTab === 'market') {
+    const sourceCode = getSourceCode()
+    return getSymbolInputHint(sourceCode)
+  } else if (props.activeTab === 'processed') {
+    const tableName = getSourceCode().toLowerCase()
+    if (tableName === 'zz_5001') {
+      return '输入股票代码（如：000001 或 SZ.000001），留空下载全部，多个用逗号分隔'
+    } else if (tableName === 'zz_6001') {
+      return '输入期货合约（如：CFFEX.IF2511, SHFE.AU2512），留空下载全部，多个用逗号分隔'
+    } else {
+      return '输入股票/期货代码（如：000001 或 SZ.000001），留空下载全部。后端会自动识别字段。'
+    }
+  }
+  return '输入代码，多个用逗号分隔'
 })
 
 // 是否可以下载（只要有数据源就可以下载，所有参数都是可选的）
@@ -447,8 +459,40 @@ const handleSymbolsInput = () => {
     return
   }
   
-  const sourceCode = getSourceCode()
-  validatedSymbols.value = autoCompleteSymbols(symbolsInput.value, sourceCode)
+  if (props.activeTab === 'market') {
+    // 行情数据：使用自动补全（补充市场前缀）
+    const sourceCode = getSourceCode()
+    validatedSymbols.value = autoCompleteSymbols(symbolsInput.value, sourceCode)
+  } else if (props.activeTab === 'processed') {
+    // ClickHouse数据：支持自动补全市场前缀
+    const codes = symbolsInput.value
+      .toUpperCase()
+      .split(/[,，\s;；\n]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+    
+    validatedSymbols.value = codes.map(code => {
+      // 如果已经有前缀（包含点号），直接使用
+      if (code.includes('.')) {
+        return code
+      }
+      
+      // 纯数字股票代码：自动补全市场前缀
+      if (/^\d{6}$/.test(code)) {
+        // 根据代码判断市场（6/688/689开头是上海，其他是深圳）
+        if (code.startsWith('6') || code.startsWith('688') || code.startsWith('689')) {
+          return `SH.${code}`
+        } else {
+          return `SZ.${code}`
+        }
+      }
+      
+      // 其他格式（期货等），保持原样
+      return code
+    }).filter((v, i, a) => a.indexOf(v) === i)  // 去重
+    
+    console.log('✅ ClickHouse代码筛选（自动补全后）:', validatedSymbols.value)
+  }
   
   // 更新输入框显示（可选）
   // symbolsInput.value = validatedSymbols.value.join(', ')
@@ -733,6 +777,11 @@ const clearAllDownloadFields = () => {
 
 // 确认下载字段并创建任务
 const confirmDownloadFields = async () => {
+  // 🔑 先验证股票代码输入（如果用户输入了但没失焦）
+  if (symbolsInput.value.trim() && validatedSymbols.value.length === 0) {
+    handleSymbolsInput()
+  }
+  
   // 验证至少选择一个字段
   if (selectedDownloadFields.value.length === 0) {
     ElMessage.warning('请至少选择一个字段')
@@ -822,13 +871,33 @@ const confirmDownloadFields = async () => {
         console.log('📅 日期范围（UPDATE_TIME）:', request.date_range)
       }
       
-      console.log('📋 创建静态元数据下载任务')
-      console.log('🔧 请求参数:', request)
+      // 🆕 股票/期货代码筛选（所有ClickHouse数据源）
+      console.log('🔍 检查股票代码筛选条件:')
+      console.log('   activeTab:', props.activeTab)
+      console.log('   symbolsInput.value:', symbolsInput.value)
+      console.log('   validatedSymbols.value:', validatedSymbols.value)
+      console.log('   validatedSymbols.length:', validatedSymbols.value.length)
+      
+      if (props.activeTab === 'processed' && validatedSymbols.value.length > 0) {
+        request.symbols = validatedSymbols.value
+        console.log('✅ 添加股票代码筛选:', request.symbols)
+      } else {
+        console.log('⚠️ 没有添加股票代码筛选（symbols为空或不是加工数据）')
+      }
+      
+      console.log('📋 创建静态元数据/加工数据下载任务')
+      console.log('🔧 序列化前的request对象:', request)
+      console.log('🔧 序列化前的request.symbols:', request.symbols)
       
       // 调用静态元数据/加工数据下载API（使用 JSON.parse(JSON.stringify()) 确保是纯对象）
       const pureRequest = JSON.parse(JSON.stringify(request))
+      console.log('🔧 序列化后的pureRequest:', pureRequest)
+      console.log('🔧 序列化后的pureRequest.symbols:', pureRequest.symbols)
+      
       // 根据当前Tab决定数据源：static=postgresql, processed=clickhouse
       const datasource = props.activeTab === 'processed' ? 'clickhouse' : undefined
+      console.log('🔧 datasource参数:', datasource)
+      
       const taskId = await window.electronAPI.staticDownload.createTask(pureRequest, fullApiKey!, datasource)
       console.log('✅ 任务创建成功, task_id:', taskId)
       

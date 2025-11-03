@@ -67,9 +67,9 @@ export class WebSocketManager {
       
       console.log('🔌 正在连接 WebSocket 总线...')
       
-      this.ws = new WebSocket('ws://61.151.241.233:8081/ws', {
-        headers: { 'X-API-Key': apiKey }
-      })
+      // 🔑 API Key 通过 URL 参数传递（WebSocket 不支持自定义 headers）
+      const wsUrl = `ws://61.151.241.233:8081/ws?api_key=${apiKey}`
+      this.ws = new WebSocket(wsUrl)
 
       this.ws.on('open', () => {
         console.log('✅ WebSocket 总线连接成功')

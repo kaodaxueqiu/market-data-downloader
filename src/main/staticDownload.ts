@@ -32,6 +32,7 @@ export interface StaticDownloadRequest {
     start_date?: string             // 开始日期 YYYY-MM-DD
     end_date?: string               // 结束日期 YYYY-MM-DD
   }
+  symbols?: string[]                // 🆕 股票/期货代码列表（可选，ClickHouse数据源）
   order_by?: string                 // 排序（可选）
   format: 'csv' | 'json'            // 文件格式
 }
@@ -121,6 +122,12 @@ class StaticDownloadManager {
       
       if (request.order_by) {
         requestBody.order_by = request.order_by
+      }
+      
+      // 🆕 股票/期货代码筛选（ClickHouse数据源）
+      if (request.symbols && request.symbols.length > 0) {
+        requestBody.symbols = request.symbols
+        console.log('📊 添加股票代码筛选:', requestBody.symbols)
       }
       
       console.log('📤 发送请求体:', JSON.stringify(requestBody, null, 2))
