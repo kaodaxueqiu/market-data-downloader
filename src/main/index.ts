@@ -111,8 +111,10 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
     
-    // 🔧 始终打开开发者工具（方便调试）
-    mainWindow?.webContents.openDevTools()
+    // 🔧 仅在开发模式下打开开发者工具
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow?.webContents.openDevTools()
+    }
     
     // 生产模式下启动时自动检查更新，并启动定期检查
     if (process.env.NODE_ENV !== 'development') {
