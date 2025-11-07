@@ -76,6 +76,14 @@ export const SOURCE_MARKET_MAP: Record<string, string> = {
   'ZZ-106': 'UNKNOWN',       // 港股通南向-上交所
   'ZZ-107': 'UNKNOWN',       // 港股通南向-深交所
   
+  // 指数数据（1个）
+  'ZZ-111': 'INDEX',         // 指数行业快照
+  
+  // 数字货币市场（3个）- 需要输入交易对
+  'ZZ-130': 'CRYPTO',        // Binance 24小时行情
+  'ZZ-131': 'CRYPTO',        // Binance 订单簿深度
+  'ZZ-132': 'CRYPTO',        // Binance 实时成交
+  
   // K线数据（2个）- 需要完整格式代码（不自动补全前缀）
   'ZZ-5001': 'KLINE_STOCK',   // 沪深A股1分钟K线（需要 SZ.XXXXXX 或 SH.XXXXXX）
   'ZZ-6001': 'KLINE_FUTURES'  // 期货1分钟K线（需要 交易所.合约代码，如 SHFE.FU2609）
@@ -98,6 +106,16 @@ export function getSymbolInputHint(sourceCode: string): string {
   
   if (!prefix) {
     return '此数据源不需要输入代码'
+  }
+  
+  // 指数数据源
+  if (prefix === 'INDEX') {
+    return `输入指数编号，如：500, 1000, 300（自动补全为 zz-500, zz-1000）`
+  }
+  
+  // 数字货币数据源
+  if (prefix === 'CRYPTO') {
+    return `输入交易对即可，如：BTCUSDT, ETHUSDT, NEIROUSDC（保持原样，区分大小写）`
   }
   
   // K线数据源特殊处理
@@ -144,6 +162,27 @@ export function autoCompleteSymbols(input: string, sourceCode: string): string[]
   const result: string[] = []
   
   codes.forEach(code => {
+    // 指数代码：补全为 zz-{编号} 格式（小写）
+    if (prefix === 'INDEX') {
+      const lowerCode = code.toLowerCase();
+      
+      // 如果已经有zz-前缀，保持原样
+      if (lowerCode.startsWith('zz-')) {
+        result.push(lowerCode);
+      }
+      // 如果只是数字（如1000、500），补全为zz-1000、zz-500
+      else {
+        result.push(`zz-${lowerCode}`);
+      }
+      return
+    }
+    
+    // 数字货币：保持原样，不补全前缀（交易对如BTCUSDT）
+    if (prefix === 'CRYPTO') {
+      result.push(code)  // 已经在上面转为大写了
+      return
+    }
+    
     // 如果已经包含点，保持原样（用户可能手动输入了完整格式）
     if (code.includes('.')) {
       result.push(code)
