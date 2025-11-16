@@ -99,12 +99,25 @@ export class DatabaseDictAPI {
     this.client.defaults.headers['X-API-Key'] = apiKey
   }
 
+  // 🆕 获取数据源列表（包含权限信息）
+  async getDatasources(): Promise<{ code: number; data: any }> {
+    try {
+      console.log('📋 调用后端API: GET /datasources')
+      const response = await this.client.get('/datasources')
+      console.log('✅ 后端返回数据源列表:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取数据源列表失败:', error)
+      throw new Error(error.response?.data?.message || '获取数据源列表失败')
+    }
+  }
+
   // 1. 获取表列表（不缓存，因为需要支持分类筛选）
   async getTables(params?: {
     category?: string
     page?: number
     size?: number
-    datasource?: 'postgresql' | 'clickhouse'  // 🆕 数据源参数
+    datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'  // 🆕 数据源参数
   }): Promise<{ code: number; data: TableInfo[]; total: number; page: number; size: number }> {
     try {
       console.log('📋 调用后端API: GET /tables', params)
@@ -118,7 +131,7 @@ export class DatabaseDictAPI {
   }
 
   // 2. 获取表详情（实时查询，不缓存）
-  async getTableDetail(tableName: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: TableDetail }> {
+  async getTableDetail(tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<{ code: number; data: TableDetail }> {
     try {
       console.log('📋 调用后端API: GET /tables/' + tableName, datasource ? `[${datasource}]` : '')
       const params = datasource ? { datasource } : {}
@@ -135,7 +148,7 @@ export class DatabaseDictAPI {
   }
 
   // 3. 获取表字段
-  async getTableFields(tableName: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: any[] }> {
+  async getTableFields(tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<{ code: number; data: any[] }> {
     try {
       const params = datasource ? { datasource } : {}
       const response = await this.client.get(`/tables/${tableName}/fields`, { params })
@@ -147,7 +160,7 @@ export class DatabaseDictAPI {
   }
 
   // 4. 获取分类统计（实时查询，不缓存）
-  async getCategories(datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: Category[] }> {
+  async getCategories(datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<{ code: number; data: Category[] }> {
     try {
       console.log('📋 调用后端API: GET /categories', datasource ? `[${datasource}]` : '')
       const params = datasource ? { datasource } : {}
@@ -161,7 +174,7 @@ export class DatabaseDictAPI {
   }
 
   // 5. 搜索表和字段
-  async search(keyword: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: SearchResult[] }> {
+  async search(keyword: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<{ code: number; data: SearchResult[] }> {
     try {
       const params: any = { keyword }
       if (datasource) params.datasource = datasource
@@ -191,7 +204,7 @@ export class DatabaseDictAPI {
   }
 
   // 7. 获取数据库统计（实时查询，不缓存）
-  async getStats(datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; data: any }> {
+  async getStats(datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<{ code: number; data: any }> {
     try {
       const params = datasource ? { datasource } : {}
       const response = await this.client.get('/stats', { params })
@@ -220,7 +233,7 @@ export class DatabaseDictAPI {
   }
 
   // 9. 清除缓存
-  async clearCache(datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; message: string }> {
+  async clearCache(datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<{ code: number; message: string }> {
     try {
       const params = datasource ? { datasource } : {}
       const response = await this.client.post('/cache/clear', {}, { params })
@@ -264,7 +277,7 @@ export class DatabaseDictAPI {
   }
 
   // 🆕 预览表数据（最新10条）
-  async previewTable(tableName: string, datasource?: 'postgresql' | 'clickhouse'): Promise<{ code: number; table_name: string; preview_count: number; columns: string[]; data: any[] }> {
+  async previewTable(tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<{ code: number; table_name: string; preview_count: number; columns: string[]; data: any[] }> {
     try {
       console.log('📋 调用后端API: GET /tables/' + tableName + '/preview', datasource ? `[${datasource}]` : '')
       const params = datasource ? { datasource } : {}

@@ -204,6 +204,18 @@
               >
                 WebSocket权限 ({{ getSelectedInCategory('websocket_api') }}/{{ getCategoryPermissions('websocket_api').length }})
               </el-button>
+              <el-button
+                :type="activePermissionCategory === 'datasource' ? 'primary' : ''"
+                @click="activePermissionCategory = 'datasource'"
+              >
+                数据源权限 ({{ selectedDatasources.length }}/4)
+              </el-button>
+              <el-button
+                :type="activePermissionCategory === 'basic' ? 'primary' : ''"
+                @click="activePermissionCategory = 'basic'"
+              >
+                基础配置
+              </el-button>
             </div>
             
             <!-- 权限内容展示区 -->
@@ -422,6 +434,109 @@
                 <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
                   <el-button @click="resetApiPermissions">重置</el-button>
                   <el-button type="primary" @click="saveApiPermissions">保存WebSocket权限</el-button>
+                </div>
+              </div>
+
+              <!-- 数据源权限 -->
+              <div v-else-if="activePermissionCategory === 'datasource'" style="padding: 30px;">
+                <div style="margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <el-button size="default" @click="selectAllDatasources">全选</el-button>
+                    <el-button size="default" @click="unselectAllDatasources">全不选</el-button>
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                  <div 
+                    v-for="ds in allDatasources" 
+                    :key="ds.code"
+                    :class="{ 'datasource-card-selected': selectedDatasources.includes(ds.code) }"
+                    class="datasource-card"
+                    @click="toggleDatasource(ds.code)"
+                  >
+                    <div class="datasource-card-inner">
+                      <div class="datasource-checkbox">
+                        <el-checkbox 
+                          :model-value="selectedDatasources.includes(ds.code)"
+                          size="large"
+                          @change="toggleDatasource(ds.code)"
+                          @click.stop
+                        />
+                      </div>
+                      <div class="datasource-content">
+                        <div class="datasource-header">
+                          <div class="datasource-name">{{ ds.name }}</div>
+                          <el-tag :type="getDataSourceTagType(ds.code)" effect="plain" size="default">
+                            {{ ds.tables }}{{ ds.type }}
+                          </el-tag>
+                        </div>
+                        <div class="datasource-description">{{ ds.description }}</div>
+                        <div class="datasource-footer">
+                          <el-tag size="small" effect="plain">{{ ds.code }}</el-tag>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div style="margin-top: 30px; text-align: right;">
+                  <el-button size="large" @click="resetDatasourcePermissions">重置</el-button>
+                  <el-button size="large" type="primary" @click="saveDatasourcePermissions">保存数据源权限</el-button>
+                </div>
+              </div>
+
+              <!-- 基础配置 -->
+              <div v-else-if="activePermissionCategory === 'basic'" style="padding: 30px;">
+                <el-form :model="basicConfig" label-width="120px" style="max-width: 600px;">
+                  <el-form-item label="用户名称">
+                    <el-input v-model="basicConfig.name" placeholder="请输入用户名称" />
+                  </el-form-item>
+                  
+                  <el-form-item label="描述信息">
+                    <el-input 
+                      v-model="basicConfig.description" 
+                      type="textarea" 
+                      :rows="3"
+                      placeholder="选填：用户描述或备注信息"
+                    />
+                  </el-form-item>
+                  
+                  <el-form-item label="数据等级">
+                    <el-radio-group v-model="basicConfig.data_level">
+                      <el-radio value="L0" size="large">
+                        <span style="font-weight: 500;">L0 - 基础级</span>
+                        <span style="margin-left: 10px; color: #909399; font-size: 13px;">（权限最低，受限数据，试用用户）</span>
+                      </el-radio>
+                      <el-radio value="L1" size="large" style="margin-top: 10px;">
+                        <span style="font-weight: 500;">L1 - 标准级</span>
+                        <span style="margin-left: 10px; color: #909399; font-size: 13px;">（中等权限，标准数据，普通客户）</span>
+                      </el-radio>
+                      <el-radio value="L2" size="large" style="margin-top: 10px;">
+                        <span style="font-weight: 500;">L2 - 完整级</span>
+                        <span style="margin-left: 10px; color: #909399; font-size: 13px;">（权限最高，全部数据，VIP/内部用户）</span>
+                      </el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                  
+                  <el-form-item label="速率限制">
+                    <el-input-number 
+                      v-model="basicConfig.rate_limit" 
+                      :min="-1" 
+                      :max="10000"
+                      :step="10"
+                      controls-position="right"
+                      style="width: 200px;"
+                    />
+                    <span style="margin-left: 15px; color: #606266;">次/分钟</span>
+                    <div style="margin-top: 10px; font-size: 13px; color: #909399;">
+                      设置为 -1 表示无限制，0表示禁止访问，其他值表示每分钟最大请求次数
+                    </div>
+                  </el-form-item>
+                </el-form>
+                
+                <div style="margin-top: 30px; text-align: right;">
+                  <el-button size="large" @click="resetBasicConfig">重置</el-button>
+                  <el-button size="large" type="primary" @click="saveBasicConfig">保存基础配置</el-button>
                 </div>
               </div>
             </el-card>
@@ -829,6 +944,23 @@ const permissionLoading = ref(false)
 // 可编辑的权限
 const selectedMenuPermissions = ref<string[]>([])
 const selectedApiPermissions = ref<string[]>([])
+const selectedDatasources = ref<string[]>([])
+
+// 基础配置
+const basicConfig = ref({
+  name: '',
+  description: '',
+  data_level: 'L2',
+  rate_limit: -1
+})
+
+// 所有可用数据源
+const allDatasources = [
+  { code: 'postgresql', name: '财务数据库', description: '原始静态数据（财务、基本信息等）', tables: 755, type: '张表' },
+  { code: 'redis', name: '实时行情库', description: '实时行情数据（ZZ-01~ZZ-107）', tables: 53, type: '个数据源' },
+  { code: 'clickhouse', name: '数据加工库', description: '数据加工和宽表', tables: 183, type: '张表' },
+  { code: 'clickhouse_data', name: '行情镜像库', description: '完整行情数据（ZZ-01~ZZ-107等）', tables: 56, type: '张表' }
+]
 
 // Tab 3: 数据库配置相关
 const selectedDatabaseKey = ref('')
@@ -1408,6 +1540,135 @@ const saveApiPermissions = async () => {
   }
 }
 
+// 🆕 数据源权限相关方法
+const toggleDatasource = (code: string) => {
+  const index = selectedDatasources.value.indexOf(code)
+  if (index > -1) {
+    selectedDatasources.value.splice(index, 1)
+  } else {
+    selectedDatasources.value.push(code)
+  }
+}
+
+const selectAllDatasources = () => {
+  selectedDatasources.value = allDatasources.map(ds => ds.code)
+}
+
+const unselectAllDatasources = () => {
+  selectedDatasources.value = []
+}
+
+const resetDatasourcePermissions = () => {
+  selectedDatasources.value = [...(permissionConfig.value?.datasource_access || [])]
+}
+
+const saveDatasourcePermissions = async () => {
+  if (!selectedPermissionKey.value) {
+    ElMessage.error('请先选择用户')
+    return
+  }
+  
+  try {
+    console.log('💾 保存数据源权限:', selectedDatasources.value)
+    
+    // 转换为普通对象（避免IPC序列化错误）
+    const updates = {
+      datasource_access: [...selectedDatasources.value]
+    }
+    
+    const result = await window.electronAPI.config.patchPermissionConfig(
+      selectedPermissionKey.value,
+      updates
+    )
+    
+    if (result.success) {
+      ElMessage.success('数据源权限保存成功！')
+      
+      // 直接重新获取权限配置
+      const fetchResult = await window.electronAPI.config.fetchPermissionConfig(selectedPermissionKey.value)
+      if (fetchResult.success && fetchResult.data) {
+        permissionConfig.value = fetchResult.data
+        // 强制更新数据源权限显示
+        selectedDatasources.value = [...(fetchResult.data.datasource_access || [])]
+        console.log('✅ 数据源权限已刷新:', selectedDatasources.value)
+      }
+    } else {
+      ElMessage.error(result.error || '保存失败')
+    }
+  } catch (error: any) {
+    ElMessage.error('保存失败: ' + error.message)
+  }
+}
+
+// 获取数据源Tag颜色
+const getDataSourceTagType = (code: string) => {
+  const colorMap: Record<string, any> = {
+    'postgresql': 'success',
+    'redis': 'primary',
+    'clickhouse': 'warning',
+    'clickhouse_data': 'info'
+  }
+  return colorMap[code] || 'info'
+}
+
+// 🆕 基础配置相关方法
+const resetBasicConfig = () => {
+  if (permissionConfig.value) {
+    basicConfig.value = {
+      name: permissionConfig.value.name || '',
+      description: permissionConfig.value.description || '',
+      data_level: permissionConfig.value.data_level || 'L2',
+      rate_limit: permissionConfig.value.rate_limit ?? -1
+    }
+  }
+}
+
+const saveBasicConfig = async () => {
+  if (!selectedPermissionKey.value) {
+    ElMessage.error('请先选择用户')
+    return
+  }
+  
+  try {
+    console.log('💾 保存基础配置:', basicConfig.value)
+    
+    // 转换为普通对象（避免IPC序列化错误）
+    const updates = {
+      name: basicConfig.value.name,
+      description: basicConfig.value.description,
+      data_level: basicConfig.value.data_level,
+      rate_limit: basicConfig.value.rate_limit
+    }
+    
+    const result = await window.electronAPI.config.patchPermissionConfig(
+      selectedPermissionKey.value,
+      updates
+    )
+    
+    if (result.success) {
+      ElMessage.success('基础配置保存成功！')
+      
+      // 重新获取权限配置
+      const fetchResult = await window.electronAPI.config.fetchPermissionConfig(selectedPermissionKey.value)
+      if (fetchResult.success && fetchResult.data) {
+        permissionConfig.value = fetchResult.data
+        // 强制更新基础配置显示
+        basicConfig.value = {
+          name: fetchResult.data.name || '',
+          description: fetchResult.data.description || '',
+          data_level: fetchResult.data.data_level || 'L2',
+          rate_limit: fetchResult.data.rate_limit ?? -1
+        }
+        console.log('✅ 基础配置已刷新:', basicConfig.value)
+      }
+    } else {
+      ElMessage.error(result.error || '保存失败')
+    }
+  } catch (error: any) {
+    ElMessage.error('保存失败: ' + error.message)
+  }
+}
+
 // 加载权限注册表（系统所有可用权限）
 const loadPermissionRegistry = async () => {
   if (permissionRegistry.value) return  // 已加载过，直接返回
@@ -1435,6 +1696,8 @@ const loadUserPermissions = async () => {
     // 清空选择
     selectedMenuPermissions.value = []
     selectedApiPermissions.value = []
+    selectedDatasources.value = []
+    basicConfig.value = { name: '', description: '', data_level: 'L2', rate_limit: -1 }
     permissionConfig.value = null
     return
   }
@@ -1451,7 +1714,10 @@ const loadUserPermissions = async () => {
       }
     }
     
-    // 加载用户权限配置
+    // 1. 先获取用户完整信息（包含name、description）
+    const detailResult = await window.electronAPI.config.fetchApiKeyDetail(selectedPermissionKey.value)
+    
+    // 2. 再加载用户权限配置
     const result = await window.electronAPI.config.fetchPermissionConfig(selectedPermissionKey.value)
     
     if (result.success && result.data) {
@@ -1484,9 +1750,22 @@ const loadUserPermissions = async () => {
         console.log('✅ 使用具体权限列表，共', selectedApiPermissions.value.length, '个')
       }
       
+      // 填充数据源权限
+      selectedDatasources.value = [...(result.data.datasource_access || [])]
+      
+      // 填充基础配置（从两个接口合并数据）
+      basicConfig.value = {
+        name: detailResult.data?.name || result.data.name || '',
+        description: detailResult.data?.description || result.data.description || '',
+        data_level: result.data.data_level || 'L2',
+        rate_limit: result.data.rate_limit ?? -1
+      }
+      
       console.log('✅ 用户权限已加载')
       console.log('  - 菜单权限:', selectedMenuPermissions.value)
       console.log('  - API权限数量:', selectedApiPermissions.value.length)
+      console.log('  - 数据源权限:', selectedDatasources.value)
+      console.log('  - 基础配置:', basicConfig.value)
     } else {
       ElMessage.error(result.error || '获取用户权限失败')
     }
@@ -1516,15 +1795,16 @@ const loadDatabaseConfig = async () => {
   
   try {
     databaseLoading.value = true
-    const result = await window.electronAPI.config.fetchApiKeyDetail(selectedDatabaseKey.value)
+    const result = await window.electronAPI.config.fetchDatabaseConfig(selectedDatabaseKey.value)
     
-    if (result.success && result.data && result.data.metadata) {
-      const metadata = result.data.metadata
+    if (result.success && result.data) {
+      // 后端返回的是 data.database_config
+      const dbConfig = result.data.database_config || result.data
       databaseConfig.value = {
-        postgresql_username: metadata.postgresql_username?.trim() || '',
-        postgresql_password: metadata.postgresql_password?.trim() || '',
-        clickhouse_username: metadata.clickhouse_username?.trim() || '',
-        clickhouse_password: metadata.clickhouse_password?.trim() || ''
+        postgresql_username: dbConfig.postgresql_username?.trim() || '',
+        postgresql_password: dbConfig.postgresql_password?.trim() || '',
+        clickhouse_username: dbConfig.clickhouse_username?.trim() || '',
+        clickhouse_password: dbConfig.clickhouse_password?.trim() || ''
       }
       
       // 保存原始配置用于重置
@@ -1560,29 +1840,15 @@ const saveDatabaseConfig = async () => {
   try {
     savingDatabase.value = true
     
-    // 第1步：先获取用户当前完整数据
-    const userResult = await window.electronAPI.config.fetchApiKeyDetail(selectedDatabaseKey.value)
-    
-    if (!userResult.success || !userResult.data) {
-      ElMessage.error('获取用户信息失败')
-      return
-    }
-    
-    // 第2步：保留原有metadata，只更新数据库凭证
-    const updatedMetadata = {
-      ...(userResult.data.metadata || {}),  // 保留原有数据（email、phone、company等）
-      postgresql_username: databaseConfig.value.postgresql_username,
-      postgresql_password: databaseConfig.value.postgresql_password,
-      clickhouse_username: databaseConfig.value.clickhouse_username,
-      clickhouse_password: databaseConfig.value.clickhouse_password
-    }
-    
-    console.log('准备更新metadata:', updatedMetadata)
-    
-    // 第3步：调用更新接口
-    const updateResult = await window.electronAPI.config.updateApiKey(
+    // 使用独立的数据库配置接口
+    const updateResult = await window.electronAPI.config.updateDatabaseConfig(
       selectedDatabaseKey.value,
-      { metadata: updatedMetadata }
+      {
+        postgresql_username: databaseConfig.value.postgresql_username,
+        postgresql_password: databaseConfig.value.postgresql_password,
+        clickhouse_username: databaseConfig.value.clickhouse_username,
+        clickhouse_password: databaseConfig.value.clickhouse_password
+      }
     )
     
     if (updateResult.success) {
@@ -1650,6 +1916,74 @@ onMounted(() => {
     
     .el-button {
       border-radius: 20px;
+    }
+  }
+  
+  // 数据源卡片样式
+  .datasource-card {
+    background: #ffffff;
+    border: 2px solid #e4e7ed;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    
+    &:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+      border-color: #409eff;
+    }
+    
+    &.datasource-card-selected {
+      border-color: #409eff;
+      background: linear-gradient(135deg, #f6f9ff 0%, #ecf5ff 100%);
+      box-shadow: 0 4px 16px rgba(64, 158, 255, 0.2);
+      
+      .datasource-name {
+        color: #409eff;
+      }
+    }
+    
+    .datasource-card-inner {
+      display: flex;
+      align-items: flex-start;
+      gap: 15px;
+    }
+    
+    .datasource-checkbox {
+      padding-top: 2px;
+    }
+    
+    .datasource-content {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .datasource-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .datasource-name {
+      font-size: 17px;
+      font-weight: 600;
+      color: #303133;
+      transition: color 0.25s;
+    }
+    
+    .datasource-description {
+      color: #606266;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    
+    .datasource-footer {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
   }
 }

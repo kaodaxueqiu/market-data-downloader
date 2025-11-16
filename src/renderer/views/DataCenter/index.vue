@@ -2,7 +2,7 @@
   <div class="data-center">
     <!-- 顶部Tab切换 -->
     <el-tabs v-model="activeTab" class="data-tabs" @tab-change="handleTabChange">
-      <el-tab-pane label="行情数据" name="market">
+      <el-tab-pane v-if="hasRedisPermission" label="行情数据" name="market">
         <template #label>
           <span class="tab-label">
             <el-icon><DataLine /></el-icon>
@@ -11,7 +11,7 @@
         </template>
       </el-tab-pane>
       
-      <el-tab-pane label="静态元数据" name="static">
+      <el-tab-pane v-if="hasPostgresqlPermission" label="静态元数据" name="static">
         <template #label>
           <span class="tab-label">
             <el-icon><Document /></el-icon>
@@ -20,11 +20,20 @@
         </template>
       </el-tab-pane>
       
-      <el-tab-pane label="加工数据" name="processed">
+      <el-tab-pane v-if="hasClickhousePermission" label="加工数据" name="processed">
         <template #label>
           <span class="tab-label">
             <el-icon><Operation /></el-icon>
             加工数据 <el-tag size="small" type="warning">{{ processedSourceCount }}</el-tag>
+          </span>
+        </template>
+      </el-tab-pane>
+      
+      <el-tab-pane v-if="hasClickhouseDataPermission" label="行情镜像库" name="mirror">
+        <template #label>
+          <span class="tab-label">
+            <el-icon><CopyDocument /></el-icon>
+            行情镜像库 <el-tag size="small" type="info">{{ mirrorSourceCount }}</el-tag>
           </span>
         </template>
       </el-tab-pane>
@@ -124,6 +133,23 @@
       </div>
     </div>
 
+    <!-- 分类标签（行情镜像库） -->
+    <div v-if="activeTab === 'mirror'" class="category-section">
+      <div class="category-tags">
+        <el-tag
+          v-for="(cat, index) in mirrorCategories"
+          :key="cat.code === 'all' ? 'all' : `mirror-${index}`"
+          :type="getMirrorCategoryType(cat)"
+          :effect="categoryFilter === (cat.code === 'all' ? '' : cat.name) ? 'dark' : 'plain'"
+          size="large"
+          class="category-tag"
+          @click="selectCategory(cat.code === 'all' ? '' : cat.name)"
+        >
+          {{ cat.name }} ({{ cat.table_count }})
+        </el-tag>
+      </div>
+    </div>
+
     <!-- 三栏布局 -->
     <div class="content-layout">
       <!-- 左侧：数据源列表 -->
@@ -147,7 +173,7 @@
           :is="detailComponent"
           :source="selectedSource"
           :selected-fields="selectedFields"
-          :datasource="activeTab === 'processed' ? 'clickhouse' : undefined"
+          :datasource="getDatasourceParam"
           @fields-change="handleFieldsChange"
         />
       </div>
@@ -167,10 +193,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Document, Operation, Search, Refresh, List, DArrowLeft, DArrowRight, Loading } from '@element-plus/icons-vue'
+import { DataLine, Document, Operation, CopyDocument, Search, Refresh, List, DArrowLeft, DArrowRight, Loading } from '@element-plus/icons-vue'
 import DataSourceList from './components/DataSourceList.vue'
 import MarketDataDetail from './components/MarketDataDetail.vue'
 import StaticDataDetail from './components/StaticDataDetail.vue'
@@ -180,7 +206,7 @@ import GlobalSearchDropdown from '../../components/GlobalSearchDropdown.vue'
 const router = useRouter()
 
 // Tab状态
-const activeTab = ref<'market' | 'static' | 'processed'>('market')
+const activeTab = ref<'market' | 'static' | 'processed' | 'mirror'>('market')
 
 // 左侧面板显示状态
 const showLeftPanel = ref(true)
@@ -192,6 +218,16 @@ const searchLoading = ref(false)
 const showSearchResults = ref(false)
 let searchTimer: NodeJS.Timeout | null = null
 
+// 🆕 数据源权限控制
+const userDataSourcePermissions = ref<string[]>([])  // 用户可访问的数据源列表
+const datasourcePermissionLoaded = ref(false)  // 权限是否已加载
+const dataSourceTabMapping: Record<string, string> = {
+  'redis': 'market',
+  'postgresql': 'static',
+  'clickhouse': 'processed',
+  'clickhouse_data': 'mirror'
+}
+
 // 搜索和筛选
 const searchKeyword = ref('')
 const marketFilter = ref('')
@@ -200,7 +236,8 @@ const categoryFilter = ref('')
 // 数据源
 const marketSources = ref<any[]>([])
 const staticSources = ref<any[]>([])
-const processedSources = ref<any[]>([])  // 🆕 加工数据源（ClickHouse）
+const processedSources = ref<any[]>([])  // 加工数据源（ClickHouse）
+const mirrorSources = ref<any[]>([])      // 行情镜像库（ClickHouse）
 const selectedSource = ref<any>(null)
 const selectedFields = ref<string[]>([])
 
@@ -210,6 +247,8 @@ const marketCategories = ref<any[]>([])
 const staticCategories = ref<any[]>([])
 // 加工数据分类（包含 'all' 分类）
 const processedCategories = ref<any[]>([])
+// 行情镜像库分类（包含 'all' 分类）
+const mirrorCategories = ref<any[]>([])
 
 // 数据源数量
 const marketSourceCount = computed(() => {
@@ -227,6 +266,11 @@ const processedSourceCount = computed(() => {
   const allCat = processedCategories.value.find((c: any) => c.code === 'all')
   return allCat ? allCat.table_count : 0
 })
+const mirrorSourceCount = computed(() => {
+  // 从 mirrorCategories 中查找 code='all' 的分类
+  const allCat = mirrorCategories.value.find((c: any) => c.code === 'all')
+  return allCat ? allCat.table_count : 0
+})
 
 // 当前数据源列表
 const currentDataSources = computed(() => {
@@ -234,8 +278,10 @@ const currentDataSources = computed(() => {
     return marketSources.value
   } else if (activeTab.value === 'static') {
     return staticSources.value
-  } else {
+  } else if (activeTab.value === 'processed') {
     return processedSources.value  // 加工数据
+  } else {
+    return mirrorSources.value  // 行情镜像库
   }
 })
 
@@ -267,8 +313,18 @@ const filteredDataSources = computed(() => {
 
 // 详情组件
 const detailComponent = computed(() => {
-  // 行情数据用 MarketDataDetail，静态元数据和加工数据都用 StaticDataDetail
+  // 行情数据用 MarketDataDetail，静态元数据、加工数据和行情镜像库都用 StaticDataDetail
   return activeTab.value === 'market' ? MarketDataDetail : StaticDataDetail
+})
+
+// 数据源参数
+const getDatasourceParam = computed(() => {
+  if (activeTab.value === 'processed') {
+    return 'clickhouse'
+  } else if (activeTab.value === 'mirror') {
+    return 'clickhouse_data'
+  }
+  return undefined
 })
 
 // Tab切换
@@ -328,7 +384,7 @@ const handleSearchClear = () => {
 }
 
 // 🆕 选择搜索结果
-const handleSearchResultSelect = async (result: any, dataType: 'market' | 'static' | 'processed') => {
+const handleSearchResultSelect = async (result: any, dataType: 'market' | 'static' | 'processed' | 'mirror') => {
   console.log('选择搜索结果:', result, dataType)
   
   // 1. 切换到对应的Tab
@@ -338,11 +394,13 @@ const handleSearchResultSelect = async (result: any, dataType: 'market' | 'stati
   marketFilter.value = ''
   categoryFilter.value = ''
   
-  // 3. 如果是静态/加工数据，需要重新加载全部表（清除分类筛选）
+  // 3. 如果是静态/加工数据/行情镜像库，需要重新加载全部表（清除分类筛选）
   if (dataType === 'static') {
     await loadStaticSources() // 加载所有静态数据表
   } else if (dataType === 'processed') {
     await loadProcessedSources() // 加载所有加工数据表
+  } else if (dataType === 'mirror') {
+    await loadMirrorSources() // 加载所有行情镜像库表
   }
   
   // 4. 等待数据加载完成
@@ -376,6 +434,15 @@ const handleSearchResultSelect = async (result: any, dataType: 'market' | 'stati
     } else {
       ElMessage.warning(`未找到数据表 ${result.table_name}`)
     }
+  } else if (dataType === 'mirror') {
+    // 行情镜像库：根据 table_name 查找
+    const table = mirrorSources.value.find((t: any) => t.table_name === result.table_name)
+    if (table) {
+      selectedSource.value = table
+      console.log('✅ 已选中加工数据表:', table.table_name)
+    } else {
+      ElMessage.warning(`未找到数据表 ${result.table_name}`)
+    }
   }
   
   // 6. 关闭搜索下拉框并清空搜索词
@@ -397,6 +464,21 @@ const getMarketTagType = (index: number) => {
   return types[index % types.length]
 }
 
+// 行情镜像库分类颜色
+const getMirrorCategoryType = (cat: any) => {
+  if (cat.code === 'all') return 'primary'
+  
+  // 根据分类名称设置颜色
+  const colorMap: Record<string, string> = {
+    '深圳市场': 'success',
+    '上海市场': 'danger',
+    '期货市场': 'warning',
+    '其他': 'info'
+  }
+  
+  return colorMap[cat.name] || 'info'
+}
+
 // 选择分类
 const selectCategory = async (category: string) => {
   categoryFilter.value = category
@@ -408,6 +490,8 @@ const selectCategory = async (category: string) => {
     await loadStaticSources(category === '' ? undefined : category)
   } else if (activeTab.value === 'processed') {
     await loadProcessedSources(category === '' ? undefined : category)
+  } else if (activeTab.value === 'mirror') {
+    await loadMirrorSources(category === '' ? undefined : category)
   }
 }
 
@@ -422,6 +506,9 @@ const handleRefresh = async () => {
   } else if (activeTab.value === 'processed') {
     await loadProcessedCategories()
     await loadProcessedSources(categoryFilter.value === '' ? undefined : categoryFilter.value)
+  } else if (activeTab.value === 'mirror') {
+    await loadMirrorCategories()
+    await loadMirrorSources(categoryFilter.value === '' ? undefined : categoryFilter.value)
   }
   ElMessage.success('刷新成功')
 }
@@ -469,6 +556,73 @@ const toggleLeftPanel = () => {
   showLeftPanel.value = !showLeftPanel.value
 }
 
+// 🆕 加载用户数据源权限
+const loadUserDataSourcePermissions = async () => {
+  try {
+    console.log('📋 加载用户数据源权限...')
+    const result = await window.electronAPI.dbdict.getDatasources()
+    
+    console.log('🔍 接口返回结果:', result)
+    console.log('  - result.code:', result.code)
+    console.log('  - result.data:', result.data)
+    
+    if (result.code === 200 && result.data) {
+      // 提取有权限的数据源
+      const datasources = result.data.datasources || []
+      console.log('  - datasources数组:', datasources)
+      console.log('  - datasources数量:', datasources.length)
+      
+      userDataSourcePermissions.value = datasources
+        .filter((ds: any) => ds.has_permission)
+        .map((ds: any) => ds.code)
+      
+      console.log('✅ 用户可访问的数据源:', userDataSourcePermissions.value)
+      console.log('  - 权限数量:', userDataSourcePermissions.value.length)
+      
+      // 标记权限已加载
+      datasourcePermissionLoaded.value = true
+      console.log('  - 权限加载状态已设置为: true')
+      
+      // 如果当前Tab没有权限，切换到第一个有权限的Tab
+      const currentTabDataSource = Object.keys(dataSourceTabMapping).find(
+        key => dataSourceTabMapping[key] === activeTab.value
+      )
+      
+      if (currentTabDataSource && !userDataSourcePermissions.value.includes(currentTabDataSource)) {
+        // 当前Tab没权限，切换到第一个有权限的Tab
+        const firstAvailableTab = Object.entries(dataSourceTabMapping).find(
+          ([ds]) => userDataSourcePermissions.value.includes(ds)
+        )
+        
+        if (firstAvailableTab) {
+          activeTab.value = firstAvailableTab[1] as 'market' | 'static' | 'processed' | 'mirror'
+          console.log('🔄 切换到有权限的Tab:', activeTab.value)
+        } else {
+          ElMessage.error('您没有访问任何数据源的权限')
+        }
+      }
+    } else {
+      // 接口失败，不允许访问任何数据源
+      console.error('❌ 获取数据源权限失败')
+      userDataSourcePermissions.value = []
+      datasourcePermissionLoaded.value = true
+      ElMessage.error('获取数据源权限失败，请重新登录或联系管理员')
+    }
+  } catch (error: any) {
+    console.error('❌ 加载数据源权限失败:', error)
+    // 出错时不允许访问任何数据源
+    userDataSourcePermissions.value = []
+    datasourcePermissionLoaded.value = true
+    ElMessage.error('加载数据源权限失败，请重新登录或联系管理员')
+  }
+}
+
+// 🆕 判断用户是否有某个数据源的权限 - 使用computed确保响应式
+const hasRedisPermission = computed(() => userDataSourcePermissions.value.includes('redis'))
+const hasPostgresqlPermission = computed(() => userDataSourcePermissions.value.includes('postgresql'))
+const hasClickhousePermission = computed(() => userDataSourcePermissions.value.includes('clickhouse'))
+const hasClickhouseDataPermission = computed(() => userDataSourcePermissions.value.includes('clickhouse_data'))
+
 // 设置API Key
 const setupApiKey = async () => {
   try {
@@ -513,7 +667,11 @@ const loadMarketCategories = async () => {
     }
   } catch (error: any) {
     console.error('❌ 加载市场分类失败:', error)
-    ElMessage.error('加载市场分类失败')
+    if (error.message?.includes('403') || error.message?.includes('Permission denied')) {
+      ElMessage.error('您没有访问实时行情库的权限，请联系管理员')
+    } else {
+      ElMessage.error('加载市场分类失败')
+    }
   }
 }
 
@@ -560,7 +718,11 @@ const loadStaticCategories = async () => {
     }
   } catch (error: any) {
     console.error('❌ 加载静态元数据分类失败:', error)
-    ElMessage.error('加载分类失败')
+    if (error.message?.includes('403') || error.message?.includes('Permission denied')) {
+      ElMessage.error('您没有访问财务数据库的权限，请联系管理员')
+    } else {
+      ElMessage.error('加载分类失败')
+    }
   }
 }
 
@@ -622,7 +784,11 @@ const loadProcessedCategories = async () => {
     }
   } catch (error: any) {
     console.error('❌ [加工数据] 加载ClickHouse分类失败:', error)
-    ElMessage.error('加载加工数据分类失败')
+    if (error.message?.includes('403') || error.message?.includes('Permission denied')) {
+      ElMessage.error('您没有访问数据加工库的权限，请联系管理员')
+    } else {
+      ElMessage.error('加载加工数据分类失败')
+    }
   }
 }
 
@@ -665,22 +831,145 @@ const loadProcessedSources = async (category?: string) => {
   }
 }
 
+// 🆕 加载行情镜像库分类（ClickHouse）
+const loadMirrorCategories = async () => {
+  try {
+    console.log('📋 [行情镜像库] 开始加载ClickHouse分类...')
+    
+    // 调用API时传入 datasource: 'clickhouse_data'
+    const result = await window.electronAPI.dbdict.getCategories('clickhouse_data')
+    console.log('✅ [行情镜像库] ClickHouse分类返回结果:', result)
+    
+    if (result.code === 200) {
+      // 计算总表数
+      const allCount = result.data.reduce((sum: number, cat: any) => sum + cat.table_count, 0)
+      mirrorCategories.value = [
+        { code: 'all', name: '全部', table_count: allCount },
+        ...result.data
+      ]
+      
+      console.log(`✅ [行情镜像库] 加载ClickHouse分类成功: 总表数 ${allCount}, ${result.data.length} 个分类`)
+    } else {
+      ElMessage.error(result.msg || '加载行情镜像库分类失败')
+    }
+  } catch (error: any) {
+    console.error('❌ [行情镜像库] 加载ClickHouse分类失败:', error)
+    if (error.message?.includes('403') || error.message?.includes('Permission denied')) {
+      ElMessage.error('您没有访问行情镜像库的权限，请联系管理员')
+    } else {
+      ElMessage.error('加载行情镜像库分类失败')
+    }
+  }
+}
+
+// 🆕 加载行情镜像库数据源（ClickHouse）
+const loadMirrorSources = async (category?: string) => {
+  try {
+    const params: any = {
+      page: 1,
+      size: 1000,  // 加载所有表
+      datasource: 'clickhouse_data'  // 🔑 关键：指定行情镜像库数据源
+    }
+    
+    // 如果指定了分类，则按分类筛选
+    if (category && category !== 'all') {
+      params.category = category
+      console.log('📋 [行情镜像库] 加载ClickHouse数据，category参数:', category)
+    } else {
+      console.log('📋 [行情镜像库] 加载所有ClickHouse表数据')
+    }
+    
+    console.log('🔍 [行情镜像库] 调用API，参数:', params)
+    const result = await window.electronAPI.dbdict.getTables(params)
+    console.log('✅ [行情镜像库] ClickHouse数据源返回结果:', result)
+    console.log('📊 [行情镜像库] 返回表数量:', result.data?.length)
+    
+    if (result.code === 200) {
+      // 按table_name排序
+      mirrorSources.value = (result.data || []).sort((a: any, b: any) => {
+        const nameA = a.table_name || ''
+        const nameB = b.table_name || ''
+        return nameA.localeCompare(nameB)
+      })
+      console.log('✅ [行情镜像库] 加载ClickHouse数据源成功:', mirrorSources.value.length)
+    } else {
+      ElMessage.error(result.msg || '加载行情镜像库数据源失败')
+    }
+  } catch (error: any) {
+    console.error('❌ [行情镜像库] 加载ClickHouse数据源失败:', error)
+    ElMessage.error('数据库字典服务不可用，请检查网络连接和API配置')
+  }
+}
+
+// 监听数据源权限变更事件
+const handleDatasourcePermissionChanged = async (event: any) => {
+  const newPermissions = event.detail?.permissions || []
+  console.log('📢 收到数据源权限变更通知:', newPermissions)
+  
+  // 更新权限列表
+  userDataSourcePermissions.value = newPermissions
+  
+  // 根据新权限重新加载数据
+  if (newPermissions.includes('redis') && marketSources.value.length === 0) {
+    await loadMarketCategories()
+    await loadMarketSources()
+  }
+  
+  if (newPermissions.includes('postgresql') && staticSources.value.length === 0) {
+    await loadStaticCategories()
+    await loadStaticSources()
+  }
+  
+  if (newPermissions.includes('clickhouse') && processedSources.value.length === 0) {
+    await loadProcessedCategories()
+    await loadProcessedSources()
+  }
+  
+  if (newPermissions.includes('clickhouse_data') && mirrorSources.value.length === 0) {
+    await loadMirrorCategories()
+    await loadMirrorSources()
+  }
+}
+
 // 初始化
 onMounted(async () => {
   console.log('📊 数据中心组件已挂载')
   
+  // 监听数据源权限变更
+  window.addEventListener('datasource-permission-changed', handleDatasourcePermissionChanged)
+  
   // 先设置API Key
   const hasApiKey = await setupApiKey()
   if (hasApiKey) {
-    // 🆕 加载行情数据市场分类
-    await loadMarketCategories()
-    await loadMarketSources()
-    await loadStaticCategories()
-    await loadStaticSources()
-    // 🆕 加载加工数据
-    await loadProcessedCategories()
-    await loadProcessedSources()
+    // 🆕 加载用户数据源权限
+    await loadUserDataSourcePermissions()
+    
+    // 根据权限加载对应的数据
+    if (userDataSourcePermissions.value.includes('redis')) {
+      await loadMarketCategories()
+      await loadMarketSources()
+    }
+    
+    if (userDataSourcePermissions.value.includes('postgresql')) {
+      await loadStaticCategories()
+      await loadStaticSources()
+    }
+    
+    if (userDataSourcePermissions.value.includes('clickhouse')) {
+      await loadProcessedCategories()
+      await loadProcessedSources()
+    }
+    
+    if (userDataSourcePermissions.value.includes('clickhouse_data')) {
+      await loadMirrorCategories()
+      await loadMirrorSources()
+    }
   }
+})
+
+// 清理
+onUnmounted(() => {
+  window.removeEventListener('datasource-permission-changed', handleDatasourcePermissionChanged)
 })
 </script>
 

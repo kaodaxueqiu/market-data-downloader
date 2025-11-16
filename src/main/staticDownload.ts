@@ -82,7 +82,7 @@ class StaticDownloadManager {
   /**
    * 创建下载任务
    */
-  async createTask(request: StaticDownloadRequest, apiKey: string, datasource?: 'postgresql' | 'clickhouse'): Promise<string> {
+  async createTask(request: StaticDownloadRequest, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data'): Promise<string> {
     try {
       const dbType = datasource || 'postgresql'
       console.log(`📋 创建${dbType === 'clickhouse' ? 'ClickHouse' : 'PostgreSQL'}下载任务`)

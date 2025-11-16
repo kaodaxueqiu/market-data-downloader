@@ -206,20 +206,18 @@ export class SubscriptionSession {
         }
       }
       
-      // 提取股票代码
-      const symbol = this.extractSymbol(data, message.channel || message.key)
+      // 提取股票代码（某些数据源如ZZ-111可能没有代码字段）
+      let symbol = this.extractSymbol(data, message.channel || message.key)
       
       if (!symbol) {
-        console.error('❌ 无法提取股票代码!')
-        console.error('   Channel:', message.channel)
-        console.error('   Pattern:', message.pattern)
-        console.error('   数据字段:', Object.keys(data))
-        console.error('   stockCode:', data.stockCode)
-        console.error('   证券代码:', data.证券代码)
-        return
+        // 提取不到代码时使用默认值，而不是丢弃数据
+        symbol = 'UNKNOWN'
+        console.warn('⚠️  无法提取代码，使用默认值: UNKNOWN')
+        console.warn('   Channel:', message.channel)
+        console.warn('   数据源:', this.config.sourceCode)
+      } else {
+        console.log(`✅ 提取代码成功: ${symbol}，准备写入CSV`)
       }
-      
-      console.log(`✅ 提取股票代码成功: ${symbol}，准备写入CSV`)
 
       // 🔍 调试：打印第一条数据的结构（只打印一次）
       if (this.totalReceived === 0) {

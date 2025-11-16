@@ -428,6 +428,16 @@ ipcMain.handle('config:patchPermissionConfig', async (_event, key: string, updat
   return configManager.patchPermissionConfig(key, updates)
 })
 
+// 🆕 获取数据库配置（独立接口）
+ipcMain.handle('config:fetchDatabaseConfig', async (_event, key: string) => {
+  return configManager.fetchDatabaseConfig(key)
+})
+
+// 🆕 更新数据库配置（独立接口）
+ipcMain.handle('config:updateDatabaseConfig', async (_event, key: string, config: any) => {
+  return configManager.updateDatabaseConfig(key, config)
+})
+
 // 获取应用版本号
 ipcMain.handle('app:getVersion', async () => {
   return app.getVersion()
@@ -823,7 +833,7 @@ ipcMain.handle('dbdict:getTables', async (_event, params?: any) => {
 })
 
 // 获取表详情
-ipcMain.handle('dbdict:getTableDetail', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse') => {
+ipcMain.handle('dbdict:getTableDetail', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const result = await dbDictAPI.getTableDetail(tableName, datasource)
     return result
@@ -833,7 +843,7 @@ ipcMain.handle('dbdict:getTableDetail', async (_event, tableName: string, dataso
 })
 
 // 获取表字段
-ipcMain.handle('dbdict:getTableFields', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse') => {
+ipcMain.handle('dbdict:getTableFields', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const result = await dbDictAPI.getTableFields(tableName, datasource)
     return result
@@ -843,7 +853,17 @@ ipcMain.handle('dbdict:getTableFields', async (_event, tableName: string, dataso
 })
 
 // 获取分类统计
-ipcMain.handle('dbdict:getCategories', async (_event, datasource?: 'postgresql' | 'clickhouse') => {
+// 获取数据源列表（包含权限信息）
+ipcMain.handle('dbdict:getDatasources', async () => {
+  try {
+    const result = await dbDictAPI.getDatasources()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取数据源列表失败')
+  }
+})
+
+ipcMain.handle('dbdict:getCategories', async (_event, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const result = await dbDictAPI.getCategories(datasource)
     return result
@@ -853,7 +873,7 @@ ipcMain.handle('dbdict:getCategories', async (_event, datasource?: 'postgresql' 
 })
 
 // 搜索表和字段
-ipcMain.handle('dbdict:search', async (_event, keyword: string, datasource?: 'postgresql' | 'clickhouse') => {
+ipcMain.handle('dbdict:search', async (_event, keyword: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const result = await dbDictAPI.search(keyword, datasource)
     return result
@@ -873,7 +893,7 @@ ipcMain.handle('dbdict:buildSQL', async (_event, params: any) => {
 })
 
 // 获取数据库统计
-ipcMain.handle('dbdict:getStats', async (_event, datasource?: 'postgresql' | 'clickhouse') => {
+ipcMain.handle('dbdict:getStats', async (_event, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const result = await dbDictAPI.getStats(datasource)
     return result
@@ -893,7 +913,7 @@ ipcMain.handle('dbdict:export', async (_event, params: any) => {
 })
 
 // 清除缓存
-ipcMain.handle('dbdict:clearCache', async (_event, datasource?: 'postgresql' | 'clickhouse') => {
+ipcMain.handle('dbdict:clearCache', async (_event, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const result = await dbDictAPI.clearCache(datasource)
     return result
@@ -903,7 +923,7 @@ ipcMain.handle('dbdict:clearCache', async (_event, datasource?: 'postgresql' | '
 })
 
 // 预览表数据
-ipcMain.handle('dbdict:previewTable', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse') => {
+ipcMain.handle('dbdict:previewTable', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const result = await dbDictAPI.previewTable(tableName, datasource)
     return result
@@ -1163,7 +1183,7 @@ ipcMain.handle('factor:getFactorPerformance', async (_event, factorId: number, d
 // ========== 静态数据异步下载 ==========
 
 // 创建静态数据下载任务
-ipcMain.handle('staticDownload:createTask', async (_event, request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse') => {
+ipcMain.handle('staticDownload:createTask', async (_event, request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
   try {
     const taskId = await staticDownloadManager.createTask(request, apiKey, datasource)
     return taskId

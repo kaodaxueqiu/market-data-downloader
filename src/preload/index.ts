@@ -34,7 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reactivateApiKey: (key: string) => ipcRenderer.invoke('config:reactivateApiKey', key),
     fetchPermissionConfig: (key: string) => ipcRenderer.invoke('config:fetchPermissionConfig', key),
     fetchPermissionRegistry: () => ipcRenderer.invoke('config:fetchPermissionRegistry'),
-    patchPermissionConfig: (key: string, updates: any) => ipcRenderer.invoke('config:patchPermissionConfig', key, updates)
+    patchPermissionConfig: (key: string, updates: any) => ipcRenderer.invoke('config:patchPermissionConfig', key, updates),
+    fetchDatabaseConfig: (key: string) => ipcRenderer.invoke('config:fetchDatabaseConfig', key),
+    updateDatabaseConfig: (key: string, config: any) => ipcRenderer.invoke('config:updateDatabaseConfig', key, config)
   },
 
   // 对话框
@@ -133,23 +135,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 数据库字典 (PostgreSQL 755张表 + ClickHouse)
   dbdict: {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('dbdict:setApiKey', apiKey),
+    getDatasources: () => ipcRenderer.invoke('dbdict:getDatasources'),
     getTables: (params?: any) => ipcRenderer.invoke('dbdict:getTables', params),
-    getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => 
+    getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('dbdict:getTableDetail', tableName, datasource),
-    getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => 
+    getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('dbdict:getTableFields', tableName, datasource),
-    getCategories: (datasource?: 'postgresql' | 'clickhouse') => 
+    getCategories: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('dbdict:getCategories', datasource),
-    search: (keyword: string, datasource?: 'postgresql' | 'clickhouse') => 
+    search: (keyword: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('dbdict:search', keyword, datasource),
     buildSQL: (params: any) => ipcRenderer.invoke('dbdict:buildSQL', params),
-    getStats: (datasource?: 'postgresql' | 'clickhouse') => 
+    getStats: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('dbdict:getStats', datasource),
     exportDict: (params: any) => ipcRenderer.invoke('dbdict:export', params),
-    clearCache: (datasource?: 'postgresql' | 'clickhouse') => 
+    clearCache: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('dbdict:clearCache', datasource),
     downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath),
-    previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => 
+    previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('dbdict:previewTable', tableName, datasource)
   },
   
@@ -166,7 +169,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 静态数据下载 (异步任务系统 - PostgreSQL + ClickHouse)
   staticDownload: {
-    createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse') => 
+    createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
       ipcRenderer.invoke('staticDownload:createTask', request, apiKey, datasource),
     getTaskStatus: (taskId: string, apiKey: string) => ipcRenderer.invoke('staticDownload:getTaskStatus', taskId, apiKey),
     downloadFile: (fileId: string, savePath: string, fileName: string, apiKey: string) => 
@@ -248,6 +251,8 @@ declare global {
         fetchPermissionConfig: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>
         fetchPermissionRegistry: () => Promise<{ success: boolean; data?: any; error?: string }>
         patchPermissionConfig: (key: string, updates: any) => Promise<{ success: boolean; error?: string }>
+        fetchDatabaseConfig: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        updateDatabaseConfig: (key: string, config: any) => Promise<{ success: boolean; error?: string }>
       }
       dialog: {
         selectDirectory: () => Promise<string | null>
@@ -313,17 +318,18 @@ declare global {
       }
       dbdict: {
         setApiKey: (apiKey: string) => Promise<boolean>
+        getDatasources: () => Promise<any>
         getTables: (params?: any) => Promise<any>
-        getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
-        getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
-        getCategories: (datasource?: 'postgresql' | 'clickhouse') => Promise<any>
-        search: (keyword: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+        getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
+        getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
+        getCategories: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
+        search: (keyword: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
         buildSQL: (params: any) => Promise<any>
-        getStats: (datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+        getStats: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
         exportDict: (params: any) => Promise<any>
-        clearCache: (datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+        clearCache: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
         downloadData: (params: any, savePath: string) => Promise<any>
-        previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse') => Promise<any>
+        previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
       }
       factor: {
         setApiKey: (apiKey: string) => Promise<boolean>
@@ -335,7 +341,7 @@ declare global {
         getFactorPerformance: (factorId: number, days?: number) => Promise<any>
       }
       staticDownload: {
-        createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse') => Promise<string>
+        createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<string>
         getTaskStatus: (taskId: string, apiKey: string) => Promise<any>
         downloadFile: (fileId: string, savePath: string, fileName: string, apiKey: string) => Promise<string>
       }

@@ -601,6 +601,88 @@ export class ConfigManager {
     }
   }
 
+  // 🆕 获取数据库配置（独立接口）
+  async fetchDatabaseConfig(key: string): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('🔐 获取数据库配置:', key)
+      const response = await axios.get(
+        `http://61.151.241.233:8080/api/v1/admin/apikeys/${key}/database-config`,
+        {
+          headers: {
+            'X-API-Key': defaultKey
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 获取数据库配置成功:', response.data)
+      
+      if (response.data.success && response.data.data) {
+        return { success: true, data: response.data.data }
+      } else {
+        return { success: false, error: '响应格式错误' }
+      }
+    } catch (error: any) {
+      console.error('❌ 获取数据库配置失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 404) {
+        return { success: false, error: 'API Key不存在' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
+  // 🆕 更新数据库配置（独立接口）
+  async updateDatabaseConfig(key: string, config: any): Promise<any> {
+    try {
+      const defaultKey = this.getDefaultApiKey()
+      if (!defaultKey) {
+        return { success: false, error: '未找到API Key' }
+      }
+
+      console.log('🔄 更新数据库配置:', key, config)
+      const response = await axios.put(
+        `http://61.151.241.233:8080/api/v1/admin/apikeys/${key}/database-config`,
+        config,
+        {
+          headers: {
+            'X-API-Key': defaultKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      )
+      
+      console.log('✅ 数据库配置更新成功:', response.data)
+      
+      if (response.data.success) {
+        return { success: true }
+      } else {
+        return { success: false, error: response.data.error || '更新失败' }
+      }
+    } catch (error: any) {
+      console.error('❌ 更新数据库配置失败:', error)
+      if (error.response?.status === 401) {
+        return { success: false, error: 'API Key无效或已过期' }
+      } else if (error.response?.status === 403) {
+        return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 404) {
+        return { success: false, error: 'API Key不存在' }
+      } else {
+        return { success: false, error: error.message || '网络错误' }
+      }
+    }
+  }
+
   // 🆕 获取权限注册表（所有系统权限）
   async fetchPermissionRegistry(): Promise<any> {
     try {

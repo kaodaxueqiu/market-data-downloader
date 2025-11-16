@@ -61,7 +61,7 @@ import { DataLine, Document } from '@element-plus/icons-vue'
 const props = defineProps<{
   dataSources: any[]
   selectedSource: any
-  activeTab: 'market' | 'static' | 'processed'
+  activeTab: 'market' | 'static' | 'processed' | 'mirror'
 }>()
 
 const emit = defineEmits<{

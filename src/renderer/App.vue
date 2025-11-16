@@ -196,6 +196,10 @@ const activeSubscriptionCount = ref(0)
 const menuPermissions = ref<string[]>([])
 let permissionRefreshTimer: NodeJS.Timeout | null = null
 
+// 🆕 数据源权限相关
+const datasourcePermissions = ref<string[]>([])
+let datasourceRefreshTimer: NodeJS.Timeout | null = null
+
 // 🆕 所有菜单配置（ID与后端对应）
 interface MenuItem {
   id: string
@@ -456,6 +460,71 @@ const stopPermissionRefresh = () => {
   }
 }
 
+// 🆕 刷新数据源权限（从后端获取最新）
+const refreshDatasourcePermissions = async (showMessage: boolean = false) => {
+  try {
+    console.log('🔄 刷新数据源权限...')
+    const result = await window.electronAPI.dbdict.getDatasources()
+    
+    if (result.code === 200 && result.data) {
+      const datasources = result.data.datasources || []
+      const newPermissions = datasources
+        .filter((ds: any) => ds.has_permission)
+        .map((ds: any) => ds.code)
+      
+      const oldPermissions = [...datasourcePermissions.value]
+      datasourcePermissions.value = newPermissions
+      
+      // 检查权限是否有变化
+      const hasChanged = JSON.stringify(oldPermissions.sort()) !== JSON.stringify(newPermissions.sort())
+      
+      if (hasChanged) {
+        console.log('⚠️ 数据源权限已变更:', {
+          旧权限: oldPermissions,
+          新权限: newPermissions
+        })
+        ElMessage.warning({
+          message: '您的数据源访问权限已更新，部分数据源可能已变化',
+          duration: 5000
+        })
+        
+        // 通知所有需要的组件刷新（可以用事件总线或其他方式）
+        window.dispatchEvent(new CustomEvent('datasource-permission-changed', { 
+          detail: { permissions: newPermissions }
+        }))
+      } else if (showMessage) {
+        console.log('✅ 数据源权限未变化')
+      }
+    } else {
+      console.warn('⚠️ 刷新数据源权限失败:', result.error)
+    }
+  } catch (error: any) {
+    console.error('❌ 刷新数据源权限失败:', error)
+  }
+}
+
+// 🆕 启动数据源权限定时刷新（每30秒）
+const startDatasourceRefresh = () => {
+  if (datasourceRefreshTimer) {
+    clearInterval(datasourceRefreshTimer)
+  }
+  
+  datasourceRefreshTimer = setInterval(() => {
+    refreshDatasourcePermissions(false)
+  }, 30000)
+  
+  console.log('⏰ 数据源权限定时刷新已启动（每30秒）')
+}
+
+// 🆕 停止数据源权限定时刷新
+const stopDatasourceRefresh = () => {
+  if (datasourceRefreshTimer) {
+    clearInterval(datasourceRefreshTimer)
+    datasourceRefreshTimer = null
+    console.log('⏹️ 数据源权限定时刷新已停止')
+  }
+}
+
 // 🆕 路由守卫：没有API Key时只能访问设置页
 watch([() => route.path, hasApiKey], () => {
   if (!hasApiKey.value && route.path !== '/settings') {
@@ -518,12 +587,17 @@ onMounted(async () => {
     
     // 🆕 启动定时刷新
     startPermissionRefresh()
+    
+    // 🆕 数据源权限定期检查
+    await refreshDatasourcePermissions(false)
+    startDatasourceRefresh()
   }, 100)
 })
 
 onUnmounted(() => {
   // 🆕 组件卸载时清理定时器
   stopPermissionRefresh()
+  stopDatasourceRefresh()
 })
 </script>
 

@@ -22,7 +22,7 @@
 
           <!-- 股票/期货代码（行情数据 + 所有ClickHouse加工数据） -->
           <el-form-item 
-            v-if="(activeTab === 'market' && needsSymbolInputComputed) || activeTab === 'processed'" 
+            v-if="(activeTab === 'market' && needsSymbolInputComputed) || activeTab === 'processed' || activeTab === 'mirror'" 
             label="股票/期货代码（可选）"
           >
             <el-input
@@ -64,7 +64,7 @@
           </el-form-item>
 
           <!-- 日期范围（可选，静态元数据 - 支持单选） -->
-          <el-form-item v-if="activeTab === 'static' || activeTab === 'processed'" label="日期范围（可选）">
+          <el-form-item v-if="activeTab === 'static' || activeTab === 'processed' || activeTab === 'mirror'" label="日期范围（可选）">
             <el-date-picker
               v-model="downloadConfig.startDate"
               type="date"
@@ -143,7 +143,7 @@
           </el-form-item>
 
           <!-- 静态元数据：选择字段并下载 -->
-          <el-form-item v-if="activeTab === 'static' || activeTab === 'processed'">
+          <el-form-item v-if="activeTab === 'static' || activeTab === 'processed' || activeTab === 'mirror'">
             <el-button 
               type="primary" 
               size="large"
@@ -294,7 +294,7 @@ import {
 const props = defineProps<{
   source: any
   selectedFields: string[]
-  activeTab: 'market' | 'static' | 'processed'
+  activeTab: 'market' | 'static' | 'processed' | 'mirror'
 }>()
 
 const emit = defineEmits<{
@@ -353,7 +353,7 @@ const symbolInputHint = computed(() => {
   if (props.activeTab === 'market') {
     const sourceCode = getSourceCode()
     return getSymbolInputHint(sourceCode)
-  } else if (props.activeTab === 'processed') {
+  } else if (props.activeTab === 'processed' || props.activeTab === 'mirror') {
     const tableName = getSourceCode().toLowerCase()
     if (tableName === 'zz_5001') {
       return '输入股票代码（如：000001 或 SZ.000001），留空下载全部，多个用逗号分隔'
@@ -463,7 +463,7 @@ const handleSymbolsInput = () => {
     // 行情数据：使用自动补全（补充市场前缀）
     const sourceCode = getSourceCode()
     validatedSymbols.value = autoCompleteSymbols(symbolsInput.value, sourceCode)
-  } else if (props.activeTab === 'processed') {
+  } else if (props.activeTab === 'processed' || props.activeTab === 'mirror') {
     // ClickHouse数据：支持自动补全市场前缀
     const codes = symbolsInput.value
       .toUpperCase()
@@ -650,7 +650,7 @@ const showStaticFieldSelector = async () => {
   // 加载表的所有字段
   try {
     // 根据当前Tab决定数据源
-    const datasource = props.activeTab === 'processed' ? 'clickhouse' : undefined
+    const datasource = props.activeTab === 'processed' ? 'clickhouse' : props.activeTab === 'mirror' ? 'clickhouse_data' : undefined
     const result = await window.electronAPI.dbdict.getTableDetail(props.source.table_name, datasource)
     if (result.code === 200) {
       allFields.value = result.data?.columns || []
@@ -858,7 +858,8 @@ const confirmDownloadFields = async () => {
       }
       // 如果全选或不选，则不传 columns 参数（下载所有字段）
       
-      // 日期范围 - 后端自动使用 UPDATE_TIME 字段筛选
+      // 日期范围 - 后端根据datasource自动判断使用哪个日期字段
+      // PostgreSQL: UPDATE_TIME, ClickHouse: zz_date
       if (downloadConfig.value.startDate || downloadConfig.value.endDate) {
         request.date_range = {}
         if (downloadConfig.value.startDate) {
@@ -867,8 +868,8 @@ const confirmDownloadFields = async () => {
         if (downloadConfig.value.endDate) {
           request.date_range.end_date = downloadConfig.value.endDate
         }
-        // 不需要 date_field，后端自动用 UPDATE_TIME
-        console.log('📅 日期范围（UPDATE_TIME）:', request.date_range)
+        // 不需要传 date_field，后端会根据 datasource 自动判断
+        console.log('📅 日期范围:', request.date_range)
       }
       
       // 🆕 股票/期货代码筛选（所有ClickHouse数据源）
@@ -878,7 +879,7 @@ const confirmDownloadFields = async () => {
       console.log('   validatedSymbols.value:', validatedSymbols.value)
       console.log('   validatedSymbols.length:', validatedSymbols.value.length)
       
-      if (props.activeTab === 'processed' && validatedSymbols.value.length > 0) {
+      if ((props.activeTab === 'processed' || props.activeTab === 'mirror') && validatedSymbols.value.length > 0) {
         request.symbols = validatedSymbols.value
         console.log('✅ 添加股票代码筛选:', request.symbols)
       } else {
@@ -894,8 +895,8 @@ const confirmDownloadFields = async () => {
       console.log('🔧 序列化后的pureRequest:', pureRequest)
       console.log('🔧 序列化后的pureRequest.symbols:', pureRequest.symbols)
       
-      // 根据当前Tab决定数据源：static=postgresql, processed=clickhouse
-      const datasource = props.activeTab === 'processed' ? 'clickhouse' : undefined
+      // 根据当前Tab决定数据源：static=postgresql, processed=clickhouse, mirror=clickhouse_data
+      const datasource = props.activeTab === 'processed' ? 'clickhouse' : props.activeTab === 'mirror' ? 'clickhouse_data' : undefined
       console.log('🔧 datasource参数:', datasource)
       
       const taskId = await window.electronAPI.staticDownload.createTask(pureRequest, fullApiKey!, datasource)
