@@ -167,6 +167,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFactorPerformance: (factorId: number, days?: number) => ipcRenderer.invoke('factor:getFactorPerformance', factorId, days)
   },
 
+  // 基金管理API
+  fund: {
+    setApiKey: (apiKey: string) => ipcRenderer.invoke('fund:setApiKey', apiKey),
+    getCustodians: () => ipcRenderer.invoke('fund:getCustodians'),
+    getBrokers: () => ipcRenderer.invoke('fund:getBrokers'),
+    createFund: (fundData: any) => ipcRenderer.invoke('fund:createFund', fundData),
+    getFundList: (params?: any) => ipcRenderer.invoke('fund:getFundList', params),
+    getFundDetail: (code: string) => ipcRenderer.invoke('fund:getFundDetail', code),
+    updateFund: (code: string, fundData: any) => ipcRenderer.invoke('fund:updateFund', code, fundData),
+    deleteFund: (code: string) => ipcRenderer.invoke('fund:deleteFund', code),
+    liquidateFund: (code: string, liquidateDate: string, reason?: string) => ipcRenderer.invoke('fund:liquidateFund', code, liquidateDate, reason),
+    restoreFund: (code: string, restoreDate: string, reason?: string) => ipcRenderer.invoke('fund:restoreFund', code, restoreDate, reason),
+    uploadReport: (formData: any) => ipcRenderer.invoke('fund:uploadReport', formData),
+    getReportList: (params?: any) => ipcRenderer.invoke('fund:getReportList', params),
+    getReportDownloadUrl: (reportId: number) => ipcRenderer.invoke('fund:getReportDownloadUrl', reportId),
+    deleteReport: (reportId: number) => ipcRenderer.invoke('fund:deleteReport', reportId)
+  },
+
   // 静态数据下载 (异步任务系统 - PostgreSQL + ClickHouse)
   staticDownload: {
     createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
@@ -339,6 +357,16 @@ declare global {
         getFactorDetail: (factorId: number) => Promise<any>
         downloadFactorData: (params: any) => Promise<any>
         getFactorPerformance: (factorId: number, days?: number) => Promise<any>
+      }
+      fund: {
+        setApiKey: (apiKey: string) => Promise<boolean>
+        getCustodians: () => Promise<any>
+        getBrokers: () => Promise<any>
+        createFund: (fundData: any) => Promise<any>
+        getFundList: (params?: any) => Promise<any>
+        getFundDetail: (code: string) => Promise<any>
+        updateFund: (code: string, fundData: any) => Promise<any>
+        deleteFund: (code: string) => Promise<any>
       }
       staticDownload: {
         createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<string>

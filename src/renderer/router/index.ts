@@ -18,6 +18,34 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/FactorLibrary.vue')
   },
   {
+    path: '/fund-management',
+    name: 'FundManagement',
+    component: () => import('../views/FundManagement/index.vue'),
+    redirect: '/fund-management/list',
+    children: [
+      {
+        path: 'list',
+        name: 'FundList',
+        component: () => import('../views/FundManagement/List.vue')
+      },
+      {
+        path: 'performance',
+        name: 'FundPerformance',
+        component: () => import('../views/FundManagement/Performance.vue')
+      },
+      {
+        path: 'position',
+        name: 'FundPosition',
+        component: () => import('../views/FundManagement/Position.vue')
+      },
+      {
+        path: 'operations',
+        name: 'FundOperations',
+        component: () => import('../views/FundManagement/Operations.vue')
+      }
+    ]
+  },
+  {
     path: '/download',
     name: 'Download',
     component: () => import('../views/QueryAndExport.vue')

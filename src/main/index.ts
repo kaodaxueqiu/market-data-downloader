@@ -8,6 +8,7 @@ import { ConfigManager } from './config'
 import { getDictionaryAPI } from './dictionary'
 import { getDbDictAPI } from './dbdict'
 import { factorAPI } from './factor'
+import { getFundAPI } from './fund'
 import * as updater from './updater'
 import { SubscriptionTaskManager } from './subscriptionTaskManager'
 
@@ -1177,6 +1178,145 @@ ipcMain.handle('factor:getFactorPerformance', async (_event, factorId: number, d
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取因子性能数据失败')
+  }
+})
+
+// ========== 基金管理API ==========
+
+const fundAPI = getFundAPI()
+
+// 设置API Key
+ipcMain.handle('fund:setApiKey', async (_event, apiKey: string) => {
+  return fundAPI.setApiKey(apiKey)
+})
+
+// 获取托管人列表
+ipcMain.handle('fund:getCustodians', async () => {
+  try {
+    const result = await fundAPI.getCustodians()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取托管人列表失败')
+  }
+})
+
+// 获取经纪服务商列表
+ipcMain.handle('fund:getBrokers', async () => {
+  try {
+    const result = await fundAPI.getBrokers()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取经纪服务商列表失败')
+  }
+})
+
+// 创建基金
+ipcMain.handle('fund:createFund', async (_event, fundData: any) => {
+  try {
+    const result = await fundAPI.createFund(fundData)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '创建基金失败')
+  }
+})
+
+// 获取基金列表
+ipcMain.handle('fund:getFundList', async (_event, params?: any) => {
+  try {
+    const result = await fundAPI.getFundList(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取基金列表失败')
+  }
+})
+
+// 获取基金详情
+ipcMain.handle('fund:getFundDetail', async (_event, code: string) => {
+  try {
+    const result = await fundAPI.getFundDetail(code)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取基金详情失败')
+  }
+})
+
+// 更新基金
+ipcMain.handle('fund:updateFund', async (_event, code: string, fundData: any) => {
+  try {
+    const result = await fundAPI.updateFund(code, fundData)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '更新基金失败')
+  }
+})
+
+// 删除基金
+ipcMain.handle('fund:deleteFund', async (_event, code: string) => {
+  try {
+    const result = await fundAPI.deleteFund(code)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '删除基金失败')
+  }
+})
+
+// 清盘基金
+ipcMain.handle('fund:liquidateFund', async (_event, code: string, liquidateDate: string, reason?: string) => {
+  try {
+    const result = await fundAPI.liquidateFund(code, liquidateDate, reason)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '清盘基金失败')
+  }
+})
+
+// 恢复基金运作
+ipcMain.handle('fund:restoreFund', async (_event, code: string, restoreDate: string, reason?: string) => {
+  try {
+    const result = await fundAPI.restoreFund(code, restoreDate, reason)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '恢复基金失败')
+  }
+})
+
+// 上传报告
+ipcMain.handle('fund:uploadReport', async (_event, reportData: any) => {
+  try {
+    const result = await fundAPI.uploadReport(reportData)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '上传报告失败')
+  }
+})
+
+// 获取报告列表
+ipcMain.handle('fund:getReportList', async (_event, params?: any) => {
+  try {
+    const result = await fundAPI.getReportList(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取报告列表失败')
+  }
+})
+
+// 获取报告下载链接
+ipcMain.handle('fund:getReportDownloadUrl', async (_event, reportId: number) => {
+  try {
+    const result = await fundAPI.getReportDownloadUrl(reportId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取下载链接失败')
+  }
+})
+
+// 删除报告
+ipcMain.handle('fund:deleteReport', async (_event, reportId: number) => {
+  try {
+    const result = await fundAPI.deleteReport(reportId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '删除报告失败')
   }
 })
 

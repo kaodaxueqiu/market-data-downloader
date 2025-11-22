@@ -17,7 +17,25 @@
           >
             <!-- 🆕 根据权限动态渲染菜单 -->
             <template v-for="menu in visibleMenus" :key="menu.id">
-              <el-menu-item :index="menu.path">
+              <!-- 有子菜单：渲染二级菜单 -->
+              <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="menu.path">
+                <template #title>
+                  <el-icon>
+                    <component :is="menu.icon" />
+                  </el-icon>
+                  <span>{{ menu.name }}</span>
+                </template>
+                <el-menu-item 
+                  v-for="child in menu.children" 
+                  :key="child.id" 
+                  :index="child.path"
+                >
+                  {{ child.name }}
+                </el-menu-item>
+              </el-sub-menu>
+              
+              <!-- 无子菜单：普通菜单项 -->
+              <el-menu-item v-else :index="menu.path">
                 <el-icon>
                   <component :is="menu.icon" />
                 </el-icon>
@@ -174,6 +192,7 @@ import {
   Connection,
   Key,
   Box,
+  Coin,
   DArrowLeft,
   DArrowRight,
   Refresh
@@ -207,12 +226,25 @@ interface MenuItem {
   path: string
   icon: any
   tag?: { type: string; text: string }
+  children?: MenuItem[]
 }
 
 const allMenus: MenuItem[] = [
   { id: 'home', name: '首页', path: '/', icon: House },
   { id: 'data_center', name: '数据中心', path: '/data-center', icon: Connection },
   { id: 'factor_library', name: '因子库', path: '/factor-library', icon: Box },
+  { 
+    id: 'fund_management', 
+    name: '基金管理', 
+    path: '/fund-management', 
+    icon: Coin,
+    children: [
+      { id: 'fund_list', name: '基金列表', path: '/fund-management/list', icon: null },
+      { id: 'fund_performance', name: '业绩分析', path: '/fund-management/performance', icon: null },
+      { id: 'fund_position', name: '持仓分析', path: '/fund-management/position', icon: null },
+      { id: 'fund_operations', name: '基金运维', path: '/fund-management/operations', icon: null }
+    ]
+  },
   { id: 'task_management', name: '任务管理', path: '/tasks', icon: List },
   { id: 'history', name: '历史记录', path: '/history', icon: Clock },
   { id: 'sdk_download', name: 'SDK下载', path: '/sdk-download', icon: Box },
@@ -245,6 +277,11 @@ const pageTitle = computed(() => {
     '/': '首页',
     '/data-center': '数据中心',
     '/factor-library': '因子库',
+    '/fund-management': '基金管理',
+    '/fund-management/list': '基金列表',
+    '/fund-management/performance': '业绩分析',
+    '/fund-management/position': '持仓分析',
+    '/fund-management/operations': '基金运维',
     '/download': '行情数据下载',
     '/tasks': '任务管理',
     '/history': '历史记录',

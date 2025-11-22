@@ -974,6 +974,7 @@ const allMenusConfig = [
   { id: 'home', name: '首页' },
   { id: 'data_center', name: '数据中心' },
   { id: 'factor_library', name: '因子库' },
+  { id: 'fund_management', name: '基金管理' },
   { id: 'task_management', name: '任务管理' },
   { id: 'history', name: '历史记录' },
   { id: 'sdk_download', name: 'SDK下载' },
