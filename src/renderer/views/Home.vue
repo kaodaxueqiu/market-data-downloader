@@ -4,266 +4,227 @@
     <el-card class="welcome-card">
       <div class="welcome-content">
         <div class="welcome-text">
-          <h1>欢迎使用资舟量化研究平台 ✨</h1>
-          <p>专业的量化研究与数据管理平台，提供因子库管理、市场数据获取、数据字典查询等全方位量化研究工具 📊</p>
-          <div class="quick-actions">
-            <el-button type="primary" size="large" @click="goToDownload">
-              <el-icon><Download /></el-icon>
-              开始下载
-            </el-button>
-            <el-button size="large" @click="goToSettings">
-              <el-icon><Setting /></el-icon>
-              系统设置
-            </el-button>
-          </div>
+          <h1>资舟量化研究平台 ✨</h1>
+          <p>专业的量化研究与数据管理系统，集成数据中心、因子库、基金管理、任务管理等核心功能</p>
         </div>
         <div class="welcome-icon">
-          <el-icon :size="120" color="#409EFF"><DataAnalysis /></el-icon>
+          <el-icon :size="100" color="rgba(255,255,255,0.8)"><DataAnalysis /></el-icon>
         </div>
       </div>
     </el-card>
     
-    <!-- 统计信息 -->
-    <div class="stats-grid">
-      <el-card v-for="stat in stats" :key="stat.label" class="stat-card">
-        <div class="stat-content">
-          <el-icon :size="32" :color="stat.color">
-            <component :is="stat.icon" />
-          </el-icon>
-          <div class="stat-info">
-            <div class="stat-value">{{ stat.value }}</div>
-            <div class="stat-label">{{ stat.label }}</div>
+    <!-- 功能模块快捷入口 -->
+    <div class="modules-grid">
+      <el-card 
+        v-for="module in modules" 
+        :key="module.name" 
+        class="module-card"
+        shadow="hover"
+        @click="goToModule(module.path)"
+      >
+        <div class="module-content">
+          <div class="module-icon">
+            <el-icon :size="48" :color="module.color">
+              <component :is="module.icon" />
+            </el-icon>
+          </div>
+          <div class="module-info">
+            <div class="module-name">{{ module.name }}</div>
+            <div class="module-desc">{{ module.description }}</div>
           </div>
         </div>
       </el-card>
     </div>
     
-    <!-- 市场覆盖 -->
-    <el-card class="markets-card">
-      <template #header>
-        <span>支持的市场类型</span>
-      </template>
-      
-      <div class="markets-grid">
-        <div v-for="market in markets" :key="market.name" class="market-item">
-          <div class="market-icon">
-            <el-icon :size="40" :color="market.color">
-              <component :is="market.icon" />
-            </el-icon>
-          </div>
-          <div class="market-info">
-            <div class="market-name">{{ market.name }}</div>
-            <div class="market-count">{{ market.count }}种消息类型</div>
-            <div class="market-types">
-              <el-tag
-                v-for="type in market.types.slice(0, 3)"
-                :key="type"
-                size="small"
-                type="info"
-              >
-                {{ type }}
-              </el-tag>
-              <el-tag v-if="market.types.length > 3" size="small" type="info">
-                +{{ market.types.length - 3 }}
-              </el-tag>
+    <!-- 系统状态 -->
+    <el-row :gutter="20" style="margin-bottom: 20px;">
+      <el-col :span="12">
+        <el-card>
+          <template #header>
+            <span>系统状态</span>
+          </template>
+          <div class="status-list">
+            <div class="status-item">
+              <span class="status-label">数据源连接</span>
+              <el-tag type="success">正常</el-tag>
+            </div>
+            <div class="status-item">
+              <span class="status-label">API服务</span>
+              <el-tag type="success">运行中</el-tag>
+            </div>
+            <div class="status-item">
+              <span class="status-label">存储空间</span>
+              <el-tag type="info">充足</el-tag>
             </div>
           </div>
-        </div>
-      </div>
-    </el-card>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card>
+          <template #header>
+            <span>使用统计</span>
+          </template>
+          <div class="stats-list">
+            <div class="stat-item">
+              <span class="stat-label">今日查询次数</span>
+              <span class="stat-value">{{ todayQueries }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">活跃任务</span>
+              <span class="stat-value">{{ activeTasks }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">数据表总数</span>
+              <span class="stat-value">938</span>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
     
-    <!-- 最近下载 -->
-    <el-card class="recent-card">
+    <!-- 快速开始 -->
+    <el-card>
       <template #header>
-        <div class="card-header">
-          <span>最近下载记录</span>
-          <el-button link type="primary" @click="goToHistory">
-            查看全部
-            <el-icon><ArrowRight /></el-icon>
-          </el-button>
-        </div>
+        <span>快速开始</span>
       </template>
-      
-      <el-table
-        :data="recentDownloads"
-        style="width: 100%"
-        empty-text="暂无下载记录"
-      >
-        <el-table-column prop="messageType" label="消息类型" width="120" />
-        <el-table-column prop="dateRange" label="日期范围" width="200" />
-        <el-table-column prop="format" label="格式" width="80">
-          <template #default="scope">
-            <el-tag size="small">{{ scope.row.format?.toUpperCase() || 'CSV' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="recordCount" label="记录数" width="100" />
-        <el-table-column prop="fileSize" label="文件大小" width="100">
-          <template #default="scope">
-            {{ formatFileSize(scope.row.fileSize) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="scope">
-            <el-tag :type="getStatusType(scope.row.status)" size="small">
-              {{ getStatusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" fixed="right" width="100">
-          <template #default="scope">
-            <el-button
-              v-if="scope.row.status === 'completed'"
-              link
-              type="primary"
-              @click="openFile(scope.row.savePath)"
-            >
-              打开文件
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="quick-guide">
+        <el-steps :active="1" align-center>
+          <el-step title="配置API Key" description="在系统设置中配置" />
+          <el-step title="选择功能模块" description="数据中心/因子库/基金管理" />
+          <el-step title="开始使用" description="查询数据或管理基金" />
+        </el-steps>
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Download,
   Setting,
   DataAnalysis,
-  ArrowRight,
-  Files,
-  // Clock,
-  CircleCheck,
-  TrendCharts,
+  Connection,
+  Box,
   Coin,
-  DataLine,
-  Connection
+  List,
+  Clock,
+  Key
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
-const stats = ref([
-  { label: '支持消息类型', value: 53, icon: Files, color: '#409EFF' },
-  { label: '今日下载', value: 0, icon: Download, color: '#67C23A' },
-  { label: '总下载次数', value: 0, icon: CircleCheck, color: '#E6A23C' },
-  { label: '总数据量', value: '0 GB', icon: DataAnalysis, color: '#F56C6C' }
-])
+// 用户菜单权限
+const menuPermissions = ref<string[]>([])
 
-const markets = ref([
+// 所有功能模块配置（与菜单ID对应）
+const allModules = [
   {
-    name: '深圳市场',
-    count: 14,
-    color: '#409EFF',
-    icon: TrendCharts,
-    types: ['股票快照', '指数行情', '逐笔成交', '债券行情', 'ETF申赎']
-  },
-  {
-    name: '上海市场',
-    count: 9,
-    color: '#67C23A',
-    icon: DataLine,
-    types: ['股票快照', '指数行情', '债券快照', '盘后交易']
-  },
-  {
-    name: '期货市场',
-    count: 13,
-    color: '#E6A23C',
-    icon: Coin,
-    types: ['中金所', '上期所', '郑商所', '大商所', '广期所', '能源所']
-  },
-  {
-    name: '期权市场',
-    count: 13,
-    color: '#F56C6C',
-    icon: DataAnalysis,
-    types: ['股票期权', '商品期权', '股指期权', '成交统计']
-  },
-  {
-    name: '陆港通市场',
-    count: 4,
-    color: '#909399',
+    name: '数据中心',
+    description: '查询市场数据、财务数据',
     icon: Connection,
-    types: ['资金流向', '北向额度', '南向额度']
+    color: '#409EFF',
+    path: '/data-center',
+    menuId: 'data_center'
+  },
+  {
+    name: '因子库',
+    description: '因子数据管理与查询',
+    icon: Box,
+    color: '#67C23A',
+    path: '/factor-library',
+    menuId: 'factor_library'
+  },
+  {
+    name: '基金管理',
+    description: '基金运维、净值、申赎',
+    icon: Coin,
+    color: '#E6A23C',
+    path: '/fund-management',
+    menuId: 'fund_management'
+  },
+  {
+    name: '任务管理',
+    description: '查看数据任务状态',
+    icon: List,
+    color: '#F56C6C',
+    path: '/tasks',
+    menuId: 'task_management'
+  },
+  {
+    name: '历史记录',
+    description: '查看操作历史',
+    icon: Clock,
+    color: '#909399',
+    path: '/history',
+    menuId: 'history'
+  },
+  {
+    name: 'SDK下载',
+    description: '下载开发工具包',
+    icon: Download,
+    color: '#5470C6',
+    path: '/sdk-download',
+    menuId: 'sdk_download'
+  },
+  {
+    name: 'API Key管理',
+    description: '管理用户和权限',
+    icon: Key,
+    color: '#91CC75',
+    path: '/api-key-management',
+    menuId: 'api_key_management'
+  },
+  {
+    name: '系统设置',
+    description: '系统参数配置',
+    icon: Setting,
+    color: '#FAC858',
+    path: '/settings',
+    menuId: 'settings'
   }
-])
+]
 
-const recentDownloads = ref<any[]>([])
-
-const goToDownload = () => {
-  router.push('/download')
-}
-
-const goToSettings = () => {
-  router.push('/settings')
-}
-
-const goToHistory = () => {
-  router.push('/history')
-}
-
-const openFile = async (filePath: string) => {
-  if (filePath) {
-    await window.electronAPI.shell.showItemInFolder(filePath)
+// 根据权限过滤可见模块
+const modules = computed(() => {
+  if (menuPermissions.value.length === 0) {
+    // 没有权限数据，显示所有模块
+    return allModules
   }
+  // 只显示有权限的模块
+  return allModules.filter(m => menuPermissions.value.includes(m.menuId))
+})
+
+const todayQueries = ref(0)
+const activeTasks = ref(0)
+
+const goToModule = (path: string) => {
+  router.push(path)
 }
 
-const formatFileSize = (bytes: number) => {
-  if (!bytes) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-}
-
-const getStatusType = (status: string) => {
-  const types: Record<string, any> = {
-    completed: 'success',
-    failed: 'danger',
-    cancelled: 'info'
-  }
-  return types[status] || 'info'
-}
-
-const getStatusText = (status: string) => {
-  const texts: Record<string, string> = {
-    completed: '已完成',
-    failed: '失败',
-    cancelled: '已取消'
-  }
-  return texts[status] || status
-}
-
-const loadRecentDownloads = async () => {
+// 加载菜单权限
+const loadMenuPermissions = async () => {
   try {
-    console.log('🔍 开始加载下载历史...')
-    const history = await window.electronAPI.download.getHistory()
-    console.log('✅ 下载历史加载成功，记录数:', history.length)
-    recentDownloads.value = history.slice(0, 5)
+    const keys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = keys.find((k: any) => k.isDefault)
     
-    // 更新统计
-    stats.value[2].value = history.length
-    
-    const today = new Date().toISOString().slice(0, 10)
-    const todayDownloads = history.filter((h: any) => 
-      h.startTime && h.startTime.startsWith(today)
-    )
-    stats.value[1].value = todayDownloads.length
-    
-    const totalSize = history.reduce((sum: number, h: any) => sum + (h.fileSize || 0), 0)
-    stats.value[3].value = formatFileSize(totalSize)
-    console.log('✅ 统计信息更新完成')
+    if (defaultKey && defaultKey.menu_permissions) {
+      menuPermissions.value = defaultKey.menu_permissions
+      console.log('✅ 首页菜单权限已加载:', menuPermissions.value)
+    } else {
+      console.log('⚠️ 未找到菜单权限')
+      menuPermissions.value = []
+    }
   } catch (error) {
-    console.error('❌ 加载下载历史失败:', error)
-    // 不抛出错误，避免崩溃
+    console.error('❌ 加载菜单权限失败:', error)
+    menuPermissions.value = []
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   console.log('🏠 Home组件已挂载')
-  loadRecentDownloads()
+  await loadMenuPermissions()
 })
 </script>
 
@@ -309,84 +270,76 @@ onMounted(() => {
     }
   }
   
-  .stats-grid {
+  .modules-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 20px;
     margin-bottom: 20px;
     
-    .stat-card {
-      .stat-content {
+    .module-card {
+      cursor: pointer;
+      transition: transform 0.2s;
+      
+      &:hover {
+        transform: translateY(-4px);
+      }
+      
+      .module-content {
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 20px;
+        padding: 10px 0;
         
-        .stat-info {
+        .module-icon {
+          flex-shrink: 0;
+        }
+        
+        .module-info {
           flex: 1;
           
-          .stat-value {
-            font-size: 24px;
+          .module-name {
+            font-size: 18px;
             font-weight: bold;
             color: #303133;
+            margin-bottom: 8px;
           }
           
-          .stat-label {
+          .module-desc {
             font-size: 14px;
             color: #909399;
-            margin-top: 5px;
           }
         }
       }
     }
   }
   
-  .markets-card {
-    margin-bottom: 20px;
-    
-    .markets-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      
-      .market-item {
-        display: flex;
-        gap: 15px;
-        padding: 15px;
-        border-radius: 8px;
-        background: #f5f7fa;
-        
-        .market-info {
-          flex: 1;
-          
-          .market-name {
-            font-size: 16px;
-            font-weight: bold;
-            color: #303133;
-            margin-bottom: 5px;
-          }
-          
-          .market-count {
-            font-size: 14px;
-            color: #606266;
-            margin-bottom: 10px;
-          }
-          
-          .market-types {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-          }
-        }
-      }
-    }
-  }
-  
-  .recent-card {
-    .card-header {
+  .status-list, .stats-list {
+    .status-item, .stat-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+      
+      &:last-child {
+        border-bottom: none;
+      }
+      
+      .status-label, .stat-label {
+        font-size: 14px;
+        color: #606266;
+      }
+      
+      .stat-value {
+        font-size: 20px;
+        font-weight: bold;
+        color: #409EFF;
+      }
     }
+  }
+  
+  .quick-guide {
+    padding: 20px 0;
   }
 }
 </style>

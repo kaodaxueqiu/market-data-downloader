@@ -178,7 +178,7 @@
                 :type="activePermissionCategory === 'menu' ? 'primary' : ''"
                 @click="activePermissionCategory = 'menu'"
               >
-                菜单权限 ({{ selectedMenuPermissions.length }}/8)
+                菜单权限 ({{ selectedMenuPermissions.length }})
               </el-button>
               <el-button
                 :type="activePermissionCategory === 'factor' ? 'primary' : ''"
@@ -220,22 +220,43 @@
             
             <!-- 权限内容展示区 -->
             <el-card v-loading="permissionLoading">
-              <!-- 菜单权限 -->
+              <!-- 菜单权限（3级树形结构）-->
               <div v-if="activePermissionCategory === 'menu'" style="padding: 20px;">
                 <div style="margin-bottom: 15px;">
                   <el-button size="small" @click="selectAllMenuPermissions">全选</el-button>
                   <el-button size="small" @click="unselectAllMenuPermissions">全不选</el-button>
+                  <el-button size="small" @click="expandAllMenus">全部展开</el-button>
+                  <el-button size="small" @click="collapseAllMenus">全部折叠</el-button>
                 </div>
                 
-                <el-checkbox-group v-model="selectedMenuPermissions">
-                  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-                    <el-checkbox v-for="menu in allMenusConfig" :key="menu.id" :value="menu.id" size="large">
-                      <span style="font-size: 15px; font-weight: 500;">{{ menu.name }}</span>
-                    </el-checkbox>
-                  </div>
-                </el-checkbox-group>
+                <el-tree
+                  ref="menuTreeRef"
+                  :data="allMenusConfig"
+                  node-key="id"
+                  show-checkbox
+                  check-strictly
+                  :default-expand-all="false"
+                  :props="{ label: 'name', children: 'children' }"
+                  @check="handleMenuCheck"
+                  style="border: 1px solid #dcdfe6; padding: 15px; border-radius: 4px; background: #fafafa;"
+                >
+                  <template #default="{ data }">
+                    <span style="font-size: 14px;">
+                      {{ data.name }}
+                      <el-tag v-if="data.level" size="small" style="margin-left: 8px;">
+                        {{ data.level }}级
+                      </el-tag>
+                    </span>
+                  </template>
+                </el-tree>
                 
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: right;">
+                <div style="margin-top: 20px; padding: 10px; background: #f0f9ff; border-radius: 4px;">
+                  <div style="font-size: 13px; color: #606266;">
+                    已选择 <strong style="color: #409eff;">{{ selectedMenuPermissions.length }}</strong> 个菜单
+                  </div>
+                </div>
+                
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; text-align: right;">
                   <el-button @click="resetMenuPermissions">重置</el-button>
                   <el-button type="primary" @click="saveMenuPermissions">保存菜单权限</el-button>
                 </div>
@@ -969,18 +990,77 @@ const databaseLoading = ref(false)
 const savingDatabase = ref(false)
 const originalDatabaseConfig = ref<any>(null)
 
-// 所有可用菜单（与App.vue中的allMenus一致）
-const allMenusConfig = [
-  { id: 'home', name: '首页' },
-  { id: 'data_center', name: '数据中心' },
-  { id: 'factor_library', name: '因子库' },
-  { id: 'fund_management', name: '基金管理' },
-  { id: 'task_management', name: '任务管理' },
-  { id: 'history', name: '历史记录' },
-  { id: 'sdk_download', name: 'SDK下载' },
-  { id: 'api_key_management', name: 'API Key管理' },
-  { id: 'settings', name: '系统设置' }
-]
+// 所有可用菜单（从后端获取的3级菜单树）
+const allMenusConfig = ref<any[]>([])
+const menuTreeRef = ref<any>(null)
+
+// 加载所有菜单定义
+const loadAllMenus = async () => {
+  try {
+    // 先获取当前API Key
+    const keys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = keys.find((k: any) => k.isDefault)
+    
+    if (defaultKey) {
+      const fullKey = await window.electronAPI.config.getFullApiKey(defaultKey.id)
+      if (fullKey) {
+        // 设置API Key后再调用
+        await window.electronAPI.fund.setApiKey(fullKey)
+        
+        const result = await window.electronAPI.account.getAllMenus()
+        
+        if (result.success && result.data) {
+          allMenusConfig.value = result.data
+          console.log('✅ 加载菜单定义成功，共', result.data.length, '个一级菜单')
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('加载菜单定义失败:', error)
+    // 不显示错误提示，静默失败
+    // ElMessage.error('加载菜单失败')
+  }
+}
+
+// 树形菜单选中处理
+const handleMenuCheck = () => {
+  if (menuTreeRef.value) {
+    selectedMenuPermissions.value = menuTreeRef.value.getCheckedKeys()
+  }
+}
+
+// 展开所有菜单节点
+const expandAllMenus = () => {
+  if (menuTreeRef.value) {
+    // 获取所有节点的key并展开
+    const allKeys = getAllMenuIds(allMenusConfig.value)
+    allKeys.forEach(key => {
+      menuTreeRef.value.store.nodesMap[key]?.expand()
+    })
+  }
+}
+
+// 折叠所有菜单节点
+const collapseAllMenus = () => {
+  if (menuTreeRef.value) {
+    const allKeys = getAllMenuIds(allMenusConfig.value)
+    allKeys.forEach(key => {
+      menuTreeRef.value.store.nodesMap[key]?.collapse()
+    })
+  }
+}
+
+// 递归获取所有菜单ID
+const getAllMenuIds = (menus: any[]): string[] => {
+  let ids: string[] = []
+  menus.forEach(menu => {
+    ids.push(menu.id)
+    if (menu.children && menu.children.length > 0) {
+      ids = ids.concat(getAllMenuIds(menu.children))
+    }
+  })
+  return ids
+}
 
 const formData = reactive({
   id: '',
@@ -1408,12 +1488,19 @@ const togglePermission = (resource: string) => {
 
 // 全选菜单权限
 const selectAllMenuPermissions = () => {
-  selectedMenuPermissions.value = allMenusConfig.map(m => m.id)
+  const allIds = getAllMenuIds(allMenusConfig.value)
+  selectedMenuPermissions.value = allIds
+  if (menuTreeRef.value) {
+    menuTreeRef.value.setCheckedKeys(allIds)
+  }
 }
 
 // 全不选菜单权限
 const unselectAllMenuPermissions = () => {
   selectedMenuPermissions.value = []
+  if (menuTreeRef.value) {
+    menuTreeRef.value.setCheckedKeys([])
+  }
 }
 
 // 全选指定分类的API权限
@@ -1727,6 +1814,14 @@ const loadUserPermissions = async () => {
       // 填充菜单权限
       selectedMenuPermissions.value = [...(result.data.menu_permissions || [])]
       
+      // 同步设置树形控件的选中状态（使用 nextTick 确保树已渲染）
+      setTimeout(() => {
+        if (menuTreeRef.value) {
+          console.log('🔧 设置树选中状态:', selectedMenuPermissions.value)
+          menuTreeRef.value.setCheckedKeys(selectedMenuPermissions.value)
+        }
+      }, 100)
+      
       // 填充API权限（处理通配符 * 或 **）
       const hasWildcard = result.data.permissions && result.data.permissions.some((p: string) => p === '*' || p === '**')
       if (hasWildcard) {
@@ -1778,10 +1873,11 @@ const loadUserPermissions = async () => {
 }
 
 // Tab切换事件
-const handleTabChange = (tabName: string) => {
+const handleTabChange = async (tabName: string) => {
   console.log('Tab切换到:', tabName)
   if (tabName === 'permissions') {
-    // 切换到权限配置Tab，立即加载权限注册表
+    // 切换到权限配置Tab，立即加载菜单定义和权限注册表
+    await loadAllMenus()
     loadPermissionRegistry()
   }
 }
@@ -1867,8 +1963,10 @@ const saveDatabaseConfig = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadApiKeys()
+  // 一进入页面就加载菜单树（不等切换Tab）
+  await loadAllMenus()
 })
 </script>
 

@@ -182,7 +182,45 @@ contextBridge.exposeInMainWorld('electronAPI', {
     uploadReport: (formData: any) => ipcRenderer.invoke('fund:uploadReport', formData),
     getReportList: (params?: any) => ipcRenderer.invoke('fund:getReportList', params),
     getReportDownloadUrl: (reportId: number) => ipcRenderer.invoke('fund:getReportDownloadUrl', reportId),
-    deleteReport: (reportId: number) => ipcRenderer.invoke('fund:deleteReport', reportId)
+    deleteReport: (reportId: number) => ipcRenderer.invoke('fund:deleteReport', reportId),
+    // 净值管理
+    createNav: (data: any) => ipcRenderer.invoke('fund:createNav', data),
+    getNavList: (params?: any) => ipcRenderer.invoke('fund:getNavList', params),
+    getNavDetail: (navId: number) => ipcRenderer.invoke('fund:getNavDetail', navId),
+    updateNav: (navId: number, data: any) => ipcRenderer.invoke('fund:updateNav', navId, data),
+    deleteNav: (navId: number) => ipcRenderer.invoke('fund:deleteNav', navId),
+    getFundNavHistory: (code: string, params?: any) => ipcRenderer.invoke('fund:getFundNavHistory', code, params),
+    getLatestNav: (code: string) => ipcRenderer.invoke('fund:getLatestNav', code),
+    getNavChart: (code: string, days: number) => ipcRenderer.invoke('fund:getNavChart', code, days),
+    getNavStatistics: (code: string) => ipcRenderer.invoke('fund:getNavStatistics', code),
+    // 申购赎回
+    createTransaction: (data: any) => ipcRenderer.invoke('fund:createTransaction', data),
+    getTransactionList: (params?: any) => ipcRenderer.invoke('fund:getTransactionList', params),
+    confirmTransaction: (transId: number, data: any) => ipcRenderer.invoke('fund:confirmTransaction', transId, data),
+    cancelTransaction: (transId: number) => ipcRenderer.invoke('fund:cancelTransaction', transId),
+    getFundTransactions: (code: string, params?: any) => ipcRenderer.invoke('fund:getFundTransactions', code, params),
+    // 基础信息维护
+    createCustodian: (data: any) => ipcRenderer.invoke('fund:createCustodian', data),
+    updateCustodian: (id: number, data: any) => ipcRenderer.invoke('fund:updateCustodian', id, data),
+    deleteCustodian: (id: number) => ipcRenderer.invoke('fund:deleteCustodian', id),
+    createBroker: (data: any) => ipcRenderer.invoke('fund:createBroker', data),
+    updateBroker: (id: number, data: any) => ipcRenderer.invoke('fund:updateBroker', id, data),
+    deleteBroker: (id: number) => ipcRenderer.invoke('fund:deleteBroker', id),
+    // 投资者管理
+    createInvestor: (data: any) => ipcRenderer.invoke('fund:createInvestor', data),
+    getInvestorList: (params?: any) => ipcRenderer.invoke('fund:getInvestorList', params),
+    getInvestorDetail: (id: number) => ipcRenderer.invoke('fund:getInvestorDetail', id),
+    updateInvestor: (id: number, data: any) => ipcRenderer.invoke('fund:updateInvestor', id, data),
+    deleteInvestor: (id: number) => ipcRenderer.invoke('fund:deleteInvestor', id),
+    qualifyInvestor: (id: number, data: any) => ipcRenderer.invoke('fund:qualifyInvestor', id, data),
+    riskAssessInvestor: (id: number, data: any) => ipcRenderer.invoke('fund:riskAssessInvestor', id, data),
+    getInvestorStatistics: () => ipcRenderer.invoke('fund:getInvestorStatistics')
+  },
+
+  // 账户/菜单管理
+  account: {
+    getMyMenus: () => ipcRenderer.invoke('account:getMyMenus'),
+    getAllMenus: () => ipcRenderer.invoke('account:getAllMenus')
   },
 
   // 静态数据下载 (异步任务系统 - PostgreSQL + ClickHouse)
@@ -367,6 +405,44 @@ declare global {
         getFundDetail: (code: string) => Promise<any>
         updateFund: (code: string, fundData: any) => Promise<any>
         deleteFund: (code: string) => Promise<any>
+        liquidateFund: (code: string, liquidateDate: string, reason?: string) => Promise<any>
+        restoreFund: (code: string, restoreDate: string, reason?: string) => Promise<any>
+        uploadReport: (formData: any) => Promise<any>
+        getReportList: (params?: any) => Promise<any>
+        getReportDownloadUrl: (reportId: number) => Promise<any>
+        deleteReport: (reportId: number) => Promise<any>
+        createNav: (data: any) => Promise<any>
+        getNavList: (params?: any) => Promise<any>
+        getNavDetail: (navId: number) => Promise<any>
+        updateNav: (navId: number, data: any) => Promise<any>
+        deleteNav: (navId: number) => Promise<any>
+        getFundNavHistory: (code: string, params?: any) => Promise<any>
+        getLatestNav: (code: string) => Promise<any>
+        getNavChart: (code: string, days: number) => Promise<any>
+        getNavStatistics: (code: string) => Promise<any>
+        createTransaction: (data: any) => Promise<any>
+        getTransactionList: (params?: any) => Promise<any>
+        confirmTransaction: (transId: number, data: any) => Promise<any>
+        cancelTransaction: (transId: number) => Promise<any>
+        getFundTransactions: (code: string, params?: any) => Promise<any>
+        createCustodian: (data: any) => Promise<any>
+        updateCustodian: (id: number, data: any) => Promise<any>
+        deleteCustodian: (id: number) => Promise<any>
+        createBroker: (data: any) => Promise<any>
+        updateBroker: (id: number, data: any) => Promise<any>
+        deleteBroker: (id: number) => Promise<any>
+        createInvestor: (data: any) => Promise<any>
+        getInvestorList: (params?: any) => Promise<any>
+        getInvestorDetail: (id: number) => Promise<any>
+        updateInvestor: (id: number, data: any) => Promise<any>
+        deleteInvestor: (id: number) => Promise<any>
+        qualifyInvestor: (id: number, data: any) => Promise<any>
+        riskAssessInvestor: (id: number, data: any) => Promise<any>
+        getInvestorStatistics: () => Promise<any>
+      }
+      account: {
+        getMyMenus: () => Promise<any>
+        getAllMenus: () => Promise<any>
       }
       staticDownload: {
         createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<string>

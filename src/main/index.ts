@@ -263,6 +263,12 @@ process.on('unhandledRejection', (reason, promise) => {
 app.whenReady().then(() => {
   console.log('✅ App准备就绪')
   
+  // 禁用代理（解决 ERR_PROXY_CONNECTION_FAILED 错误）
+  const { session } = require('electron')
+  session.defaultSession.setProxy({ mode: 'direct' })
+    .then(() => console.log('✅ 已禁用代理'))
+    .catch((err: any) => console.error('⚠️ 设置代理失败:', err))
+  
   // 先初始化服务
   try {
     initializeServices()
@@ -1317,6 +1323,302 @@ ipcMain.handle('fund:deleteReport', async (_event, reportId: number) => {
     return result
   } catch (error: any) {
     throw new Error(error.message || '删除报告失败')
+  }
+})
+
+// ========== 净值管理 ==========
+
+// 录入净值
+ipcMain.handle('fund:createNav', async (_event, data: any) => {
+  try {
+    const result = await fundAPI.createNav(data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '录入净值失败')
+  }
+})
+
+// 获取净值列表
+ipcMain.handle('fund:getNavList', async (_event, params?: any) => {
+  try {
+    const result = await fundAPI.getNavList(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取净值列表失败')
+  }
+})
+
+// 获取净值详情
+ipcMain.handle('fund:getNavDetail', async (_event, navId: number) => {
+  try {
+    const result = await fundAPI.getNavDetail(navId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取净值详情失败')
+  }
+})
+
+// 更新净值
+ipcMain.handle('fund:updateNav', async (_event, navId: number, data: any) => {
+  try {
+    const result = await fundAPI.updateNav(navId, data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '更新净值失败')
+  }
+})
+
+// 删除净值
+ipcMain.handle('fund:deleteNav', async (_event, navId: number) => {
+  try {
+    const result = await fundAPI.deleteNav(navId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '删除净值失败')
+  }
+})
+
+// 获取基金净值历史
+ipcMain.handle('fund:getFundNavHistory', async (_event, code: string, params?: any) => {
+  try {
+    const result = await fundAPI.getFundNavHistory(code, params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取净值历史失败')
+  }
+})
+
+// 获取最新净值
+ipcMain.handle('fund:getLatestNav', async (_event, code: string) => {
+  try {
+    const result = await fundAPI.getLatestNav(code)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取最新净值失败')
+  }
+})
+
+// 获取净值曲线
+ipcMain.handle('fund:getNavChart', async (_event, code: string, days: number) => {
+  try {
+    const result = await fundAPI.getNavChart(code, days)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取净值曲线失败')
+  }
+})
+
+// 获取净值统计
+ipcMain.handle('fund:getNavStatistics', async (_event, code: string) => {
+  try {
+    const result = await fundAPI.getNavStatistics(code)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取净值统计失败')
+  }
+})
+
+// ========== 申购赎回 ==========
+
+// 创建交易
+ipcMain.handle('fund:createTransaction', async (_event, data: any) => {
+  try {
+    const result = await fundAPI.createTransaction(data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '创建交易失败')
+  }
+})
+
+// 获取交易列表
+ipcMain.handle('fund:getTransactionList', async (_event, params?: any) => {
+  try {
+    const result = await fundAPI.getTransactionList(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取交易列表失败')
+  }
+})
+
+// 确认交易
+ipcMain.handle('fund:confirmTransaction', async (_event, transId: number, data: any) => {
+  try {
+    const result = await fundAPI.confirmTransaction(transId, data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '确认交易失败')
+  }
+})
+
+// 撤销交易
+ipcMain.handle('fund:cancelTransaction', async (_event, transId: number) => {
+  try {
+    const result = await fundAPI.cancelTransaction(transId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '撤销交易失败')
+  }
+})
+
+// 获取基金交易记录
+ipcMain.handle('fund:getFundTransactions', async (_event, code: string, params?: any) => {
+  try {
+    const result = await fundAPI.getFundTransactions(code, params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取基金交易记录失败')
+  }
+})
+
+// ========== 基础信息维护 ==========
+
+// 托管人管理
+ipcMain.handle('fund:createCustodian', async (_event, data: any) => {
+  try {
+    const result = await fundAPI.createCustodian(data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '创建托管人失败')
+  }
+})
+
+ipcMain.handle('fund:updateCustodian', async (_event, id: number, data: any) => {
+  try {
+    const result = await fundAPI.updateCustodian(id, data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '更新托管人失败')
+  }
+})
+
+ipcMain.handle('fund:deleteCustodian', async (_event, id: number) => {
+  try {
+    const result = await fundAPI.deleteCustodian(id)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '删除托管人失败')
+  }
+})
+
+// 经纪商管理
+ipcMain.handle('fund:createBroker', async (_event, data: any) => {
+  try {
+    const result = await fundAPI.createBroker(data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '创建经纪商失败')
+  }
+})
+
+ipcMain.handle('fund:updateBroker', async (_event, id: number, data: any) => {
+  try {
+    const result = await fundAPI.updateBroker(id, data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '更新经纪商失败')
+  }
+})
+
+ipcMain.handle('fund:deleteBroker', async (_event, id: number) => {
+  try {
+    const result = await fundAPI.deleteBroker(id)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '删除经纪商失败')
+  }
+})
+
+// ========== 投资者管理 ==========
+
+ipcMain.handle('fund:createInvestor', async (_event, data: any) => {
+  try {
+    const result = await fundAPI.createInvestor(data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '创建投资者失败')
+  }
+})
+
+ipcMain.handle('fund:getInvestorList', async (_event, params?: any) => {
+  try {
+    const result = await fundAPI.getInvestorList(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取投资者列表失败')
+  }
+})
+
+ipcMain.handle('fund:getInvestorDetail', async (_event, id: number) => {
+  try {
+    const result = await fundAPI.getInvestorDetail(id)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取投资者详情失败')
+  }
+})
+
+ipcMain.handle('fund:updateInvestor', async (_event, id: number, data: any) => {
+  try {
+    const result = await fundAPI.updateInvestor(id, data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '更新投资者失败')
+  }
+})
+
+ipcMain.handle('fund:deleteInvestor', async (_event, id: number) => {
+  try {
+    const result = await fundAPI.deleteInvestor(id)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '投资者销户失败')
+  }
+})
+
+ipcMain.handle('fund:qualifyInvestor', async (_event, id: number, data: any) => {
+  try {
+    const result = await fundAPI.qualifyInvestor(id, data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '合格投资者认定失败')
+  }
+})
+
+ipcMain.handle('fund:riskAssessInvestor', async (_event, id: number, data: any) => {
+  try {
+    const result = await fundAPI.riskAssessInvestor(id, data)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '风险评估失败')
+  }
+})
+
+ipcMain.handle('fund:getInvestorStatistics', async (_event) => {
+  try {
+    const result = await fundAPI.getInvestorStatistics()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取投资者统计失败')
+  }
+})
+
+// ========== 账户/菜单管理 ==========
+
+ipcMain.handle('account:getMyMenus', async (_event) => {
+  try {
+    const result = await fundAPI.getMyMenus()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取菜单权限失败')
+  }
+})
+
+ipcMain.handle('account:getAllMenus', async (_event) => {
+  try {
+    const result = await fundAPI.getAllMenus()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取所有菜单失败')
   }
 })
 

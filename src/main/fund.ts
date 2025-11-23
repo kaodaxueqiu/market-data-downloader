@@ -7,8 +7,10 @@ import axios, { AxiosInstance } from 'axios'
 export class FundAPI {
   private client: AxiosInstance
   private apiKey: string | null = null
+  private baseURL: string
 
   constructor(baseURL: string = 'http://61.151.241.233:8080') {
+    this.baseURL = baseURL
     this.client = axios.create({
       baseURL: baseURL + '/api/v1/fund',
       timeout: 30000,
@@ -23,6 +25,18 @@ export class FundAPI {
         config.headers['X-API-Key'] = this.apiKey
       }
       return config
+    })
+  }
+  
+  // 创建 account 接口的 client
+  private getAccountClient() {
+    return axios.create({
+      baseURL: this.baseURL + '/api/v1',
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': this.apiKey
+      }
     })
   }
 
@@ -264,6 +278,501 @@ export class FundAPI {
     } catch (error: any) {
       console.error('删除报告失败:', error)
       throw new Error(error.response?.data?.error || '删除报告失败')
+    }
+  }
+
+  // ========== 净值管理 ==========
+
+  /**
+   * 录入净值
+   */
+  async createNav(data: {
+    fund_code: string
+    nav_date: string
+    unit_nav: number
+    accumulated_nav?: number
+    daily_return?: number
+    total_assets?: number
+    total_shares?: number
+    remark?: string
+  }): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /nav', data)
+      const response = await this.client.post('/nav', data)
+      console.log('✅ 净值录入成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('录入净值失败:', error)
+      throw new Error(error.response?.data?.error || '录入净值失败')
+    }
+  }
+
+  /**
+   * 获取净值列表
+   */
+  async getNavList(params?: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /nav', params)
+      const response = await this.client.get('/nav', { params })
+      console.log('✅ 后端返回净值列表:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取净值列表失败:', error)
+      throw new Error(error.response?.data?.error || '获取净值列表失败')
+    }
+  }
+
+  /**
+   * 获取净值详情
+   */
+  async getNavDetail(navId: number): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /nav/' + navId)
+      const response = await this.client.get(`/nav/${navId}`)
+      console.log('✅ 后端返回净值详情:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取净值详情失败:', error)
+      throw new Error(error.response?.data?.error || '获取净值详情失败')
+    }
+  }
+
+  /**
+   * 更新净值
+   */
+  async updateNav(navId: number, data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: PUT /nav/' + navId, data)
+      const response = await this.client.put(`/nav/${navId}`, data)
+      console.log('✅ 净值更新成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('更新净值失败:', error)
+      throw new Error(error.response?.data?.error || '更新净值失败')
+    }
+  }
+
+  /**
+   * 删除净值
+   */
+  async deleteNav(navId: number): Promise<any> {
+    try {
+      console.log('📋 调用后端API: DELETE /nav/' + navId)
+      const response = await this.client.delete(`/nav/${navId}`)
+      console.log('✅ 净值删除成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('删除净值失败:', error)
+      throw new Error(error.response?.data?.error || '删除净值失败')
+    }
+  }
+
+  /**
+   * 获取基金净值历史
+   */
+  async getFundNavHistory(code: string, params?: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /info/' + code + '/nav', params)
+      const response = await this.client.get(`/info/${code}/nav`, { params })
+      console.log('✅ 后端返回净值历史:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取净值历史失败:', error)
+      throw new Error(error.response?.data?.error || '获取净值历史失败')
+    }
+  }
+
+  /**
+   * 获取最新净值
+   */
+  async getLatestNav(code: string): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /info/' + code + '/nav/latest')
+      const response = await this.client.get(`/info/${code}/nav/latest`)
+      console.log('✅ 后端返回最新净值:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取最新净值失败:', error)
+      throw new Error(error.response?.data?.error || '获取最新净值失败')
+    }
+  }
+
+  /**
+   * 获取净值曲线数据（用于图表）
+   */
+  async getNavChart(code: string, days: number = 30): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /info/' + code + '/nav/chart')
+      const response = await this.client.get(`/info/${code}/nav/chart`, {
+        params: { days }
+      })
+      console.log('✅ 后端返回净值曲线:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取净值曲线失败:', error)
+      throw new Error(error.response?.data?.error || '获取净值曲线失败')
+    }
+  }
+
+  /**
+   * 获取净值统计
+   */
+  async getNavStatistics(code: string): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /nav/statistics')
+      const response = await this.client.get('/nav/statistics', {
+        params: { fund_code: code }
+      })
+      console.log('✅ 后端返回净值统计:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取净值统计失败:', error)
+      throw new Error(error.response?.data?.error || '获取净值统计失败')
+    }
+  }
+
+  // ========== 申购赎回 ==========
+
+  /**
+   * 创建交易（申购或赎回）
+   */
+  async createTransaction(data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /transactions', data)
+      const response = await this.client.post('/transactions', data)
+      console.log('✅ 交易创建成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('创建交易失败:', error)
+      throw new Error(error.response?.data?.error || '创建交易失败')
+    }
+  }
+
+  /**
+   * 获取交易列表
+   */
+  async getTransactionList(params?: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /transactions', params)
+      const response = await this.client.get('/transactions', { params })
+      console.log('✅ 后端返回交易列表:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取交易列表失败:', error)
+      throw new Error(error.response?.data?.error || '获取交易列表失败')
+    }
+  }
+
+  /**
+   * 确认交易
+   */
+  async confirmTransaction(transId: number, data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /transactions/' + transId + '/confirm', data)
+      const response = await this.client.post(`/transactions/${transId}/confirm`, data)
+      console.log('✅ 交易确认成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('确认交易失败:', error)
+      throw new Error(error.response?.data?.error || '确认交易失败')
+    }
+  }
+
+  /**
+   * 撤销交易
+   */
+  async cancelTransaction(transId: number): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /transactions/' + transId + '/cancel')
+      const response = await this.client.post(`/transactions/${transId}/cancel`)
+      console.log('✅ 交易撤销成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('撤销交易失败:', error)
+      throw new Error(error.response?.data?.error || '撤销交易失败')
+    }
+  }
+
+  /**
+   * 获取基金的交易记录
+   */
+  async getFundTransactions(code: string, params?: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /info/' + code + '/transactions', params)
+      const response = await this.client.get(`/info/${code}/transactions`, { params })
+      console.log('✅ 后端返回基金交易记录:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取基金交易记录失败:', error)
+      throw new Error(error.response?.data?.error || '获取基金交易记录失败')
+    }
+  }
+
+  // ========== 基础信息维护 ==========
+
+  /**
+   * 创建托管人
+   */
+  async createCustodian(data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /custodians', data)
+      const response = await this.client.post('/custodians', data)
+      console.log('✅ 托管人创建成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('创建托管人失败:', error)
+      throw new Error(error.response?.data?.error || '创建托管人失败')
+    }
+  }
+
+  /**
+   * 更新托管人
+   */
+  async updateCustodian(id: number, data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: PUT /custodians/' + id, data)
+      const response = await this.client.put(`/custodians/${id}`, data)
+      console.log('✅ 托管人更新成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('更新托管人失败:', error)
+      throw new Error(error.response?.data?.error || '更新托管人失败')
+    }
+  }
+
+  /**
+   * 删除托管人
+   */
+  async deleteCustodian(id: number): Promise<any> {
+    try {
+      console.log('📋 调用后端API: DELETE /custodians/' + id)
+      const response = await this.client.delete(`/custodians/${id}`)
+      console.log('✅ 托管人删除成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('删除托管人失败:', error)
+      throw new Error(error.response?.data?.error || '删除托管人失败')
+    }
+  }
+
+  /**
+   * 创建经纪商
+   */
+  async createBroker(data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /brokers', data)
+      const response = await this.client.post('/brokers', data)
+      console.log('✅ 经纪商创建成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('创建经纪商失败:', error)
+      throw new Error(error.response?.data?.error || '创建经纪商失败')
+    }
+  }
+
+  /**
+   * 更新经纪商
+   */
+  async updateBroker(id: number, data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: PUT /brokers/' + id, data)
+      const response = await this.client.put(`/brokers/${id}`, data)
+      console.log('✅ 经纪商更新成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('更新经纪商失败:', error)
+      throw new Error(error.response?.data?.error || '更新经纪商失败')
+    }
+  }
+
+  /**
+   * 删除经纪商
+   */
+  async deleteBroker(id: number): Promise<any> {
+    try {
+      console.log('📋 调用后端API: DELETE /brokers/' + id)
+      const response = await this.client.delete(`/brokers/${id}`)
+      console.log('✅ 经纪商删除成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('删除经纪商失败:', error)
+      throw new Error(error.response?.data?.error || '删除经纪商失败')
+    }
+  }
+
+  // ========== 投资者管理 ==========
+  // 注意：投资者接口在 /api/v1/investors，需要创建独立的client
+
+  private getInvestorClient() {
+    return axios.create({
+      baseURL: 'http://61.151.241.233:8080/api/v1',
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': this.apiKey
+      }
+    })
+  }
+
+  /**
+   * 创建投资者
+   */
+  async createInvestor(data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /investors', data)
+      const client = this.getInvestorClient()
+      const response = await client.post('/investors', data)
+      console.log('✅ 投资者创建成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('创建投资者失败:', error)
+      throw new Error(error.response?.data?.error || '创建投资者失败')
+    }
+  }
+
+  /**
+   * 获取投资者列表
+   */
+  async getInvestorList(params?: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /investors', params)
+      const client = this.getInvestorClient()
+      const response = await client.get('/investors', { params })
+      console.log('✅ 后端返回投资者列表:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取投资者列表失败:', error)
+      throw new Error(error.response?.data?.error || '获取投资者列表失败')
+    }
+  }
+
+  /**
+   * 获取投资者详情
+   */
+  async getInvestorDetail(id: number): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /investors/' + id)
+      const client = this.getInvestorClient()
+      const response = await client.get(`/investors/${id}`)
+      console.log('✅ 后端返回投资者详情:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取投资者详情失败:', error)
+      throw new Error(error.response?.data?.error || '获取投资者详情失败')
+    }
+  }
+
+  /**
+   * 更新投资者
+   */
+  async updateInvestor(id: number, data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: PUT /investors/' + id, data)
+      const client = this.getInvestorClient()
+      const response = await client.put(`/investors/${id}`, data)
+      console.log('✅ 投资者更新成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('更新投资者失败:', error)
+      throw new Error(error.response?.data?.error || '更新投资者失败')
+    }
+  }
+
+  /**
+   * 删除投资者（销户）
+   */
+  async deleteInvestor(id: number): Promise<any> {
+    try {
+      console.log('📋 调用后端API: DELETE /investors/' + id)
+      const client = this.getInvestorClient()
+      const response = await client.delete(`/investors/${id}`)
+      console.log('✅ 投资者销户成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('投资者销户失败:', error)
+      throw new Error(error.response?.data?.error || '投资者销户失败')
+    }
+  }
+
+  /**
+   * 合格投资者认定
+   */
+  async qualifyInvestor(id: number, data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /investors/' + id + '/qualify', data)
+      const client = this.getInvestorClient()
+      const response = await client.post(`/investors/${id}/qualify`, data)
+      console.log('✅ 合格投资者认定成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('合格投资者认定失败:', error)
+      throw new Error(error.response?.data?.error || '合格投资者认定失败')
+    }
+  }
+
+  /**
+   * 风险评估
+   */
+  async riskAssessInvestor(id: number, data: any): Promise<any> {
+    try {
+      console.log('📋 调用后端API: POST /investors/' + id + '/risk-assess', data)
+      const client = this.getInvestorClient()
+      const response = await client.post(`/investors/${id}/risk-assess`, data)
+      console.log('✅ 风险评估成功:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('风险评估失败:', error)
+      throw new Error(error.response?.data?.error || '风险评估失败')
+    }
+  }
+
+  /**
+   * 投资者统计
+   */
+  async getInvestorStatistics(): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /investors/statistics')
+      const client = this.getInvestorClient()
+      const response = await client.get('/investors/statistics')
+      console.log('✅ 后端返回投资者统计:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取投资者统计失败:', error)
+      throw new Error(error.response?.data?.error || '获取投资者统计失败')
+    }
+  }
+
+  // ========== 账户/菜单管理 ==========
+
+  /**
+   * 获取用户的菜单权限
+   */
+  async getMyMenus(): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /account/my-menus')
+      const client = this.getAccountClient()
+      const response = await client.get('/account/my-menus')
+      console.log('✅ 后端返回菜单权限:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取菜单权限失败:', error)
+      throw new Error(error.response?.data?.error || '获取菜单权限失败')
+    }
+  }
+
+  /**
+   * 获取所有菜单定义
+   */
+  async getAllMenus(): Promise<any> {
+    try {
+      console.log('📋 调用后端API: GET /account/menus')
+      const client = this.getAccountClient()
+      const response = await client.get('/account/menus')
+      console.log('✅ 后端返回所有菜单:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('获取所有菜单失败:', error)
+      throw new Error(error.response?.data?.error || '获取所有菜单失败')
     }
   }
 }

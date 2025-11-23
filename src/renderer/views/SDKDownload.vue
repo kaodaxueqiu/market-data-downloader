@@ -146,7 +146,36 @@ const loadSDKList = async () => {
   loading.value = true
   try {
     console.log('[SDK] 开始加载SDK列表...')
-    const response = await fetch(`${API_BASE}/api/v1/sdk/versions`)
+    
+    // 获取API Key
+    const keys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = keys.find((k: any) => k.isDefault)
+    
+    if (!defaultKey) {
+      ElMessage.warning('请先配置API Key')
+      loading.value = false
+      return
+    }
+    
+    const fullKey = await window.electronAPI.config.getFullApiKey(defaultKey.id)
+    
+    if (!fullKey) {
+      ElMessage.error('获取API Key失败')
+      loading.value = false
+      return
+    }
+    
+    const response = await fetch(`${API_BASE}/api/v1/sdk/versions`, {
+      headers: {
+        'X-API-Key': fullKey
+      },
+      mode: 'cors'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    
     const data = await response.json()
 
     console.log('[SDK] 响应数据:', data)

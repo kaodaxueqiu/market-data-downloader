@@ -183,6 +183,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { setMenuPermissions } from './router/index'
 import { ElMessage } from 'element-plus'
 import { 
   House, 
@@ -242,7 +243,20 @@ const allMenus: MenuItem[] = [
       { id: 'fund_list', name: '基金列表', path: '/fund-management/list', icon: null },
       { id: 'fund_performance', name: '业绩分析', path: '/fund-management/performance', icon: null },
       { id: 'fund_position', name: '持仓分析', path: '/fund-management/position', icon: null },
-      { id: 'fund_operations', name: '基金运维', path: '/fund-management/operations', icon: null }
+      { 
+        id: 'fund_operation', 
+        name: '基金运维', 
+        path: '/fund-management/operations', 
+        icon: null,
+        children: [
+          { id: 'fund_info_manage', name: '基金信息管理', path: '/fund-management/operations#fund', icon: null },
+          { id: 'fund_basic_info', name: '基础信息维护', path: '/fund-management/operations#basicinfo', icon: null },
+          { id: 'fund_subscription', name: '申购赎回', path: '/fund-management/operations#transaction', icon: null },
+          { id: 'fund_nav_manage', name: '净值管理', path: '/fund-management/operations#netvalue', icon: null },
+          { id: 'fund_report_manage', name: '报告管理', path: '/fund-management/operations#report', icon: null },
+          { id: 'fund_investor_manage', name: '投资者管理', path: '/fund-management/operations#investor', icon: null }
+        ]
+      }
     ]
   },
   { id: 'task_management', name: '任务管理', path: '/tasks', icon: List },
@@ -252,7 +266,26 @@ const allMenus: MenuItem[] = [
   { id: 'settings', name: '系统设置', path: '/settings', icon: Setting }
 ]
 
-// 🆕 根据权限过滤可见菜单
+// 扁平化过滤菜单树（精确匹配权限）
+const filterMenuTree = (menus: MenuItem[]): MenuItem[] => {
+  return menus
+    .filter(menu => {
+      // 当前菜单必须在权限列表里才显示
+      return menuPermissions.value.includes(menu.id)
+    })
+    .map(menu => {
+      const filtered = { ...menu }
+      
+      // 如果有子菜单，递归过滤子菜单
+      if (menu.children && menu.children.length > 0) {
+        filtered.children = filterMenuTree(menu.children)
+      }
+      
+      return filtered
+    })
+}
+
+// 🆕 根据权限过滤可见菜单（支持3级，精确匹配）
 const visibleMenus = computed(() => {
   // 🔐 没有配置API Key，只显示"设置"菜单
   if (!hasApiKey.value) {
@@ -266,9 +299,9 @@ const visibleMenus = computed(() => {
     return allMenus
   }
   
-  // 根据权限过滤
-  const filtered = allMenus.filter(menu => menuPermissions.value.includes(menu.id))
-  console.log('✅ 可见菜单:', filtered.map(m => m.name))
+  // 精确过滤：只显示在权限列表里的菜单
+  const filtered = filterMenuTree(allMenus)
+  console.log('✅ 可见菜单（3级）:', filtered.map(m => m.name))
   return filtered
 })
 
@@ -429,10 +462,12 @@ const loadMenuPermissions = async () => {
     
     if (defaultKey && defaultKey.menu_permissions) {
       menuPermissions.value = defaultKey.menu_permissions
+      setMenuPermissions(defaultKey.menu_permissions)  // 同步到路由守卫
       console.log('✅ 菜单权限已加载:', menuPermissions.value)
     } else {
       console.log('⚠️ 未找到菜单权限，显示全部菜单')
       menuPermissions.value = []
+      setMenuPermissions([])  // 同步到路由守卫
     }
   } catch (error) {
     console.error('❌ 加载菜单权限失败:', error)
@@ -449,6 +484,7 @@ const refreshMenuPermissions = async (showMessage: boolean = false) => {
     if (result.success && result.menuPermissions) {
       const oldPermissions = [...menuPermissions.value]
       menuPermissions.value = result.menuPermissions
+      setMenuPermissions(result.menuPermissions)  // 同步到路由守卫
       
       // 检查权限是否有变化
       const hasChanged = JSON.stringify(oldPermissions.sort()) !== JSON.stringify(result.menuPermissions.sort())
@@ -501,6 +537,17 @@ const stopPermissionRefresh = () => {
 const refreshDatasourcePermissions = async (showMessage: boolean = false) => {
   try {
     console.log('🔄 刷新数据源权限...')
+    
+    // 先设置API Key
+    const keys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = keys.find((k: any) => k.isDefault)
+    if (defaultKey) {
+      const fullKey = await window.electronAPI.config.getFullApiKey(defaultKey.id)
+      if (fullKey) {
+        await window.electronAPI.dbdict.setApiKey(fullKey)
+      }
+    }
+    
     const result = await window.electronAPI.dbdict.getDatasources()
     
     if (result.code === 200 && result.data) {
