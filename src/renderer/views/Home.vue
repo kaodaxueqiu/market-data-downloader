@@ -110,7 +110,8 @@ import {
   Coin,
   List,
   Clock,
-  Key
+  Key,
+  Monitor
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -175,6 +176,14 @@ const allModules = [
     color: '#91CC75',
     path: '/api-key-management',
     menuId: 'api_key_management'
+  },
+  {
+    name: '系统监控',
+    description: 'Redis/市场/服务/定时任务监控',
+    icon: Monitor,
+    color: '#EE6666',
+    path: '/monitoring/redis',
+    menuId: 'system_monitor'
   },
   {
     name: '系统设置',

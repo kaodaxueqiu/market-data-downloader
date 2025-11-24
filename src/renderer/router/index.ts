@@ -98,6 +98,86 @@ const routes: RouteRecordRaw[] = [
     meta: { menuId: 'api_key_management' }
   },
   {
+    path: '/monitoring',
+    name: 'Monitoring',
+    redirect: '/monitoring/redis',
+    meta: { menuId: 'system_monitor' },
+    children: [
+      {
+        path: 'redis',
+        name: 'MonitoringRedis',
+        component: () => import('../views/Monitoring/Redis.vue'),
+        meta: { menuId: 'redis_monitor' }
+      },
+      {
+        path: 'redis/:market',
+        name: 'MonitoringRedisDetail',
+        component: () => import('../views/Monitoring/RedisDetail.vue'),
+        meta: { menuId: 'redis_monitor' }
+      },
+      {
+        path: 'redis/:market/:port',
+        name: 'MonitoringRedisDB',
+        component: () => import('../views/Monitoring/RedisDB.vue'),
+        meta: { menuId: 'redis_monitor' }
+      },
+      {
+        path: 'markets',
+        name: 'MonitoringMarkets',
+        component: () => import('../views/Monitoring/Markets.vue'),
+        meta: { menuId: 'market_monitor' }
+      },
+      {
+        path: 'markets/:market',
+        name: 'MonitoringMarketsDetail',
+        component: () => import('../views/Monitoring/MarketsDetail.vue'),
+        meta: { menuId: 'market_monitor' }
+      },
+      {
+        path: 'services',
+        name: 'MonitoringServices',
+        component: () => import('../views/Monitoring/Services.vue'),
+        meta: { menuId: 'service_monitor' }
+      },
+      {
+        path: 'kafka',
+        name: 'MonitoringKafka',
+        component: () => import('../views/Monitoring/KafkaDetail.vue'),
+        meta: { menuId: 'service_monitor' }
+      },
+      {
+        path: 'api-gateway',
+        name: 'MonitoringAPIGateway',
+        component: () => import('../views/Monitoring/APIGatewayDetail.vue'),
+        meta: { menuId: 'service_monitor' }
+      },
+      {
+        path: 'redis-indexer',
+        name: 'MonitoringRedisIndexer',
+        component: () => import('../views/Monitoring/RedisIndexerDetail.vue'),
+        meta: { menuId: 'service_monitor' }
+      },
+      {
+        path: 'opensearch',
+        name: 'MonitoringOpenSearch',
+        component: () => import('../views/Monitoring/OpenSearchDetail.vue'),
+        meta: { menuId: 'service_monitor' }
+      },
+      {
+        path: 'clickhouse-cron',
+        name: 'MonitoringClickHouseCron',
+        component: () => import('../views/Monitoring/ClickHouseCron.vue'),
+        meta: { menuId: 'clickhouse_tasks' }
+      },
+      {
+        path: 'clickhouse-cron/:jobName',
+        name: 'MonitoringClickHouseCronDetail',
+        component: () => import('../views/Monitoring/ClickHouseCronDetail.vue'),
+        meta: { menuId: 'clickhouse_tasks' }
+      }
+    ]
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue'),

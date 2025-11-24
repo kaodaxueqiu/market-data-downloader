@@ -60,15 +60,5 @@ linux:
   maintainer: ZiZhou Quant Team
   category: Finance
   icon: public/icon.png
-nsis:
-  oneClick: false
-  perMachine: false
-  allowToChangeInstallationDirectory: true
-  deleteAppDataOnUninstall: false
-  installerIcon: public/icon.ico
-  uninstallerIcon: public/icon.ico
-  installerHeaderIcon: public/icon.ico
-  createDesktopShortcut: true
-  createStartMenuShortcut: true
-  shortcutName: 资舟量化研究平台
 forceCodeSigning: false
+

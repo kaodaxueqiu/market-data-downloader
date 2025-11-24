@@ -196,7 +196,11 @@ import {
   Coin,
   DArrowLeft,
   DArrowRight,
-  Refresh
+  Refresh,
+  Monitor,
+  DataBoard,
+  TrendCharts,
+  Grid
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
@@ -263,6 +267,18 @@ const allMenus: MenuItem[] = [
   { id: 'history', name: '历史记录', path: '/history', icon: Clock },
   { id: 'sdk_download', name: 'SDK下载', path: '/sdk-download', icon: Box },
   { id: 'api_key_management', name: 'API Key管理', path: '/api-key-management', icon: Key },
+  { 
+    id: 'system_monitor', 
+    name: '系统监控', 
+    path: '/monitoring', 
+    icon: Monitor,
+    children: [
+      { id: 'redis_monitor', name: 'Redis监控', path: '/monitoring/redis', icon: DataBoard },
+      { id: 'market_monitor', name: '市场监控', path: '/monitoring/markets', icon: TrendCharts },
+      { id: 'service_monitor', name: '服务监控', path: '/monitoring/services', icon: Grid },
+      { id: 'clickhouse_tasks', name: 'ClickHouse定时任务', path: '/monitoring/clickhouse-cron', icon: Clock }
+    ]
+  },
   { id: 'settings', name: '系统设置', path: '/settings', icon: Setting }
 ]
 
@@ -323,6 +339,10 @@ const pageTitle = computed(() => {
     '/static-data-download': '静态元数据下载',
     '/sdk-download': 'SDK下载',
     '/api-key-management': 'API Key管理',
+    '/monitoring/redis': 'Redis监控',
+    '/monitoring/markets': '市场监控',
+    '/monitoring/services': '服务监控',
+    '/monitoring/clickhouse-cron': 'ClickHouse定时任务',
     '/settings': '系统设置'
   }
   return titles[route.path] || '市场数据下载工具'
