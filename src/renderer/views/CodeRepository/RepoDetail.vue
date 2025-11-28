@@ -380,29 +380,9 @@
       width="500px"
     >
       <div class="push-form">
-        <el-alert type="info" :closable="false" style="margin-bottom: 20px;">
-          将本地已提交的代码推送到远程仓库
+        <el-alert type="info" :closable="false">
+          将本地已提交的代码和标签推送到远程仓库
         </el-alert>
-        
-        <!-- 创建标签选项 -->
-        <div class="tag-option-push">
-          <el-checkbox v-model="pushCreateTag">同时创建版本标签</el-checkbox>
-        </div>
-        <div v-if="pushCreateTag" class="tag-input-push">
-          <el-input
-            v-model="pushTagName"
-            placeholder="标签名，如 v1.0.0"
-          >
-            <template #prepend>标签名</template>
-          </el-input>
-          <el-input
-            v-model="pushTagMessage"
-            placeholder="标签说明（可选）"
-            style="margin-top: 10px;"
-          >
-            <template #prepend>说明</template>
-          </el-input>
-        </div>
       </div>
 
       <template #footer>
@@ -411,7 +391,6 @@
           type="primary" 
           @click="confirmPush"
           :loading="pushing"
-          :disabled="pushCreateTag && !pushTagName.trim()"
         >
           确认推送
         </el-button>
@@ -484,9 +463,6 @@ const pushing = ref(false)
 const showCloneDialog = ref(false)
 const clonePath = ref('')
 const showPushDialog = ref(false)
-const pushCreateTag = ref(false)
-const pushTagName = ref('')
-const pushTagMessage = ref('')
 
 // 变更相关
 const showChangesDialog = ref(false)
@@ -741,46 +717,24 @@ const confirmClone = async () => {
 const confirmPush = async () => {
   if (!localPath.value) return
   
-  if (pushCreateTag.value && !pushTagName.value.trim()) {
-    ElMessage.warning('请输入标签名')
-    return
-  }
-  
   pushing.value = true
   try {
-    // 1. 如果需要创建标签，先创建
-    if (pushCreateTag.value && pushTagName.value.trim()) {
-      const tagResult = await window.electronAPI.git.createTag(
-        localPath.value, 
-        pushTagName.value.trim(), 
-        pushTagMessage.value.trim() || undefined
-      )
-      if (!tagResult.success) {
-        ElMessage.error(tagResult.error || '创建标签失败')
-        return
-      }
-    }
-    
-    // 2. 推送代码
+    // 1. 推送代码
     const result = await window.electronAPI.git.push(localPath.value)
     if (!result.success) {
-      ElMessage.error(result.error || '推送失败')
+      ElMessage.error('推送代码失败：' + (result.error || '未知错误'))
       return
     }
     
-    // 3. 如果有标签，推送标签
-    if (pushCreateTag.value && pushTagName.value.trim()) {
-      const pushTagResult = await window.electronAPI.git.pushTags(localPath.value)
-      if (!pushTagResult.success) {
-        ElMessage.warning('代码已推送，但标签推送失败：' + pushTagResult.error)
-      }
+    // 2. 推送标签
+    const pushTagResult = await window.electronAPI.git.pushTags(localPath.value)
+    if (!pushTagResult.success) {
+      // 标签推送失败不阻断，可能没有新标签
+      console.log('标签推送:', pushTagResult.error)
     }
     
-    ElMessage.success(pushCreateTag.value ? '推送成功，标签已创建' : '推送成功')
+    ElMessage.success('推送成功')
     showPushDialog.value = false
-    pushCreateTag.value = false
-    pushTagName.value = ''
-    pushTagMessage.value = ''
     
     await refreshChanges()
     await loadData()
