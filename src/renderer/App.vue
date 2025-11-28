@@ -200,7 +200,11 @@ import {
   Monitor,
   DataBoard,
   TrendCharts,
-  Grid
+  Grid,
+  Folder,
+  Document,
+  Timer,
+  User
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
@@ -261,6 +265,18 @@ const allMenus: MenuItem[] = [
           { id: 'fund_investor_manage', name: '投资者管理', path: '/fund-management/operations#investor', icon: null }
         ]
       }
+    ]
+  },
+  { 
+    id: 'code_repository', 
+    name: '代码仓库', 
+    path: '/code-repository', 
+    icon: Folder,
+    children: [
+      { id: 'my_repos', name: '我的仓库', path: '/code-repository/repos', icon: null },
+      { id: 'execute_model', name: '执行模型', path: '/code-repository/execute', icon: null },
+      { id: 'execute_history', name: '执行记录', path: '/code-repository/history', icon: null },
+      { id: 'repo_admin', name: '仓库管理', path: '/code-repository/admin', icon: null }
     ]
   },
   { id: 'task_management', name: '任务管理', path: '/tasks', icon: List },
@@ -332,6 +348,11 @@ const pageTitle = computed(() => {
     '/fund-management/position': '持仓分析',
     '/fund-management/operations': '基金运维',
     '/download': '行情数据下载',
+    '/code-repository': '代码仓库',
+    '/code-repository/repos': '我的仓库',
+    '/code-repository/execute': '执行模型',
+    '/code-repository/history': '执行记录',
+    '/code-repository/admin': '仓库管理',
     '/tasks': '任务管理',
     '/history': '历史记录',
     '/dictionary': '行情数据字典',

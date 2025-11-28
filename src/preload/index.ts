@@ -223,6 +223,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAllMenus: () => ipcRenderer.invoke('account:getAllMenus')
   },
 
+  // Gitea API（通过主进程调用，避免CORS）
+  gitea: {
+    // 仓库查询
+    getOrgRepos: (org: string) => ipcRenderer.invoke('gitea:getOrgRepos', org),
+    getUserRepos: (username: string) => ipcRenderer.invoke('gitea:getUserRepos', username),
+    getUserAccessibleRepos: (org: string, username: string) => ipcRenderer.invoke('gitea:getUserAccessibleRepos', org, username),
+    getRepo: (owner: string, repo: string) => ipcRenderer.invoke('gitea:getRepo', owner, repo),
+    getBranches: (owner: string, repo: string) => ipcRenderer.invoke('gitea:getBranches', owner, repo),
+    getTags: (owner: string, repo: string) => ipcRenderer.invoke('gitea:getTags', owner, repo),
+    getCommits: (owner: string, repo: string, params?: any) => ipcRenderer.invoke('gitea:getCommits', owner, repo, params),
+    // 仓库管理（管理员）
+    createRepo: (org: string, repoData: { name: string; description?: string; private?: boolean }) => 
+      ipcRenderer.invoke('gitea:createRepo', org, repoData),
+    editRepo: (owner: string, repo: string, repoData: any) => ipcRenderer.invoke('gitea:editRepo', owner, repo, repoData),
+    deleteRepo: (owner: string, repo: string) => ipcRenderer.invoke('gitea:deleteRepo', owner, repo),
+    // 协作者管理
+    getRepoCollaborators: (owner: string, repo: string) => ipcRenderer.invoke('gitea:getRepoCollaborators', owner, repo),
+    addCollaborator: (owner: string, repo: string, username: string, permission?: string) => 
+      ipcRenderer.invoke('gitea:addCollaborator', owner, repo, username, permission),
+    removeCollaborator: (owner: string, repo: string, username: string) => 
+      ipcRenderer.invoke('gitea:removeCollaborator', owner, repo, username),
+    // 组织成员
+    getOrgMembers: (org: string) => ipcRenderer.invoke('gitea:getOrgMembers', org),
+    // 团队管理
+    getOrgTeams: (org: string) => ipcRenderer.invoke('gitea:getOrgTeams', org),
+    createTeam: (org: string, teamData: { name: string; description?: string; permission?: string }) => 
+      ipcRenderer.invoke('gitea:createTeam', org, teamData),
+    editTeam: (teamId: number, teamData: any) => ipcRenderer.invoke('gitea:editTeam', teamId, teamData),
+    deleteTeam: (teamId: number) => ipcRenderer.invoke('gitea:deleteTeam', teamId),
+    getTeamMembers: (teamId: number) => ipcRenderer.invoke('gitea:getTeamMembers', teamId),
+    addTeamMember: (teamId: number, username: string) => ipcRenderer.invoke('gitea:addTeamMember', teamId, username),
+    removeTeamMember: (teamId: number, username: string) => ipcRenderer.invoke('gitea:removeTeamMember', teamId, username),
+    // 用户管理
+    getAllUsers: () => ipcRenderer.invoke('gitea:getAllUsers'),
+    createUser: (userData: { username: string; email: string; password: string; full_name?: string; must_change_password?: boolean }) => 
+      ipcRenderer.invoke('gitea:createUser', userData),
+    editUser: (username: string, userData: { full_name?: string; email?: string; active?: boolean; admin?: boolean }) => 
+      ipcRenderer.invoke('gitea:editUser', username, userData),
+    deleteUser: (username: string) => ipcRenderer.invoke('gitea:deleteUser', username)
+  },
+
   // 静态数据下载 (异步任务系统 - PostgreSQL + ClickHouse)
   staticDownload: {
     createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
@@ -443,6 +484,34 @@ declare global {
       account: {
         getMyMenus: () => Promise<any>
         getAllMenus: () => Promise<any>
+      }
+      gitea: {
+        getOrgRepos: (org: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        getUserRepos: (username: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        getUserAccessibleRepos: (org: string, username: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        getRepo: (owner: string, repo: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getBranches: (owner: string, repo: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        getTags: (owner: string, repo: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        getCommits: (owner: string, repo: string, params?: any) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        createRepo: (org: string, repoData: { name: string; description?: string; private?: boolean }) => Promise<{ success: boolean; data?: any; error?: string }>
+        editRepo: (owner: string, repo: string, repoData: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        deleteRepo: (owner: string, repo: string) => Promise<{ success: boolean; error?: string }>
+        getRepoCollaborators: (owner: string, repo: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        addCollaborator: (owner: string, repo: string, username: string, permission?: string) => Promise<{ success: boolean; error?: string }>
+        removeCollaborator: (owner: string, repo: string, username: string) => Promise<{ success: boolean; error?: string }>
+        getOrgMembers: (org: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        // 团队管理
+        getOrgTeams: (org: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        createTeam: (org: string, teamData: { name: string; description?: string; permission?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        editTeam: (teamId: number, teamData: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        deleteTeam: (teamId: number) => Promise<{ success: boolean; error?: string }>
+        getTeamMembers: (teamId: number) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        addTeamMember: (teamId: number, username: string) => Promise<{ success: boolean; error?: string }>
+        removeTeamMember: (teamId: number, username: string) => Promise<{ success: boolean; error?: string }>
+        getAllUsers: () => Promise<{ success: boolean; data?: any[]; error?: string }>
+        createUser: (userData: { username: string; email: string; password: string; full_name?: string; must_change_password?: boolean }) => Promise<{ success: boolean; data?: any; error?: string }>
+        editUser: (username: string, userData: { full_name?: string; email?: string; active?: boolean; admin?: boolean }) => Promise<{ success: boolean; data?: any; error?: string }>
+        deleteUser: (username: string) => Promise<{ success: boolean; error?: string }>
       }
       staticDownload: {
         createTask: (request: any, apiKey: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<string>

@@ -59,6 +59,56 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/QueryAndExport.vue')
   },
   {
+    path: '/code-repository',
+    name: 'CodeRepository',
+    component: () => import('../views/CodeRepository/index.vue'),
+    meta: { menuId: 'code_repository' },
+    children: [
+      {
+        path: 'repos',
+        name: 'CodeRepositoryRepos',
+        component: () => import('../views/CodeRepository/Repos.vue'),
+        meta: { menuId: 'my_repos' }
+      },
+      {
+        path: 'repos/:repoName',
+        name: 'CodeRepositoryRepoDetail',
+        component: () => import('../views/CodeRepository/RepoDetail.vue'),
+        meta: { menuId: 'my_repos' }
+      },
+      {
+        path: 'repos/:repoName/execute',
+        name: 'CodeRepositoryRepoExecute',
+        component: () => import('../views/CodeRepository/RepoExecute.vue'),
+        meta: { menuId: 'execute_model' }
+      },
+      {
+        path: 'execute',
+        name: 'CodeRepositoryExecute',
+        component: () => import('../views/CodeRepository/Execute.vue'),
+        meta: { menuId: 'execute_model' }
+      },
+      {
+        path: 'history',
+        name: 'CodeRepositoryHistory',
+        component: () => import('../views/CodeRepository/History.vue'),
+        meta: { menuId: 'execute_history' }
+      },
+      {
+        path: 'history/:taskId',
+        name: 'CodeRepositoryTaskDetail',
+        component: () => import('../views/CodeRepository/TaskDetail.vue'),
+        meta: { menuId: 'execute_history' }
+      },
+      {
+        path: 'admin',
+        name: 'CodeRepositoryAdmin',
+        component: () => import('../views/CodeRepository/Admin.vue'),
+        meta: { menuId: 'repo_admin' }
+      }
+    ]
+  },
+  {
     path: '/tasks',
     name: 'Tasks',
     component: () => import('../views/Tasks.vue'),
@@ -221,6 +271,30 @@ router.beforeEach((to, _from, next) => {
     } else if (userMenuPermissions.includes('fund_management')) {
       // 有父菜单权限但没有子菜单权限，显示提示
       console.warn('⚠️ 有基金管理权限，但没有子菜单权限')
+      next('/')  // 跳转到首页
+      return
+    }
+  }
+  
+  // 特殊处理：访问 /code-repository 时，自动跳转到第一个有权限的子路由
+  if (to.path === '/code-repository') {
+    const subRoutes = [
+      { path: '/code-repository/repos', menuId: 'my_repos' },
+      { path: '/code-repository/execute', menuId: 'execute_model' },
+      { path: '/code-repository/history', menuId: 'execute_history' },
+      { path: '/code-repository/admin', menuId: 'repo_admin' }
+    ]
+    
+    // 找到第一个有权限的子路由
+    const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
+    
+    if (allowedRoute) {
+      console.log('🔀 自动跳转到:', allowedRoute.path)
+      next(allowedRoute.path)
+      return
+    } else if (userMenuPermissions.includes('code_repository')) {
+      // 有父菜单权限但没有子菜单权限，显示提示
+      console.warn('⚠️ 有代码仓库权限，但没有子菜单权限')
       next('/')  // 跳转到首页
       return
     }

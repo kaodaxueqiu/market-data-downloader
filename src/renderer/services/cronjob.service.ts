@@ -4,7 +4,7 @@
 
 import axios from 'axios'
 
-const API_BASE_URL = 'http://192.168.30.20:8080/api/v1'
+const API_BASE_URL = 'http://61.151.241.233:8080/api/v1'
 
 // 从配置中获取 API Key
 let apiKey = ''
@@ -130,4 +130,7 @@ class CronJobService {
 
 export const cronJobService = new CronJobService()
 export default cronJobService
+
+
+
 

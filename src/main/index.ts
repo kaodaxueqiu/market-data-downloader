@@ -445,6 +445,565 @@ ipcMain.handle('config:updateDatabaseConfig', async (_event, key: string, config
   return configManager.updateDatabaseConfig(key, config)
 })
 
+// ========== Gitea API 调用（避免CORS问题） ==========
+
+const GITEA_BASE_URL = 'http://61.151.241.233:3030/api/v1'
+const GITEA_ADMIN_TOKEN = '5441d871f875f3083e0044a337b3fee979c1ae64'
+
+// Gitea: 获取组织仓库列表
+ipcMain.handle('gitea:getOrgRepos', async (_event, org: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取组织仓库: ${org}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/orgs/${org}/repos`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getOrgRepos 错误:', error.response?.status, error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Gitea: 获取用户的所有仓库
+ipcMain.handle('gitea:getUserRepos', async (_event, username: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取用户仓库: ${username}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/users/${username}/repos`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getUserRepos 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: `状态码 ${error.response?.status}: ${error.response?.data?.message || error.message}` }
+  }
+})
+
+// Gitea: 获取仓库的协作者列表
+ipcMain.handle('gitea:getRepoCollaborators', async (_event, owner: string, repo: string) => {
+  try {
+    const axios = require('axios')
+    const response = await axios.get(`${GITEA_BASE_URL}/repos/${owner}/${repo}/collaborators`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getRepoCollaborators 错误:', error.response?.status, error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Gitea: 获取用户作为协作者能访问的仓库（从组织仓库中过滤）
+ipcMain.handle('gitea:getUserAccessibleRepos', async (_event, org: string, username: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取用户 ${username} 在组织 ${org} 中可访问的仓库`)
+    
+    // 1. 获取组织所有仓库
+    const orgReposRes = await axios.get(`${GITEA_BASE_URL}/orgs/${org}/repos`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` },
+      params: { limit: 100 }
+    })
+    const allRepos = orgReposRes.data || []
+    console.log(`[Gitea] 组织 ${org} 共有 ${allRepos.length} 个仓库`)
+    
+    // 2. 检查每个仓库的协作者
+    const accessibleRepos = []
+    for (const repo of allRepos) {
+      try {
+        const collabRes = await axios.get(`${GITEA_BASE_URL}/repos/${org}/${repo.name}/collaborators`, {
+          headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+        })
+        const collaborators = collabRes.data || []
+        // 检查用户是否在协作者列表中
+        const isCollaborator = collaborators.some((c: any) => 
+          c.login?.toLowerCase() === username.toLowerCase() || 
+          c.username?.toLowerCase() === username.toLowerCase()
+        )
+        if (isCollaborator) {
+          console.log(`[Gitea] ✓ 用户 ${username} 是仓库 ${repo.name} 的协作者`)
+          accessibleRepos.push(repo)
+        }
+      } catch (e) {
+        // 获取协作者失败，跳过
+      }
+    }
+    
+    console.log(`[Gitea] 用户 ${username} 可访问 ${accessibleRepos.length} 个仓库`)
+    return { success: true, data: accessibleRepos }
+  } catch (error: any) {
+    console.error('[Gitea] getUserAccessibleRepos 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Gitea: 创建仓库（在组织下）
+ipcMain.handle('gitea:createRepo', async (_event, org: string, repoData: { name: string; description?: string; private?: boolean }) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 创建仓库: ${org}/${repoData.name}`)
+    const response = await axios.post(`${GITEA_BASE_URL}/orgs/${org}/repos`, repoData, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] createRepo 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 编辑仓库
+ipcMain.handle('gitea:editRepo', async (_event, owner: string, repo: string, repoData: {
+  description?: string
+  private?: boolean
+  default_branch?: string
+}) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 编辑仓库: ${owner}/${repo}`, repoData)
+    const response = await axios.patch(`${GITEA_BASE_URL}/repos/${owner}/${repo}`, repoData, {
+      headers: { 
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] editRepo 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 删除仓库
+ipcMain.handle('gitea:deleteRepo', async (_event, owner: string, repo: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 删除仓库: ${owner}/${repo}`)
+    await axios.delete(`${GITEA_BASE_URL}/repos/${owner}/${repo}`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] deleteRepo 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 添加协作者
+ipcMain.handle('gitea:addCollaborator', async (_event, owner: string, repo: string, username: string, permission: string = 'write') => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 添加协作者: ${username} -> ${owner}/${repo}`)
+    await axios.put(`${GITEA_BASE_URL}/repos/${owner}/${repo}/collaborators/${username}`, 
+      { permission },
+      {
+        headers: {
+          'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] addCollaborator 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 移除协作者
+ipcMain.handle('gitea:removeCollaborator', async (_event, owner: string, repo: string, username: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 移除协作者: ${username} <- ${owner}/${repo}`)
+    await axios.delete(`${GITEA_BASE_URL}/repos/${owner}/${repo}/collaborators/${username}`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] removeCollaborator 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 获取组织成员列表
+ipcMain.handle('gitea:getOrgMembers', async (_event, org: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取组织成员: ${org}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/orgs/${org}/members`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getOrgMembers 错误:', error.response?.status, error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// ========== 团队管理 API ==========
+
+// Gitea: 获取组织下的团队列表
+ipcMain.handle('gitea:getOrgTeams', async (_event, org: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取组织团队: ${org}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/orgs/${org}/teams`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    // 打印第一个团队的数据结构
+    if (response.data && response.data.length > 0) {
+      console.log('[Gitea] 团队数据示例:', JSON.stringify(response.data[0], null, 2))
+    }
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getOrgTeams 错误:', error.response?.status, error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Gitea: 创建团队
+ipcMain.handle('gitea:createTeam', async (_event, org: string, teamData: { 
+  name: string
+  description?: string
+  permission?: string
+  includes_all_repositories?: boolean
+  can_create_org_repo?: boolean
+  units?: string[]
+  units_map?: Record<string, string>
+}) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 创建团队: ${org}/${teamData.name}`, teamData)
+    const response = await axios.post(`${GITEA_BASE_URL}/orgs/${org}/teams`, {
+      name: teamData.name,
+      description: teamData.description || '',
+      permission: teamData.permission || 'read',
+      includes_all_repositories: teamData.includes_all_repositories || false,
+      can_create_org_repo: teamData.can_create_org_repo || false,
+      units: teamData.units || ['repo.code', 'repo.issues', 'repo.pulls', 'repo.releases'],
+      units_map: teamData.units_map || {}
+    }, {
+      headers: { 
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] createTeam 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 编辑团队
+ipcMain.handle('gitea:editTeam', async (_event, teamId: number, teamData: {
+  description?: string
+  permission?: string
+  includes_all_repositories?: boolean
+  can_create_org_repo?: boolean
+  units?: string[]
+  units_map?: Record<string, string>
+}) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 编辑团队: ${teamId}`, teamData)
+    const response = await axios.patch(`${GITEA_BASE_URL}/teams/${teamId}`, teamData, {
+      headers: { 
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] editTeam 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 删除团队
+ipcMain.handle('gitea:deleteTeam', async (_event, teamId: number) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 删除团队: ${teamId}`)
+    await axios.delete(`${GITEA_BASE_URL}/teams/${teamId}`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] deleteTeam 错误:', error.response?.status, error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 获取团队的仓库列表
+ipcMain.handle('gitea:getTeamRepos', async (_event, teamId: number) => {
+  try {
+    const axios = require('axios')
+    const response = await axios.get(`${GITEA_BASE_URL}/teams/${teamId}/repos`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getTeamRepos 错误:', error.response?.status, error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Gitea: 给团队添加仓库
+ipcMain.handle('gitea:addTeamRepo', async (_event, teamId: number, org: string, repo: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 给团队添加仓库: team ${teamId} <- ${org}/${repo}`)
+    await axios.put(`${GITEA_BASE_URL}/teams/${teamId}/repos/${org}/${repo}`, {}, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] addTeamRepo 错误:', error.response?.status, error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 从团队移除仓库
+ipcMain.handle('gitea:removeTeamRepo', async (_event, teamId: number, org: string, repo: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 从团队移除仓库: team ${teamId} -> ${org}/${repo}`)
+    await axios.delete(`${GITEA_BASE_URL}/teams/${teamId}/repos/${org}/${repo}`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] removeTeamRepo 错误:', error.response?.status, error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 获取团队成员
+ipcMain.handle('gitea:getTeamMembers', async (_event, teamId: number) => {
+  try {
+    const axios = require('axios')
+    const response = await axios.get(`${GITEA_BASE_URL}/teams/${teamId}/members`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getTeamMembers 错误:', error.response?.status, error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Gitea: 添加成员到团队
+ipcMain.handle('gitea:addTeamMember', async (_event, teamId: number, username: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 添加成员到团队: ${username} -> team ${teamId}`)
+    await axios.put(`${GITEA_BASE_URL}/teams/${teamId}/members/${username}`, {}, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] addTeamMember 错误:', error.response?.status, error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 从团队移除成员
+ipcMain.handle('gitea:removeTeamMember', async (_event, teamId: number, username: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 从团队移除成员: ${username} <- team ${teamId}`)
+    await axios.delete(`${GITEA_BASE_URL}/teams/${teamId}/members/${username}`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] removeTeamMember 错误:', error.response?.status, error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 获取所有用户（管理员）
+ipcMain.handle('gitea:getAllUsers', async (_event) => {
+  try {
+    const axios = require('axios')
+    const response = await axios.get(`${GITEA_BASE_URL}/admin/users`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` },
+      params: { limit: 100 }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getAllUsers 错误:', error.response?.status, error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Gitea: 创建用户
+ipcMain.handle('gitea:createUser', async (_event, userData: { 
+  username: string
+  email: string
+  password: string
+  full_name?: string
+  must_change_password?: boolean
+}) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 创建用户: ${userData.username}`)
+    const response = await axios.post(`${GITEA_BASE_URL}/admin/users`, {
+      ...userData,
+      must_change_password: userData.must_change_password ?? false
+    }, {
+      headers: { 
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] createUser 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 编辑用户
+ipcMain.handle('gitea:editUser', async (_event, username: string, userData: {
+  full_name?: string
+  email?: string
+  active?: boolean
+  admin?: boolean
+}) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 编辑用户: ${username}`, userData)
+    // Gitea API 要求必须传 login_name
+    const response = await axios.patch(`${GITEA_BASE_URL}/admin/users/${username}`, {
+      login_name: username,  // 必填字段
+      ...userData
+    }, {
+      headers: { 
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] editUser 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 删除用户
+ipcMain.handle('gitea:deleteUser', async (_event, username: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 删除用户: ${username}`)
+    await axios.delete(`${GITEA_BASE_URL}/admin/users/${username}`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[Gitea] deleteUser 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 获取仓库详情
+ipcMain.handle('gitea:getRepo', async (_event, owner: string, repo: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取仓库详情: ${owner}/${repo}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/repos/${owner}/${repo}`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getRepo 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: `状态码 ${error.response?.status}: ${error.response?.data?.message || error.message}` }
+  }
+})
+
+// Gitea: 获取分支列表
+ipcMain.handle('gitea:getBranches', async (_event, owner: string, repo: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取分支: ${owner}/${repo}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/repos/${owner}/${repo}/branches`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getBranches 错误:', error.response?.status, error.response?.data || error.message)
+    // 409 表示仓库是空的（没有提交），返回空数组
+    if (error.response?.status === 409) {
+      return { success: true, data: [] }
+    }
+    return { success: false, error: `状态码 ${error.response?.status}: ${error.response?.data?.message || error.message}` }
+  }
+})
+
+// Gitea: 获取标签列表
+ipcMain.handle('gitea:getTags', async (_event, owner: string, repo: string) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取标签: ${owner}/${repo}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/repos/${owner}/${repo}/tags`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getTags 错误:', error.response?.status, error.response?.data || error.message)
+    // 409 表示仓库是空的，返回空数组
+    if (error.response?.status === 409) {
+      return { success: true, data: [] }
+    }
+    return { success: false, error: `状态码 ${error.response?.status}: ${error.response?.data?.message || error.message}` }
+  }
+})
+
+// Gitea: 获取提交列表
+ipcMain.handle('gitea:getCommits', async (_event, owner: string, repo: string, params?: any) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取提交: ${owner}/${repo}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/repos/${owner}/${repo}/commits`, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`
+      },
+      params
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getCommits 错误:', error.response?.status, error.response?.data || error.message)
+    // 409 表示仓库是空的，返回空数组
+    if (error.response?.status === 409) {
+      return { success: true, data: [] }
+    }
+    return { success: false, error: `状态码 ${error.response?.status}: ${error.response?.data?.message || error.message}` }
+  }
+})
+
 // 获取应用版本号
 ipcMain.handle('app:getVersion', async () => {
   return app.getVersion()
