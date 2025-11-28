@@ -206,7 +206,7 @@
                       </div>
                     </div>
                     <el-button type="warning" @click="showChangesDialog = true">
-                      查看变更并提交
+                      提交变更到本地
                     </el-button>
                   </template>
                   <template v-else>
@@ -364,11 +364,11 @@
         <el-button @click="showChangesDialog = false">取消</el-button>
         <el-button 
           type="primary" 
-          @click="commitAndPush"
+          @click="commitChanges"
           :loading="committing"
           :disabled="!hasSelectedFiles || (createTag && !tagName.trim())"
         >
-          提交并推送
+          提交到本地
         </el-button>
       </template>
     </el-dialog>
@@ -855,8 +855,8 @@ const updateSelectAll = () => {
   selectAll.value = selected === changedFiles.value.length
 }
 
-// 提交并推送
-const commitAndPush = async () => {
+// 提交变更（只提交到本地，不推送）
+const commitChanges = async () => {
   if (!localPath.value) return
   
   const selectedFiles = changedFiles.value.filter(f => f.selected).map(f => f.file)
@@ -908,29 +908,13 @@ const commitAndPush = async () => {
       }
     }
     
-    // 4. 推送代码
-    const pushResult = await window.electronAPI.git.push(localPath.value)
-    if (!pushResult.success) {
-      ElMessage.error('推送失败：' + (pushResult.error || '未知错误'))
-      return
-    }
-    
-    // 5. 如果有标签，推送标签
-    if (createTag.value && tagName.value.trim()) {
-      const pushTagResult = await window.electronAPI.git.pushTags(localPath.value)
-      if (!pushTagResult.success) {
-        ElMessage.warning('代码已推送，但标签推送失败：' + pushTagResult.error)
-      }
-    }
-    
-    ElMessage.success(createTag.value ? '提交、标签创建并推送成功' : '提交并推送成功')
+    ElMessage.success(createTag.value ? '提交成功，标签已创建（请点击"推送到远程"同步到服务器）' : '提交成功（请点击"推送到远程"同步到服务器）')
     showChangesDialog.value = false
     commitMessage.value = ''
     createTag.value = false
     tagName.value = ''
     
     await refreshChanges()
-    await loadData()
   } catch (e: any) {
     ElMessage.error(e.message || '操作失败')
   } finally {
@@ -1313,3 +1297,4 @@ onMounted(() => {
   }
 }
 </style>
+
