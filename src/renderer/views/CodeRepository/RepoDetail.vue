@@ -342,7 +342,7 @@
           v-model="commitMessage"
           type="textarea"
           :rows="2"
-          placeholder="请输入提交说明..."
+          placeholder="提交说明（可选，默认：更新代码）"
           maxlength="200"
           show-word-limit
         />
@@ -366,7 +366,7 @@
           type="primary" 
           @click="commitAndPush"
           :loading="committing"
-          :disabled="!hasSelectedFiles || !commitMessage.trim() || (createTag && !tagName.trim())"
+          :disabled="!hasSelectedFiles || (createTag && !tagName.trim())"
         >
           提交并推送
         </el-button>
@@ -804,29 +804,23 @@ const selectFile = async (file: { file: string; type: string; staged: boolean })
       if (result.success) {
         currentDiff.value = `+++ ${file.file} (新文件)\n` + result.data?.split('\n').map(line => `+ ${line}`).join('\n')
       }
-    } else if (file.staged) {
-      // 已暂存的文件，用 git diff --cached
-      const result = await window.electronAPI.git.diffStaged(localPath.value, file.file)
-      if (result.success && result.data) {
-        currentDiff.value = result.data
-      } else {
-        // 如果暂存区也没差异，可能是文件状态变化（如权限）
-        currentDiff.value = '文件已暂存，无内容差异（可能是权限或换行符变化）'
-      }
     } else {
-      // 未暂存的修改
-      const result = await window.electronAPI.git.diff(localPath.value, file.file)
-      if (result.success && result.data) {
-        currentDiff.value = result.data
-      } else {
-        // 尝试查看暂存区
-        const stagedResult = await window.electronAPI.git.diffStaged(localPath.value, file.file)
-        if (stagedResult.success && stagedResult.data) {
-          currentDiff.value = stagedResult.data
-        } else {
-          currentDiff.value = '无内容差异（可能是权限或换行符变化）'
-        }
+      // 先尝试获取未暂存的 diff
+      const diffResult = await window.electronAPI.git.diff(localPath.value, file.file)
+      if (diffResult.success && diffResult.data && diffResult.data.trim()) {
+        currentDiff.value = diffResult.data
+        return
       }
+      
+      // 再尝试获取暂存区的 diff
+      const stagedResult = await window.electronAPI.git.diffStaged(localPath.value, file.file)
+      if (stagedResult.success && stagedResult.data && stagedResult.data.trim()) {
+        currentDiff.value = stagedResult.data
+        return
+      }
+      
+      // 都没有差异
+      currentDiff.value = '无内容差异（可能是权限或换行符变化）'
     }
   } catch (e) {
     console.error('获取差异失败:', e)
@@ -863,7 +857,7 @@ const updateSelectAll = () => {
 
 // 提交并推送
 const commitAndPush = async () => {
-  if (!localPath.value || !commitMessage.value.trim()) return
+  if (!localPath.value) return
   
   const selectedFiles = changedFiles.value.filter(f => f.selected).map(f => f.file)
   if (selectedFiles.length === 0) {
@@ -876,6 +870,9 @@ const commitAndPush = async () => {
     return
   }
   
+  // 提交说明默认值
+  const message = commitMessage.value.trim() || '更新代码'
+  
   committing.value = true
   try {
     // 1. 添加文件
@@ -886,7 +883,7 @@ const commitAndPush = async () => {
     }
     
     // 2. 提交
-    const commitResult = await window.electronAPI.git.commit(localPath.value, commitMessage.value)
+    const commitResult = await window.electronAPI.git.commit(localPath.value, message)
     if (!commitResult.success) {
       ElMessage.error(commitResult.error || '提交失败')
       return
@@ -894,7 +891,7 @@ const commitAndPush = async () => {
     
     // 3. 如果需要创建标签
     if (createTag.value && tagName.value.trim()) {
-      const tagResult = await window.electronAPI.git.createTag(localPath.value, tagName.value.trim(), commitMessage.value)
+      const tagResult = await window.electronAPI.git.createTag(localPath.value, tagName.value.trim(), message)
       if (!tagResult.success) {
         ElMessage.error(tagResult.error || '创建标签失败')
         return
