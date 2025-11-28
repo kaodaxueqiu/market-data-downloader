@@ -223,6 +223,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAllMenus: () => ipcRenderer.invoke('account:getAllMenus')
   },
 
+  // Git 操作（本地 Git 命令）
+  git: {
+    // 下载代码（纯下载，不建立关联）
+    clone: (repoUrl: string, localPath: string, repoFullName: string) => 
+      ipcRenderer.invoke('git:clone', repoUrl, localPath, repoFullName),
+    // 同步操作
+    pull: (localPath: string) => ipcRenderer.invoke('git:pull', localPath),
+    push: (localPath: string) => ipcRenderer.invoke('git:push', localPath),
+    // 状态查看
+    status: (localPath: string) => ipcRenderer.invoke('git:status', localPath),
+    diff: (localPath: string, filePath?: string) => ipcRenderer.invoke('git:diff', localPath, filePath),
+    diffStaged: (localPath: string, filePath?: string) => ipcRenderer.invoke('git:diffStaged', localPath, filePath),
+    // 提交操作
+    add: (localPath: string, files: string | string[]) => ipcRenderer.invoke('git:add', localPath, files),
+    commit: (localPath: string, message: string) => ipcRenderer.invoke('git:commit', localPath, message),
+    // 标签操作
+    createTag: (localPath: string, tagName: string, message?: string) => ipcRenderer.invoke('git:createTag', localPath, tagName, message),
+    pushTags: (localPath: string) => ipcRenderer.invoke('git:pushTags', localPath),
+    // 关联管理（持久化）
+    getLocalPath: (repoFullName: string) => ipcRenderer.invoke('git:getLocalPath', repoFullName),
+    setLocalPath: (repoFullName: string, localPath: string) => ipcRenderer.invoke('git:setLocalPath', repoFullName, localPath),
+    removeLocalPath: (repoFullName: string) => ipcRenderer.invoke('git:removeLocalPath', repoFullName),
+    getAllLocalPaths: () => ipcRenderer.invoke('git:getAllLocalPaths'),
+    // 文件内容
+    getFileContent: (localPath: string, filePath: string) => ipcRenderer.invoke('git:getFileContent', localPath, filePath),
+    getRemoteFileContent: (localPath: string, filePath: string) => ipcRenderer.invoke('git:getRemoteFileContent', localPath, filePath)
+  },
+
   // Gitea API（通过主进程调用，避免CORS）
   gitea: {
     // 仓库查询
@@ -484,6 +512,24 @@ declare global {
       account: {
         getMyMenus: () => Promise<any>
         getAllMenus: () => Promise<any>
+      }
+      git: {
+        clone: (repoUrl: string, localPath: string, repoFullName: string) => Promise<{ success: boolean; message?: string; data?: any; error?: string }>
+        pull: (localPath: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        push: (localPath: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        status: (localPath: string) => Promise<{ success: boolean; data?: Array<{ status: string; file: string; staged: boolean; type: string }>; error?: string }>
+        diff: (localPath: string, filePath?: string) => Promise<{ success: boolean; data?: string; error?: string }>
+        diffStaged: (localPath: string, filePath?: string) => Promise<{ success: boolean; data?: string; error?: string }>
+        add: (localPath: string, files: string | string[]) => Promise<{ success: boolean; message?: string; error?: string }>
+        commit: (localPath: string, message: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        createTag: (localPath: string, tagName: string, message?: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        pushTags: (localPath: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        getLocalPath: (repoFullName: string) => Promise<{ success: boolean; data?: string | null; error?: string }>
+        setLocalPath: (repoFullName: string, localPath: string) => Promise<{ success: boolean; error?: string }>
+        removeLocalPath: (repoFullName: string) => Promise<{ success: boolean }>
+        getAllLocalPaths: () => Promise<{ success: boolean; data?: Record<string, string> }>
+        getFileContent: (localPath: string, filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
+        getRemoteFileContent: (localPath: string, filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
       }
       gitea: {
         getOrgRepos: (org: string) => Promise<{ success: boolean; data?: any[]; error?: string }>

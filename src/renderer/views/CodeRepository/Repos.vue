@@ -28,6 +28,7 @@
         v-for="repo in repos"
         :key="repo.id"
         class="repo-card"
+        @click="viewVersions(repo.name)"
       >
         <div class="repo-header">
           <div class="repo-icon">📁</div>
@@ -35,6 +36,7 @@
             <h3 class="repo-name">{{ repo.name }}</h3>
             <p class="repo-description">{{ repo.description || '无描述' }}</p>
           </div>
+          <el-icon class="arrow-icon"><ArrowRight /></el-icon>
         </div>
 
         <div class="repo-meta">
@@ -42,15 +44,6 @@
             <el-icon><Clock /></el-icon>
             最后更新: {{ formatTime(repo.updated_at) }}
           </span>
-        </div>
-
-        <div class="repo-actions">
-          <el-button type="primary" size="small" @click="viewVersions(repo.name)">
-            查看版本
-          </el-button>
-          <el-button type="success" size="small" @click="executeModel(repo.name)">
-            执行
-          </el-button>
         </div>
       </div>
     </div>
@@ -65,7 +58,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Refresh, Clock } from '@element-plus/icons-vue'
+import { Refresh, Clock, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import modelRunnerService, { type Repository } from '@/services/modelRunner.service'
 
@@ -155,14 +148,9 @@ const formatTime = (timeStr: string): string => {
   })
 }
 
-// 查看版本
+// 进入仓库详情
 const viewVersions = (repoName: string) => {
   router.push(`/code-repository/repos/${repoName}`)
-}
-
-// 执行模型
-const executeModel = (repoName: string) => {
-  router.push(`/code-repository/repos/${repoName}/execute`)
 }
 
 onMounted(() => {
@@ -207,16 +195,24 @@ onMounted(() => {
     padding: 20px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     transition: all 0.3s;
+    cursor: pointer;
 
     &:hover {
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 4px 20px rgba(64, 158, 255, 0.2);
       transform: translateY(-2px);
+      border-color: #409eff;
+
+      .arrow-icon {
+        color: #409eff;
+        transform: translateX(4px);
+      }
     }
 
     .repo-header {
       display: flex;
       gap: 12px;
       margin-bottom: 16px;
+      align-items: flex-start;
 
       .repo-icon {
         font-size: 32px;
@@ -244,10 +240,17 @@ onMounted(() => {
           line-height: 1.5;
         }
       }
+
+      .arrow-icon {
+        font-size: 20px;
+        color: #c0c4cc;
+        flex-shrink: 0;
+        transition: all 0.3s;
+        margin-top: 6px;
+      }
     }
 
     .repo-meta {
-      margin-bottom: 16px;
       padding-top: 12px;
       border-top: 1px solid #ebeef5;
 
@@ -262,12 +265,6 @@ onMounted(() => {
           font-size: 14px;
         }
       }
-    }
-
-    .repo-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
     }
   }
 

@@ -1004,6 +1004,396 @@ ipcMain.handle('gitea:getCommits', async (_event, owner: string, repo: string, p
   }
 })
 
+// ========== Git 操作（本地 Git 命令） ==========
+
+import { exec, spawn } from 'child_process'
+import { promisify } from 'util'
+import * as fs from 'fs'
+import * as path from 'path'
+
+const execAsync = promisify(exec)
+
+// 存储仓库和本地路径的映射（持久化到 electron-store）
+function getRepoLocalPaths(): Record<string, string> {
+  return store?.get('repoLocalPaths', {}) as Record<string, string> || {}
+}
+
+function setRepoLocalPath(repoFullName: string, localPath: string) {
+  const paths = getRepoLocalPaths()
+  paths[repoFullName] = localPath
+  store?.set('repoLocalPaths', paths)
+}
+
+function removeRepoLocalPath(repoFullName: string) {
+  const paths = getRepoLocalPaths()
+  delete paths[repoFullName]
+  store?.set('repoLocalPaths', paths)
+}
+
+function getRepoLocalPath(repoFullName: string): string | null {
+  const paths = getRepoLocalPaths()
+  return paths[repoFullName] || null
+}
+
+// 执行 Git 命令的辅助函数
+async function execGitCommand(command: string, cwd?: string): Promise<{ stdout: string; stderr: string }> {
+  const options: any = {
+    maxBuffer: 10 * 1024 * 1024, // 10MB
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0' // 禁用交互式提示
+    }
+  }
+  if (cwd) {
+    options.cwd = cwd
+  }
+  return execAsync(command, options)
+}
+
+// Git: 克隆仓库（纯下载，不建立关联）
+ipcMain.handle('git:clone', async (_event, repoUrl: string, localPath: string, _repoFullName: string) => {
+  try {
+    console.log(`[Git] 克隆仓库: ${repoUrl} -> ${localPath}`)
+    
+    // 检查目标目录是否已存在
+    if (fs.existsSync(localPath)) {
+      return { success: false, error: '目标目录已存在' }
+    }
+    
+    // 创建父目录
+    const parentDir = path.dirname(localPath)
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true })
+    }
+    
+    // 使用带认证的 URL 克隆
+    const authUrl = repoUrl.replace('http://', `http://zzadmin:${GITEA_ADMIN_TOKEN}@`)
+    const { stdout, stderr } = await execGitCommand(`git clone "${authUrl}" "${localPath}"`)
+    
+    console.log(`[Git] 克隆成功: ${stdout || stderr}`)
+    
+    // 注意：不再自动建立关联，关联是单独的操作
+    
+    return { success: true, message: '下载成功', data: { path: localPath } }
+  } catch (error: any) {
+    console.error('[Git] clone 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 拉取最新代码
+ipcMain.handle('git:pull', async (_event, localPath: string) => {
+  try {
+    console.log(`[Git] 拉取代码: ${localPath}`)
+    
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    const { stdout, stderr } = await execGitCommand(
+      `git -c http.extraHeader="Authorization: token ${GITEA_ADMIN_TOKEN}" pull`,
+      localPath
+    )
+    
+    console.log(`[Git] 拉取成功: ${stdout || stderr}`)
+    return { success: true, message: stdout || stderr || '已是最新' }
+  } catch (error: any) {
+    console.error('[Git] pull 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 推送代码
+ipcMain.handle('git:push', async (_event, localPath: string) => {
+  try {
+    console.log(`[Git] 推送代码: ${localPath}`)
+    
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    const { stdout, stderr } = await execGitCommand(
+      `git -c http.extraHeader="Authorization: token ${GITEA_ADMIN_TOKEN}" push`,
+      localPath
+    )
+    
+    console.log(`[Git] 推送成功: ${stdout || stderr}`)
+    return { success: true, message: stdout || stderr || '推送成功' }
+  } catch (error: any) {
+    console.error('[Git] push 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 查看状态
+ipcMain.handle('git:status', async (_event, localPath: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    const { stdout } = await execGitCommand('git status --porcelain', localPath)
+    
+    // 解析状态输出
+    // 格式: XY PATH 或 XY "PATH" (带引号的路径)
+    // X = 暂存区状态, Y = 工作区状态
+    // 使用正则表达式更可靠地解析
+    const files = stdout.trim().split('\n').filter(Boolean).map(line => {
+      // 匹配格式: 前两个字符是状态，然后是空格，然后是文件路径
+      const match = line.match(/^(.)(.)[\s]+(.+)$/)
+      
+      let status = ''
+      let file = ''
+      
+      if (match) {
+        status = match[1] + match[2]
+        file = match[3].trim()
+      } else {
+        // 备用解析：找到第一个非空格字符后的路径
+        const firstSpace = line.indexOf(' ')
+        if (firstSpace > 0) {
+          status = line.substring(0, firstSpace).padEnd(2, ' ')
+          file = line.substring(firstSpace).trim()
+        } else {
+          status = line.substring(0, 2)
+          file = line.substring(2).trim()
+        }
+      }
+      
+      // 去掉可能的引号
+      if (file.startsWith('"') && file.endsWith('"')) {
+        file = file.slice(1, -1)
+      }
+      
+      console.log(`[Git] status 解析: line="${line}" -> status="${status}", file="${file}"`)
+      
+      return {
+        status: status.trim() || 'M',
+        file,
+        staged: status[0] !== ' ' && status[0] !== '?',
+        type: status[0] === 'A' || status[1] === 'A' ? 'added' :
+              status[0] === 'D' || status[1] === 'D' ? 'deleted' :
+              status[0] === '?' ? 'untracked' : 'modified'
+      }
+    })
+    
+    return { success: true, data: files }
+  } catch (error: any) {
+    console.error('[Git] status 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 查看文件差异
+ipcMain.handle('git:diff', async (_event, localPath: string, filePath?: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    let command = 'git diff'
+    if (filePath) {
+      command += ` -- "${filePath}"`
+    }
+    
+    const { stdout } = await execGitCommand(command, localPath)
+    return { success: true, data: stdout }
+  } catch (error: any) {
+    console.error('[Git] diff 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 查看已暂存的差异
+ipcMain.handle('git:diffStaged', async (_event, localPath: string, filePath?: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    let command = 'git diff --cached'
+    if (filePath) {
+      command += ` -- "${filePath}"`
+    }
+    
+    const { stdout } = await execGitCommand(command, localPath)
+    return { success: true, data: stdout }
+  } catch (error: any) {
+    console.error('[Git] diffStaged 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 添加文件到暂存区
+ipcMain.handle('git:add', async (_event, localPath: string, files: string | string[]) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    // 给每个文件路径加上引号，处理空格和特殊字符
+    const fileArray = Array.isArray(files) ? files : [files]
+    const quotedFiles = fileArray.map(f => `"${f}"`).join(' ')
+    
+    console.log(`[Git] add 文件: ${quotedFiles}`)
+    const { stdout, stderr } = await execGitCommand(`git add ${quotedFiles}`, localPath)
+    
+    return { success: true, message: stdout || stderr || '已添加到暂存区' }
+  } catch (error: any) {
+    console.error('[Git] add 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 提交
+ipcMain.handle('git:commit', async (_event, localPath: string, message: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    // 转义提交信息中的特殊字符
+    const escapedMessage = message.replace(/"/g, '\\"')
+    const { stdout, stderr } = await execGitCommand(`git commit -m "${escapedMessage}"`, localPath)
+    
+    return { success: true, message: stdout || stderr || '提交成功' }
+  } catch (error: any) {
+    console.error('[Git] commit 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 创建标签
+ipcMain.handle('git:createTag', async (_event, localPath: string, tagName: string, message?: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    let command = `git tag "${tagName}"`
+    if (message) {
+      const escapedMessage = message.replace(/"/g, '\\"')
+      command = `git tag -a "${tagName}" -m "${escapedMessage}"`
+    }
+    
+    const { stdout, stderr } = await execGitCommand(command, localPath)
+    console.log(`[Git] 创建标签成功: ${tagName}`)
+    return { success: true, message: stdout || stderr || '标签创建成功' }
+  } catch (error: any) {
+    console.error('[Git] createTag 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 推送标签
+ipcMain.handle('git:pushTags', async (_event, localPath: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    const { stdout, stderr } = await execGitCommand(
+      `git -c http.extraHeader="Authorization: token ${GITEA_ADMIN_TOKEN}" push --tags`,
+      localPath
+    )
+    
+    console.log(`[Git] 推送标签成功: ${stdout || stderr}`)
+    return { success: true, message: stdout || stderr || '标签推送成功' }
+  } catch (error: any) {
+    console.error('[Git] pushTags 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 获取本地路径映射（持久化）
+ipcMain.handle('git:getLocalPath', async (_event, repoFullName: string) => {
+  const localPath = getRepoLocalPath(repoFullName)
+  if (localPath && fs.existsSync(localPath)) {
+    return { success: true, data: localPath }
+  }
+  // 如果路径不存在了，清除映射
+  if (localPath) {
+    removeRepoLocalPath(repoFullName)
+  }
+  return { success: false, data: null }
+})
+
+// Git: 设置本地路径映射（建立关联）
+ipcMain.handle('git:setLocalPath', async (_event, repoFullName: string, localPath: string) => {
+  // 验证路径是否存在且是 git 仓库
+  if (!fs.existsSync(localPath)) {
+    return { success: false, error: '目录不存在' }
+  }
+  
+  const gitDir = path.join(localPath, '.git')
+  if (!fs.existsSync(gitDir)) {
+    return { success: false, error: '该目录不是 Git 仓库' }
+  }
+  
+  // 验证是否是对应的仓库
+  try {
+    const { stdout } = await execGitCommand('git remote get-url origin', localPath)
+    const remoteUrl = stdout.trim()
+    // 从 repoFullName 提取仓库名
+    const repoName = repoFullName.split('/').pop()
+    if (!remoteUrl.includes(repoName!)) {
+      return { success: false, error: '该目录关联的远程仓库不匹配' }
+    }
+  } catch (e) {
+    return { success: false, error: '无法验证仓库信息' }
+  }
+  
+  setRepoLocalPath(repoFullName, localPath)
+  console.log(`[Git] 建立关联: ${repoFullName} -> ${localPath}`)
+  return { success: true }
+})
+
+// Git: 解除本地路径映射（解除关联）
+ipcMain.handle('git:removeLocalPath', async (_event, repoFullName: string) => {
+  removeRepoLocalPath(repoFullName)
+  console.log(`[Git] 解除关联: ${repoFullName}`)
+  return { success: true }
+})
+
+// Git: 获取所有关联关系
+ipcMain.handle('git:getAllLocalPaths', async () => {
+  return { success: true, data: getRepoLocalPaths() }
+})
+
+// Git: 获取文件内容
+ipcMain.handle('git:getFileContent', async (_event, localPath: string, filePath: string) => {
+  try {
+    const fullPath = path.join(localPath, filePath)
+    if (!fs.existsSync(fullPath)) {
+      return { success: false, error: '文件不存在' }
+    }
+    const content = fs.readFileSync(fullPath, 'utf-8')
+    return { success: true, data: content }
+  } catch (error: any) {
+    console.error('[Git] getFileContent 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 获取远程文件内容（用于对比）
+ipcMain.handle('git:getRemoteFileContent', async (_event, localPath: string, filePath: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    const { stdout } = await execGitCommand(`git show HEAD:"${filePath}"`, localPath)
+    return { success: true, data: stdout }
+  } catch (error: any) {
+    // 文件可能是新增的，不存在于远程
+    if (error.message.includes('does not exist') || error.message.includes('fatal')) {
+      return { success: true, data: '' }
+    }
+    console.error('[Git] getRemoteFileContent 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
 // 获取应用版本号
 ipcMain.handle('app:getVersion', async () => {
   return app.getVersion()
