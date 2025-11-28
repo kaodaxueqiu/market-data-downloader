@@ -875,17 +875,27 @@ const commitAndPush = async () => {
   
   committing.value = true
   try {
+    // 0. 如果需要创建标签，先检查标签是否已存在
+    if (createTag.value && tagName.value.trim()) {
+      const existsResult = await window.electronAPI.git.tagExists(localPath.value, tagName.value.trim())
+      if (existsResult.success && existsResult.exists) {
+        ElMessage.error(`标签 "${tagName.value.trim()}" 已存在，请使用其他标签名`)
+        committing.value = false
+        return
+      }
+    }
+    
     // 1. 添加文件
     const addResult = await window.electronAPI.git.add(localPath.value, selectedFiles)
     if (!addResult.success) {
-      ElMessage.error(addResult.error || '添加文件失败')
+      ElMessage.error('添加文件失败：' + (addResult.error || '未知错误'))
       return
     }
     
     // 2. 提交
     const commitResult = await window.electronAPI.git.commit(localPath.value, message)
     if (!commitResult.success) {
-      ElMessage.error(commitResult.error || '提交失败')
+      ElMessage.error('提交失败：' + (commitResult.error || '未知错误'))
       return
     }
     
@@ -893,7 +903,7 @@ const commitAndPush = async () => {
     if (createTag.value && tagName.value.trim()) {
       const tagResult = await window.electronAPI.git.createTag(localPath.value, tagName.value.trim(), message)
       if (!tagResult.success) {
-        ElMessage.error(tagResult.error || '创建标签失败')
+        ElMessage.error('创建标签失败：' + (tagResult.error || '未知错误'))
         return
       }
     }
@@ -901,7 +911,7 @@ const commitAndPush = async () => {
     // 4. 推送代码
     const pushResult = await window.electronAPI.git.push(localPath.value)
     if (!pushResult.success) {
-      ElMessage.error(pushResult.error || '推送失败')
+      ElMessage.error('推送失败：' + (pushResult.error || '未知错误'))
       return
     }
     

@@ -239,6 +239,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add: (localPath: string, files: string | string[]) => ipcRenderer.invoke('git:add', localPath, files),
     commit: (localPath: string, message: string) => ipcRenderer.invoke('git:commit', localPath, message),
     // 标签操作
+    tagExists: (localPath: string, tagName: string) => ipcRenderer.invoke('git:tagExists', localPath, tagName),
     createTag: (localPath: string, tagName: string, message?: string) => ipcRenderer.invoke('git:createTag', localPath, tagName, message),
     pushTags: (localPath: string) => ipcRenderer.invoke('git:pushTags', localPath),
     // 关联管理（持久化）
@@ -522,6 +523,7 @@ declare global {
         diffStaged: (localPath: string, filePath?: string) => Promise<{ success: boolean; data?: string; error?: string }>
         add: (localPath: string, files: string | string[]) => Promise<{ success: boolean; message?: string; error?: string }>
         commit: (localPath: string, message: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        tagExists: (localPath: string, tagName: string) => Promise<{ success: boolean; exists?: boolean; error?: string }>
         createTag: (localPath: string, tagName: string, message?: string) => Promise<{ success: boolean; message?: string; error?: string }>
         pushTags: (localPath: string) => Promise<{ success: boolean; message?: string; error?: string }>
         getLocalPath: (repoFullName: string) => Promise<{ success: boolean; data?: string | null; error?: string }>

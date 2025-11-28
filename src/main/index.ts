@@ -1263,11 +1263,32 @@ ipcMain.handle('git:commit', async (_event, localPath: string, message: string) 
   }
 })
 
+// Git: 检查标签是否存在
+ipcMain.handle('git:tagExists', async (_event, localPath: string, tagName: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    const { stdout } = await execGitCommand(`git tag -l "${tagName}"`, localPath)
+    const exists = stdout.trim() === tagName
+    return { success: true, exists }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+})
+
 // Git: 创建标签
 ipcMain.handle('git:createTag', async (_event, localPath: string, tagName: string, message?: string) => {
   try {
     if (!fs.existsSync(localPath)) {
       return { success: false, error: '本地仓库不存在' }
+    }
+    
+    // 先检查标签是否已存在
+    const { stdout: existingTags } = await execGitCommand(`git tag -l "${tagName}"`, localPath)
+    if (existingTags.trim() === tagName) {
+      return { success: false, error: `标签 "${tagName}" 已存在` }
     }
     
     let command = `git tag "${tagName}"`
