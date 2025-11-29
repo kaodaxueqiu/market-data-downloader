@@ -176,6 +176,35 @@
           </el-main>
         </el-container>
       </el-container>
+      
+      <!-- 🆕 全局更新下载进度对话框 -->
+      <el-dialog
+        v-model="showUpdateProgress"
+        title="正在下载更新"
+        width="400px"
+        :close-on-click-modal="false"
+        :close-on-press-escape="false"
+        :show-close="false"
+        center
+      >
+        <div class="update-progress-content">
+          <div class="progress-icon">
+            <el-icon :size="48" color="#409EFF" class="rotating">
+              <Loading />
+            </el-icon>
+          </div>
+          <div class="progress-info">
+            <el-progress 
+              :percentage="updateDownloadProgress" 
+              :stroke-width="20"
+              :status="updateDownloadProgress === 100 ? 'success' : undefined"
+            />
+            <div class="progress-text">
+              {{ updateDownloadStatus }}
+            </div>
+          </div>
+        </div>
+      </el-dialog>
     </div>
   </el-config-provider>
 </template>
@@ -189,7 +218,8 @@ import {
   DArrowLeft,
   DArrowRight,
   Refresh,
-  List
+  List,
+  Loading
 } from '@element-plus/icons-vue'
 import { allMenus, type MenuItem } from '@/config/menuConfig'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
@@ -205,6 +235,39 @@ const sidebarCollapsed = ref(false)
 // 🆕 系统状态
 const wsStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 const activeSubscriptionCount = ref(0)
+
+// 🆕 全局更新下载进度
+const showUpdateProgress = ref(false)
+const updateDownloadProgress = ref(0)
+const updateDownloadStatus = ref('准备下载...')
+
+// 🆕 定时器引用（用于清理）
+let statusRefreshTimer: NodeJS.Timeout | null = null
+
+// 🧪 开发测试：模拟下载进度（在控制台输入 window.testUpdateProgress() 调用）
+;(window as any).testUpdateProgress = () => {
+  showUpdateProgress.value = true
+  updateDownloadProgress.value = 0
+  updateDownloadStatus.value = '准备下载...'
+  
+  let progress = 0
+  const interval = setInterval(() => {
+    progress += 5
+    updateDownloadProgress.value = progress
+    const loadedMB = (progress * 1.2).toFixed(2)  // 模拟 120MB 文件
+    updateDownloadStatus.value = `已下载 ${loadedMB} MB / 120.00 MB`
+    
+    if (progress >= 100) {
+      clearInterval(interval)
+      updateDownloadStatus.value = '下载完成！'
+      setTimeout(() => {
+        showUpdateProgress.value = false
+      }, 1500)
+    }
+  }, 200)
+  
+  console.log('🧪 测试下载进度开始...')
+}
 
 // 🆕 菜单权限相关
 const menuPermissions = ref<string[]>([])
@@ -601,13 +664,37 @@ onMounted(async () => {
   })
   
   // 🆕 定时刷新状态（每3秒）
-  const statusRefreshTimer = setInterval(() => {
+  statusRefreshTimer = setInterval(() => {
     refreshStatus()
   }, 3000)
   
-  // 清理时移除定时器
-  onUnmounted(() => {
-    clearInterval(statusRefreshTimer)
+  // 🆕 监听全局更新下载进度
+  window.electronAPI.on('updater:start-download', () => {
+    showUpdateProgress.value = true
+    updateDownloadProgress.value = 0
+    updateDownloadStatus.value = '准备下载...'
+  })
+  
+  window.electronAPI.on('updater:download-progress', (progress: any) => {
+    showUpdateProgress.value = true
+    updateDownloadProgress.value = Math.floor(progress.percent || 0)
+    const totalMB = ((progress.total || 0) / 1024 / 1024).toFixed(2)
+    const loadedMB = (((progress.total || 0) * (progress.percent || 0) / 100) / 1024 / 1024).toFixed(2)
+    updateDownloadStatus.value = `已下载 ${loadedMB} MB / ${totalMB} MB`
+  })
+  
+  window.electronAPI.on('updater:update-downloaded', (filePath: string) => {
+    updateDownloadProgress.value = 100
+    updateDownloadStatus.value = '下载完成！'
+    setTimeout(() => {
+      showUpdateProgress.value = false
+    }, 1500)
+    console.log('✅ 更新下载完成:', filePath)
+  })
+  
+  window.electronAPI.on('updater:error', (error: any) => {
+    showUpdateProgress.value = false
+    ElMessage.error('下载更新失败: ' + (error?.message || error))
   })
   
   // 使用setTimeout避免阻塞
@@ -639,6 +726,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   // 🆕 组件卸载时清理定时器
+  if (statusRefreshTimer) {
+    clearInterval(statusRefreshTimer)
+    statusRefreshTimer = null
+  }
   stopPermissionRefresh()
   stopDatasourceRefresh()
 })
@@ -867,6 +958,33 @@ onUnmounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+// 🆕 更新下载进度对话框样式
+.update-progress-content {
+  text-align: center;
+  padding: 20px 0;
+  
+  .progress-icon {
+    margin-bottom: 20px;
+    
+    .rotating {
+      animation: rotate 1.5s linear infinite;
+    }
+  }
+  
+  .progress-info {
+    .progress-text {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #606266;
+    }
+  }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>
 

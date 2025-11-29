@@ -2947,6 +2947,9 @@ ipcMain.handle('updater:downloadUpdate', async () => {
     const savePath = saveResult.filePath
     console.log('✅ 用户选择保存到:', savePath)
     
+    // 通知渲染进程开始下载
+    mainWindow?.webContents.send('updater:start-download')
+    
     // 开始下载到指定路径
     const filePath = await updater.downloadUpdateToPath(
       currentUpdateInfo, 
