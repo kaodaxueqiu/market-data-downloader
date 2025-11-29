@@ -59,7 +59,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh, Clock, ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+// import { ElMessage } from 'element-plus'
 import modelRunnerService, { type Repository } from '@/services/modelRunner.service'
 
 const router = useRouter()

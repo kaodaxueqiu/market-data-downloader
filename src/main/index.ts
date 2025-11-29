@@ -11,6 +11,7 @@ import { factorAPI } from './factor'
 import { getFundAPI } from './fund'
 import * as updater from './updater'
 import { SubscriptionTaskManager } from './subscriptionTaskManager'
+import { getSSHManager, SSHConfig } from './sshManager'
 
 // 禁用GPU加速，避免Windows上的GPU崩溃问题
 app.disableHardwareAcceleration()
@@ -1006,12 +1007,12 @@ ipcMain.handle('gitea:getCommits', async (_event, owner: string, repo: string, p
 
 // ========== Git 操作（本地 Git 命令） ==========
 
-import { exec, spawn } from 'child_process'
+import { exec } from 'child_process'
 import { promisify } from 'util'
 import * as fs from 'fs'
 import * as path from 'path'
 
-const execAsync = promisify(exec)
+const execAsync = promisify(exec) as (command: string, options?: any) => Promise<{ stdout: string; stderr: string }>
 
 // 存储仓库和本地路径的映射（持久化到 electron-store）
 function getRepoLocalPaths(): Record<string, string> {
@@ -1341,6 +1342,119 @@ ipcMain.handle('git:pushTags', async (_event, localPath: string) => {
     return { success: true, message: stdout || stderr || '标签推送成功' }
   } catch (error: any) {
     console.error('[Git] pushTags 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// SSH: 用文件管理器打开远程目录（SFTP）
+ipcMain.handle('ssh:openTerminal', async (_event, host: string, port: number, username: string, remotePath: string) => {
+  // 构建 SFTP URL
+  const sftpUrl = port === 22 
+    ? `sftp://${username}@${host}${remotePath}`
+    : `sftp://${username}@${host}:${port}${remotePath}`
+  
+  console.log('[SSH] 尝试打开 SFTP:', sftpUrl)
+  
+  try {
+    // 尝试用系统默认方式打开 SFTP URL
+    await shell.openExternal(sftpUrl)
+    return { success: true }
+  } catch (e) {
+    console.log('[SSH] SFTP 打开失败，尝试其他方式')
+    
+    // Windows: 尝试用 explorer 打开网络路径
+    if (process.platform === 'win32') {
+      const { exec } = await import('child_process')
+      
+      return new Promise((resolve) => {
+        // 尝试启动 WinSCP（如果安装了）
+        const winscpCmd = `start "" "C:\\Program Files (x86)\\WinSCP\\WinSCP.exe" sftp://${username}@${host}:${port}${remotePath}`
+        
+        exec(winscpCmd, (error) => {
+          if (error) {
+            // WinSCP 没装，复制 SFTP 地址
+            console.log('[SSH] WinSCP 未安装')
+            resolve({ success: false, sftpUrl })
+          } else {
+            resolve({ success: true })
+          }
+        })
+      })
+    }
+    
+    return { success: false, sftpUrl }
+  }
+})
+
+// SSH: 获取仓库的 SSH 配置
+ipcMain.handle('ssh:getRepoConfig', async (_event, repoFullName: string) => {
+  const sshConfigs = store?.get('sshRepoConfigs', {}) as Record<string, any> || {}
+  const config = sshConfigs[repoFullName]
+  if (config) {
+    return { success: true, data: config }
+  }
+  return { success: false, data: null }
+})
+
+// SSH: 保存仓库的 SSH 配置
+ipcMain.handle('ssh:saveRepoConfig', async (_event, repoFullName: string, config: any) => {
+  const sshConfigs = store?.get('sshRepoConfigs', {}) as Record<string, any> || {}
+  sshConfigs[repoFullName] = config
+  store?.set('sshRepoConfigs', sshConfigs)
+  return { success: true }
+})
+
+// SSH: 删除仓库的 SSH 配置
+ipcMain.handle('ssh:removeRepoConfig', async (_event, repoFullName: string) => {
+  const sshConfigs = store?.get('sshRepoConfigs', {}) as Record<string, any> || {}
+  delete sshConfigs[repoFullName]
+  store?.set('sshRepoConfigs', sshConfigs)
+  return { success: true }
+})
+
+// Git: 列出目录文件（用于 .gitignore 配置）
+ipcMain.handle('git:listFiles', async (_event, dirPath: string) => {
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    const files = entries
+      .filter(e => !e.name.startsWith('.'))  // 排除隐藏文件
+      .map(e => ({
+        name: e.name,
+        isDir: e.isDirectory()
+      }))
+      .sort((a, b) => {
+        // 目录优先
+        if (a.isDir && !b.isDir) return -1
+        if (!a.isDir && b.isDir) return 1
+        return a.name.localeCompare(b.name)
+      })
+    return { success: true, data: files }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+})
+
+// Git: 读取 .gitignore 文件
+ipcMain.handle('git:readGitignore', async (_event, dirPath: string) => {
+  try {
+    const gitignorePath = path.join(dirPath, '.gitignore')
+    if (fs.existsSync(gitignorePath)) {
+      const content = fs.readFileSync(gitignorePath, 'utf-8')
+      return { success: true, exists: true, content }
+    }
+    return { success: true, exists: false, content: '' }
+  } catch (error: any) {
+    return { success: false, exists: false, error: error.message }
+  }
+})
+
+// Git: 写入 .gitignore 文件
+ipcMain.handle('git:writeGitignore', async (_event, dirPath: string, content: string) => {
+  try {
+    const gitignorePath = path.join(dirPath, '.gitignore')
+    fs.writeFileSync(gitignorePath, content, 'utf-8')
+    return { success: true }
+  } catch (error: any) {
     return { success: false, error: error.message }
   }
 })
@@ -2867,4 +2981,662 @@ ipcMain.handle('updater:quitAndInstall', async (_event, filePath: string) => {
     console.error('安装更新失败:', error)
     throw new Error(error.message || '安装更新失败')
   }
+})
+
+// ========== SSH 远程连接管理 ==========
+
+const sshManager = getSSHManager()
+
+// SSH 配置存储
+function getSSHConfigs(): SSHConfig[] {
+  return store?.get('sshConfigs', []) as SSHConfig[] || []
+}
+
+function saveSSHConfigs(configs: SSHConfig[]) {
+  store?.set('sshConfigs', configs)
+}
+
+function addSSHConfig(config: SSHConfig) {
+  const configs = getSSHConfigs()
+  const index = configs.findIndex(c => c.id === config.id)
+  if (index >= 0) {
+    configs[index] = config
+  } else {
+    configs.push(config)
+  }
+  saveSSHConfigs(configs)
+}
+
+function removeSSHConfig(id: string) {
+  const configs = getSSHConfigs().filter(c => c.id !== id)
+  saveSSHConfigs(configs)
+}
+
+// 测试 SSH 连接
+ipcMain.handle('ssh:testConnection', async (_event, config: { host: string; port: number; username: string; password: string }) => {
+  try {
+    const result = await sshManager.testConnection(config)
+    return result
+  } catch (error: any) {
+    console.error('[SSH] 测试连接失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 连接到 SSH 服务器
+ipcMain.handle('ssh:connect', async (_event, config: SSHConfig) => {
+  try {
+    // 保存配置
+    addSSHConfig(config)
+    
+    // 连接
+    const result = await sshManager.connect(config)
+    return result
+  } catch (error: any) {
+    console.error('[SSH] 连接失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 断开 SSH 连接
+ipcMain.handle('ssh:disconnect', async (_event, id: string) => {
+  try {
+    await sshManager.disconnect(id)
+    return { success: true }
+  } catch (error: any) {
+    console.error('[SSH] 断开连接失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 获取 SSH 连接状态
+ipcMain.handle('ssh:getStatus', async (_event, id: string) => {
+  return sshManager.getStatus(id)
+})
+
+// 获取所有已保存的 SSH 配置
+ipcMain.handle('ssh:getConfigs', async () => {
+  return getSSHConfigs()
+})
+
+// 删除 SSH 配置
+ipcMain.handle('ssh:deleteConfig', async (_event, id: string) => {
+  try {
+    await sshManager.disconnect(id)
+    removeSSHConfig(id)
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+})
+
+// 检查远程路径
+ipcMain.handle('ssh:checkRemotePath', async (_event, id: string, remotePath: string) => {
+  try {
+    const result = await sshManager.checkRemotePath(id, remotePath)
+    return result
+  } catch (error: any) {
+    console.error('[SSH] 检查远程路径失败:', error)
+    return { success: false, exists: false, isGitRepo: false, error: error.message }
+  }
+})
+
+// 执行远程 Git 命令
+ipcMain.handle('ssh:execGit', async (_event, id: string, command: string) => {
+  try {
+    const result = await sshManager.execGit(id, command)
+    return result
+  } catch (error: any) {
+    console.error('[SSH] 执行 Git 命令失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 获取远程 Git 状态
+ipcMain.handle('ssh:gitStatus', async (_event, id: string) => {
+  try {
+    const result = await sshManager.execGit(id, 'status --porcelain')
+    if (!result.success) {
+      return result
+    }
+    
+    // 解析 git status 输出
+    const files = (result.stdout || '').trim().split('\n').filter(Boolean).map(line => {
+      const status = line.substring(0, 2)
+      const file = line.substring(3).trim()
+      return {
+        status: status.trim() || 'M',
+        file,
+        staged: status[0] !== ' ' && status[0] !== '?',
+        type: status[0] === 'A' || status[1] === 'A' ? 'added' :
+              status[0] === 'D' || status[1] === 'D' ? 'deleted' :
+              status[0] === '?' ? 'untracked' : 'modified'
+      }
+    })
+    
+    return { success: true, data: files }
+  } catch (error: any) {
+    console.error('[SSH] 获取 Git 状态失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 获取远程 Git 标签列表
+ipcMain.handle('ssh:gitTags', async (_event, id: string) => {
+  try {
+    const result = await sshManager.execGit(id, 'tag -l --sort=-v:refname')
+    if (!result.success) {
+      return result
+    }
+    
+    const tags = (result.stdout || '').trim().split('\n').filter(Boolean)
+    return { success: true, data: tags }
+  } catch (error: any) {
+    console.error('[SSH] 获取 Git 标签失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 远程 Git 提交
+ipcMain.handle('ssh:gitCommit', async (_event, id: string, files: string[], message: string, tagName?: string) => {
+  try {
+    // 1. 添加文件
+    const filesArg = files.map(f => `"${f}"`).join(' ')
+    const addResult = await sshManager.execGit(id, `add ${filesArg}`)
+    if (!addResult.success) {
+      return { success: false, error: '添加文件失败: ' + addResult.error }
+    }
+    
+    // 2. 提交
+    const escapedMessage = message.replace(/"/g, '\\"')
+    const commitResult = await sshManager.execGit(id, `commit -m "${escapedMessage}"`)
+    if (!commitResult.success) {
+      return { success: false, error: '提交失败: ' + commitResult.error }
+    }
+    
+    // 3. 创建标签（如果需要）
+    if (tagName) {
+      const tagResult = await sshManager.execGit(id, `tag -a "${tagName}" -m "${escapedMessage}"`)
+      if (!tagResult.success) {
+        return { success: false, error: '创建标签失败: ' + tagResult.error }
+      }
+    }
+    
+    return { success: true, message: '提交成功' }
+  } catch (error: any) {
+    console.error('[SSH] Git 提交失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 远程 Git 推送
+ipcMain.handle('ssh:gitPush', async (_event, id: string) => {
+  try {
+    // 推送代码
+    const pushResult = await sshManager.execGit(id, 'push')
+    if (!pushResult.success) {
+      return { success: false, error: '推送失败: ' + pushResult.error }
+    }
+    
+    // 推送标签
+    await sshManager.execGit(id, 'push --tags')
+    
+    return { success: true, message: '推送成功' }
+  } catch (error: any) {
+    console.error('[SSH] Git 推送失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 远程 Git 拉取
+ipcMain.handle('ssh:gitPull', async (_event, id: string) => {
+  try {
+    const result = await sshManager.execGit(id, 'pull')
+    return result
+  } catch (error: any) {
+    console.error('[SSH] Git 拉取失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// 远程初始化 Git 仓库
+ipcMain.handle('ssh:initGitRepo', async (_event, config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows', repoFullName: string) => {
+  const { Client } = await import('ssh2')
+  
+  return new Promise((resolve) => {
+    const client = new Client()
+    
+    client.on('ready', () => {
+      // 构建初始化命令
+      const remoteUrl = `http://61.151.241.233:3030/${repoFullName}.git`
+      let initCommands: string
+      
+      if (osType === 'windows') {
+        initCommands = `cd /d "${remotePath}" && git init && git remote add origin "${remoteUrl}" 2>nul || git remote set-url origin "${remoteUrl}"`
+      } else {
+        initCommands = `cd "${remotePath}" && git init && (git remote add origin "${remoteUrl}" 2>/dev/null || git remote set-url origin "${remoteUrl}")`
+      }
+      
+      console.log('[SSH] 执行 Git 初始化命令:', initCommands)
+      
+      client.exec(initCommands, (err, stream) => {
+        if (err) {
+          client.end()
+          resolve({ success: false, error: err.message })
+          return
+        }
+        
+        let stdout = ''
+        let stderr = ''
+        
+        stream.on('data', (data: Buffer) => {
+          stdout += data.toString()
+        })
+        
+        stream.stderr.on('data', (data: Buffer) => {
+          stderr += data.toString()
+        })
+        
+        stream.on('close', (code: number) => {
+          client.end()
+          console.log('[SSH] Git 初始化完成，退出码:', code, '输出:', stdout, '错误:', stderr)
+          
+          // git init 成功即可，remote 可能已存在
+          if (code === 0 || stdout.includes('Initialized') || stdout.includes('已初始化')) {
+            resolve({ success: true })
+          } else {
+            resolve({ success: false, error: stderr || stdout || '初始化失败' })
+          }
+        })
+      })
+    })
+    
+    client.on('error', (err) => {
+      console.error('[SSH] 连接错误:', err.message)
+      resolve({ success: false, error: err.message })
+    })
+    
+    client.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      readyTimeout: 10000
+    })
+  })
+})
+
+// 检查远程 Git 仓库的 remote 配置
+ipcMain.handle('ssh:checkGitRemote', async (_event, config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') => {
+  const { Client } = await import('ssh2')
+  
+  return new Promise((resolve) => {
+    const client = new Client()
+    
+    client.on('ready', () => {
+      let cmd: string
+      if (osType === 'windows') {
+        cmd = `cd /d "${remotePath}" && git remote get-url origin 2>nul`
+      } else {
+        cmd = `cd "${remotePath}" && git remote get-url origin 2>/dev/null`
+      }
+      
+      client.exec(cmd, (err, stream) => {
+        if (err) {
+          client.end()
+          resolve({ success: false, hasRemote: false, error: err.message })
+          return
+        }
+        
+        let stdout = ''
+        stream.on('data', (data: Buffer) => {
+          stdout += data.toString()
+        })
+        
+        stream.on('close', (code: number) => {
+          client.end()
+          const remoteUrl = stdout.trim()
+          if (code === 0 && remoteUrl) {
+            resolve({ success: true, hasRemote: true, remoteUrl })
+          } else {
+            resolve({ success: true, hasRemote: false })
+          }
+        })
+      })
+    })
+    
+    client.on('error', (err) => {
+      resolve({ success: false, hasRemote: false, error: err.message })
+    })
+    
+    client.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      readyTimeout: 10000
+    })
+  })
+})
+
+// 设置远程 Git 仓库的 origin
+ipcMain.handle('ssh:setGitRemote', async (_event, config: { host: string; port: number; username: string; password: string }, remotePath: string, remoteUrl: string, osType: 'linux' | 'windows') => {
+  const { Client } = await import('ssh2')
+  
+  return new Promise((resolve) => {
+    const client = new Client()
+    
+    client.on('ready', () => {
+      // 先尝试添加，如果已存在则更新
+      let cmd: string
+      if (osType === 'windows') {
+        cmd = `cd /d "${remotePath}" && (git remote add origin "${remoteUrl}" 2>nul || git remote set-url origin "${remoteUrl}")`
+      } else {
+        cmd = `cd "${remotePath}" && (git remote add origin "${remoteUrl}" 2>/dev/null || git remote set-url origin "${remoteUrl}")`
+      }
+      
+      client.exec(cmd, (err, stream) => {
+        if (err) {
+          client.end()
+          resolve({ success: false, error: err.message })
+          return
+        }
+        
+        let stderr = ''
+        stream.stderr.on('data', (data: Buffer) => {
+          stderr += data.toString()
+        })
+        
+        stream.on('close', (code: number) => {
+          client.end()
+          if (code === 0) {
+            resolve({ success: true })
+          } else {
+            resolve({ success: false, error: stderr || '设置远程地址失败' })
+          }
+        })
+      })
+    })
+    
+    client.on('error', (err) => {
+      resolve({ success: false, error: err.message })
+    })
+    
+    client.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      readyTimeout: 10000
+    })
+  })
+})
+
+// SSH: 列出远程目录所有文件（用于 .gitignore 配置）
+ipcMain.handle('ssh:listFiles', async (_event, config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') => {
+  const { Client } = await import('ssh2')
+  
+  console.log('[SSH] listFiles 开始，路径:', remotePath, '系统:', osType)
+  
+  return new Promise((resolve) => {
+    const client = new Client()
+    
+    client.on('ready', () => {
+      let cmd: string
+      if (osType === 'windows') {
+        cmd = `powershell -Command "Get-ChildItem -Path '${remotePath}' -Force | Where-Object { $_.Name -notlike '.*' } | ForEach-Object { if($_.PSIsContainer){'D|'+$_.Name}else{'F|'+$_.Name} }"`
+      } else {
+        // 使用更兼容的方式列出文件
+        cmd = `cd "${remotePath}" && for f in *; do [ -e "$f" ] && { [ -d "$f" ] && echo "D|$f" || echo "F|$f"; }; done 2>/dev/null`
+      }
+      
+      console.log('[SSH] 执行命令:', cmd)
+      
+      client.exec(cmd, (err, stream) => {
+        if (err) {
+          client.end()
+          resolve({ success: false, error: err.message })
+          return
+        }
+        
+        let output = ''
+        stream.on('data', (data: Buffer) => {
+          output += data.toString()
+        })
+        
+        stream.on('close', () => {
+          console.log('[SSH] listFiles 原始输出:', output)
+          
+          const files: Array<{ name: string; isDir: boolean }> = []
+          const lines = output.trim().split('\n').filter(Boolean)
+          
+          for (const line of lines) {
+            const [type, name] = line.split('|')
+            if (name && !name.startsWith('.')) {
+              files.push({
+                name: name.trim(),
+                isDir: type === 'D'
+              })
+            }
+          }
+          
+          // 目录优先排序
+          files.sort((a, b) => {
+            if (a.isDir && !b.isDir) return -1
+            if (!a.isDir && b.isDir) return 1
+            return a.name.localeCompare(b.name)
+          })
+          
+          console.log('[SSH] listFiles 解析结果:', files.length, '个文件')
+          
+          client.end()
+          resolve({ success: true, data: files })
+        })
+      })
+    })
+    
+    client.on('error', (err) => {
+      resolve({ success: false, error: err.message })
+    })
+    
+    client.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      readyTimeout: 10000
+    })
+  })
+})
+
+// SSH: 读取远程 .gitignore 文件
+ipcMain.handle('ssh:readGitignore', async (_event, config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') => {
+  const { Client } = await import('ssh2')
+  
+  return new Promise((resolve) => {
+    const client = new Client()
+    
+    client.on('ready', () => {
+      const gitignorePath = osType === 'windows' 
+        ? `${remotePath}\\.gitignore`
+        : `${remotePath}/.gitignore`
+      
+      const cmd = osType === 'windows'
+        ? `powershell -Command "if(Test-Path '${gitignorePath}'){Get-Content '${gitignorePath}' -Raw}else{Write-Output 'FILE_NOT_EXISTS'}"`
+        : `cat "${gitignorePath}" 2>/dev/null || echo "FILE_NOT_EXISTS"`
+      
+      client.exec(cmd, (err, stream) => {
+        if (err) {
+          client.end()
+          resolve({ success: false, exists: false, error: err.message })
+          return
+        }
+        
+        let output = ''
+        stream.on('data', (data: Buffer) => {
+          output += data.toString()
+        })
+        
+        stream.on('close', () => {
+          client.end()
+          if (output.trim() === 'FILE_NOT_EXISTS') {
+            resolve({ success: true, exists: false, content: '' })
+          } else {
+            resolve({ success: true, exists: true, content: output })
+          }
+        })
+      })
+    })
+    
+    client.on('error', (err) => {
+      resolve({ success: false, exists: false, error: err.message })
+    })
+    
+    client.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      readyTimeout: 10000
+    })
+  })
+})
+
+// SSH: 写入远程 .gitignore 文件（使用 SFTP）
+ipcMain.handle('ssh:writeGitignore', async (_event, config: { host: string; port: number; username: string; password: string }, remotePath: string, content: string, osType: 'linux' | 'windows') => {
+  const { Client } = await import('ssh2')
+  
+  console.log('[SSH] writeGitignore 开始，路径:', remotePath)
+  
+  return new Promise((resolve) => {
+    const client = new Client()
+    
+    const timeout = setTimeout(() => {
+      console.log('[SSH] writeGitignore 超时')
+      client.end()
+      resolve({ success: false, error: '连接超时' })
+    }, 15000)
+    
+    client.on('ready', () => {
+      console.log('[SSH] 连接成功，开始 SFTP')
+      
+      client.sftp((err, sftp) => {
+        if (err) {
+          clearTimeout(timeout)
+          client.end()
+          console.error('[SSH] SFTP 错误:', err)
+          resolve({ success: false, error: err.message })
+          return
+        }
+        
+        const gitignorePath = osType === 'windows'
+          ? `${remotePath}\\.gitignore`
+          : `${remotePath}/.gitignore`
+        
+        console.log('[SSH] 写入文件:', gitignorePath)
+        
+        sftp.writeFile(gitignorePath, content, (writeErr) => {
+          clearTimeout(timeout)
+          client.end()
+          
+          if (writeErr) {
+            console.error('[SSH] 写入失败:', writeErr)
+            resolve({ success: false, error: writeErr.message })
+          } else {
+            console.log('[SSH] 写入成功')
+            resolve({ success: true })
+          }
+        })
+      })
+    })
+    
+    client.on('error', (err) => {
+      clearTimeout(timeout)
+      console.error('[SSH] 连接错误:', err)
+      resolve({ success: false, error: err.message })
+    })
+    
+    client.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      readyTimeout: 10000
+    })
+  })
+})
+
+// 浏览远程目录
+ipcMain.handle('ssh:listDirectory', async (_event, config: { host: string; port: number; username: string; password: string }, path: string, osType: 'linux' | 'windows') => {
+  const { Client } = await import('ssh2')
+  
+  return new Promise((resolve) => {
+    const client = new Client()
+    const folders: Array<{ name: string; path: string; isGit: boolean }> = []
+    
+    client.on('ready', () => {
+      let cmd: string
+      if (osType === 'windows') {
+        cmd = `powershell -Command "Get-ChildItem -Path '${path}' -Directory -ErrorAction SilentlyContinue | ForEach-Object { $gitExists = Test-Path (Join-Path $_.FullName '.git'); Write-Output ($_.Name + '|' + $gitExists) }"`
+      } else {
+        cmd = `for d in "${path}"/*/; do if [ -d "$d" ]; then name=$(basename "$d"); if [ -d "${path}/$name/.git" ]; then echo "$name|True"; else echo "$name|False"; fi; fi; done 2>/dev/null`
+      }
+      
+      client.exec(cmd, (err, stream) => {
+        if (err) {
+          client.end()
+          resolve({ success: false, error: err.message, folders: [] })
+          return
+        }
+        
+        let output = ''
+        stream.on('data', (data: Buffer) => {
+          output += data.toString()
+        })
+        
+        stream.stderr.on('data', (data: Buffer) => {
+          console.log('[SSH] stderr:', data.toString())
+        })
+        
+        stream.on('close', () => {
+          const lines = output.trim().split('\n').filter(Boolean)
+          for (const line of lines) {
+            const parts = line.split('|')
+            const name = parts[0]?.trim()
+            const isGitStr = parts[1]?.trim()
+            if (name && name !== '.' && name !== '..') {
+              const isGit = isGitStr?.toLowerCase() === 'true'
+              const fullPath = osType === 'windows' 
+                ? `${path}\\${name}`.replace(/\\\\/g, '\\')
+                : `${path}/${name}`.replace(/\/\//g, '/')
+              folders.push({ name, path: fullPath, isGit })
+            }
+          }
+          
+          // 按名称排序，Git 仓库优先
+          folders.sort((a, b) => {
+            if (a.isGit && !b.isGit) return -1
+            if (!a.isGit && b.isGit) return 1
+            return a.name.localeCompare(b.name)
+          })
+          
+          client.end()
+          resolve({ success: true, folders })
+        })
+      })
+    })
+    
+    client.on('error', (err) => {
+      console.error('[SSH] 连接错误:', err.message)
+      resolve({ success: false, error: err.message, folders: [] })
+    })
+    
+    client.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      readyTimeout: 10000
+    })
+  })
 })

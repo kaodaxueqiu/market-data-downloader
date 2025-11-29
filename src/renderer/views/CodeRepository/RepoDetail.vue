@@ -115,131 +115,200 @@
           <el-empty v-else description="暂无提交记录" />
         </el-tab-pane>
 
-        <!-- 本地管理 -->
+        <!-- 仓库管理 -->
         <el-tab-pane name="local">
           <template #label>
             <span>
-              本地管理
+              仓库管理
               <el-badge v-if="hasChanges" :value="changedFiles.length" type="warning" style="margin-left: 5px;" />
             </span>
           </template>
           
           <div class="local-management">
-            <!-- 关联状态卡片 -->
-            <div class="local-card">
-              <div class="card-header">
-                <h4>📍 本地关联</h4>
+            <!-- ==================== 仓库配置区域 ==================== -->
+            <div class="section-group">
+              <div class="section-header">
+                <span class="section-icon">⚙️</span>
+                <h3>仓库配置</h3>
+                <span class="section-desc">关联项目文件夹、初始化 Git 仓库</span>
               </div>
-              <div class="card-body">
-                <template v-if="localPath">
-                  <div class="linked-info">
-                    <el-icon color="#67c23a" size="20"><SuccessFilled /></el-icon>
-                    <div class="linked-detail">
-                      <span class="linked-label">已关联本地目录</span>
-                      <span class="linked-path">{{ localPath }}</span>
-                    </div>
+              
+              <div class="section-cards">
+                <!-- 关联状态卡片 -->
+                <div class="local-card">
+                  <div class="card-header">
+                    <h4>📁 关联项目文件夹</h4>
                   </div>
-                  <div class="linked-actions">
-                    <el-button size="small" @click="openLocalFolder">
-                      <el-icon><FolderOpened /></el-icon>
-                      打开目录
+                  <div class="card-body">
+                    <template v-if="isLinked">
+                      <div class="linked-info">
+                        <el-icon color="#67c23a" size="20"><SuccessFilled /></el-icon>
+                        <div class="linked-detail">
+                          <span class="linked-label">
+                            {{ linkType === 'local' ? '已关联本地文件夹' : '已关联远程文件夹 (SSH)' }}
+                          </span>
+                          <span class="linked-path">{{ linkedPath }}</span>
+                        </div>
+                      </div>
+                      <div class="linked-actions">
+                        <template v-if="linkType === 'local'">
+                          <el-button size="small" @click="openLocalFolder">
+                            <el-icon><FolderOpened /></el-icon>
+                            打开目录
+                          </el-button>
+                          <el-button size="small" @click="openGitFolder">
+                            <el-icon><Folder /></el-icon>
+                            打开 .git 文件夹
+                          </el-button>
+                        </template>
+                        <template v-else-if="linkType === 'ssh'">
+                          <el-button size="small" @click="openSSHTerminal">
+                            <el-icon><FolderOpened /></el-icon>
+                            打开目录
+                          </el-button>
+                          <el-button size="small" @click="openSSHTerminalGit">
+                            <el-icon><Folder /></el-icon>
+                            打开 .git 文件夹
+                          </el-button>
+                        </template>
+                        <el-button size="small" type="danger" plain @click="unlinkLocal">
+                          解除关联
+                        </el-button>
+                      </div>
+                      
+                      <!-- .gitignore 配置状态 -->
+                      <div class="gitignore-status" @click="openIgnoreConfig">
+                        <template v-if="hasGitignore">
+                          <el-icon color="#67c23a"><SuccessFilled /></el-icon>
+                          <span class="status-text success">忽略规则已配置</span>
+                          <el-button type="primary" link size="small">编辑</el-button>
+                        </template>
+                        <template v-else>
+                          <el-icon color="#909399"><Warning /></el-icon>
+                          <span class="status-text">忽略规则未配置</span>
+                          <el-button type="primary" link size="small">添加</el-button>
+                        </template>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="link-options">
+                        <div class="link-option-card" @click="linkLocalFolder">
+                          <div class="option-icon local">
+                            <el-icon size="28"><FolderOpened /></el-icon>
+                          </div>
+                          <div class="option-content">
+                            <h5>本地文件夹</h5>
+                            <p>关联电脑上的项目目录</p>
+                          </div>
+                          <el-icon class="option-arrow"><ArrowRight /></el-icon>
+                        </div>
+                        <div class="link-option-card" @click="linkRemoteFolder">
+                          <div class="option-icon remote">
+                            <el-icon size="28"><Link /></el-icon>
+                          </div>
+                          <div class="option-content">
+                            <h5>远程文件夹 (SSH)</h5>
+                            <p>通过 SSH 连接服务器目录</p>
+                          </div>
+                          <el-icon class="option-arrow"><ArrowRight /></el-icon>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- 下载代码卡片 -->
+                <div class="local-card">
+                  <div class="card-header">
+                    <h4>📥 下载代码</h4>
+                  </div>
+                  <div class="card-body">
+                    <p class="card-desc">将仓库代码下载到指定位置（不建立关联）</p>
+                    <el-button type="success" @click="downloadCode" :loading="cloning">
+                      <el-icon><Download /></el-icon>
+                      下载代码
                     </el-button>
-                    <el-button size="small" type="danger" plain @click="unlinkLocal">
-                      解除关联
-                    </el-button>
                   </div>
-                </template>
-                <template v-else>
-                  <div class="unlinked-info">
-                    <el-icon color="#909399" size="20"><Warning /></el-icon>
-                    <span>未关联本地目录</span>
-                  </div>
-                  <el-button type="primary" @click="linkLocalFolder">
-                    <el-icon><Link /></el-icon>
-                    关联本地目录
-                  </el-button>
-                </template>
+                </div>
               </div>
             </div>
 
-            <!-- 下载代码卡片 -->
-            <div class="local-card">
-              <div class="card-header">
-                <h4>📥 下载代码</h4>
-              </div>
-              <div class="card-body">
-                <p class="card-desc">将仓库代码下载到指定位置（不建立关联）</p>
-                <el-button type="success" @click="downloadCode" :loading="cloning">
-                  <el-icon><Download /></el-icon>
-                  下载代码
-                </el-button>
-              </div>
-            </div>
+            <!-- ==================== 代码同步区域 ==================== -->
+            <template v-if="isLinked">
+              <div class="section-group sync-section">
+                <div class="section-header">
+                  <span class="section-icon">🔄</span>
+                  <h3>代码同步</h3>
+                  <span class="section-desc">提交变更、推送到远程仓库</span>
+                </div>
+                
+                <div class="section-cards">
+                  <!-- 本地 Git 仓库变更卡片 -->
+                  <div class="local-card changes-card">
+                    <div class="card-header">
+                      <h4>📄 本地变更</h4>
+                      <el-button size="small" @click="refreshChanges" :loading="loadingChanges">
+                        刷新
+                      </el-button>
+                    </div>
+                    <div class="card-body">
+                      <template v-if="changedFiles.length > 0">
+                        <div class="changes-summary">
+                          <el-tag type="warning">{{ changedFiles.length }} 个文件有变更</el-tag>
+                        </div>
+                        <div class="files-list-mini">
+                          <div 
+                            v-for="file in changedFiles.slice(0, 5)" 
+                            :key="file.file"
+                            class="file-item-mini"
+                          >
+                            <span class="file-status-mini" :class="file.type">
+                              {{ file.type === 'added' ? 'A' : file.type === 'deleted' ? 'D' : file.type === 'untracked' ? '?' : 'M' }}
+                            </span>
+                            <span class="file-name-mini">{{ file.file }}</span>
+                          </div>
+                          <div v-if="changedFiles.length > 5" class="more-files">
+                            还有 {{ changedFiles.length - 5 }} 个文件...
+                          </div>
+                        </div>
+                        <el-button type="warning" @click="showChangesDialog = true">
+                          比对 / 提交到本地
+                        </el-button>
+                      </template>
+                      <template v-else>
+                        <div class="no-changes-info">
+                          <el-icon color="#67c23a"><SuccessFilled /></el-icon>
+                          <span>暂无待提交的变更</span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
 
-            <!-- 本地 Git 仓库变更卡片（仅关联后显示） -->
-            <template v-if="localPath">
-              <div class="local-card changes-card">
-                <div class="card-header">
-                  <h4>📄 本地 Git 仓库变更</h4>
-                  <el-button size="small" @click="refreshChanges" :loading="loadingChanges">
-                    刷新
-                  </el-button>
-                </div>
-                <div class="card-body">
-                  <template v-if="changedFiles.length > 0">
-                    <div class="changes-summary">
-                      <el-tag type="warning">{{ changedFiles.length }} 个文件与本地 Git 仓库不一致</el-tag>
+                  <!-- 推送代码卡片 -->
+                  <div class="local-card">
+                    <div class="card-header">
+                      <h4>⬆️ 推送到远程</h4>
                     </div>
-                    <div class="files-list-mini">
-                      <div 
-                        v-for="file in changedFiles.slice(0, 5)" 
-                        :key="file.file"
-                        class="file-item-mini"
-                      >
-                        <span class="file-status-mini" :class="file.type">
-                          {{ file.type === 'added' ? 'A' : file.type === 'deleted' ? 'D' : file.type === 'untracked' ? '?' : 'M' }}
-                        </span>
-                        <span class="file-name-mini">{{ file.file }}</span>
-                      </div>
-                      <div v-if="changedFiles.length > 5" class="more-files">
-                        还有 {{ changedFiles.length - 5 }} 个文件...
-                      </div>
+                    <div class="card-body">
+                      <template v-if="changedFiles.length > 0">
+                        <div class="push-disabled-info">
+                          <el-icon color="#e6a23c"><Warning /></el-icon>
+                          <span>请先提交本地变更</span>
+                        </div>
+                        <el-button type="primary" disabled>
+                          <el-icon><Upload /></el-icon>
+                          推送到远程
+                        </el-button>
+                      </template>
+                      <template v-else>
+                        <p class="card-desc">将已提交的代码和标签推送到远程仓库</p>
+                        <el-button type="primary" @click="showPushDialog = true">
+                          <el-icon><Upload /></el-icon>
+                          推送到远程
+                        </el-button>
+                      </template>
                     </div>
-                    <el-button type="warning" @click="showChangesDialog = true">
-                      比对 / 提交到本地 Git 仓库
-                    </el-button>
-                  </template>
-                  <template v-else>
-                    <div class="no-changes-info">
-                      <el-icon color="#67c23a"><SuccessFilled /></el-icon>
-                      <span>本地 Git 仓库没有待提交的修改</span>
-                    </div>
-                  </template>
-                </div>
-              </div>
-
-              <div class="local-card">
-                <div class="card-header">
-                  <h4>⬆️ 推送代码</h4>
-                </div>
-                <div class="card-body">
-                  <template v-if="changedFiles.length > 0">
-                    <div class="push-disabled-info">
-                      <el-icon color="#e6a23c"><Warning /></el-icon>
-                      <span>请先提交到本地 Git 仓库</span>
-                    </div>
-                    <el-button type="primary" disabled>
-                      <el-icon><Upload /></el-icon>
-                      推送到远程
-                    </el-button>
-                  </template>
-                  <template v-else>
-                    <p class="card-desc">将已提交的代码推送到远程仓库</p>
-                    <el-button type="primary" @click="showPushDialog = true">
-                      <el-icon><Upload /></el-icon>
-                      推送到远程
-                    </el-button>
-                  </template>
+                  </div>
                 </div>
               </div>
             </template>
@@ -433,7 +502,7 @@
         </el-form-item>
       </el-form>
       <el-alert type="info" :closable="false" style="margin-top: 10px;">
-        下载代码不会建立关联关系。如需同步代码，请在下载后手动关联本地目录。
+        下载代码不会建立关联关系。如需同步代码，请在下载后手动关联项目文件夹。
       </el-alert>
 
       <template #footer>
@@ -443,13 +512,147 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- SSH 远程连接对话框 -->
+    <el-dialog
+      v-model="showSSHDialog"
+      title="关联远程文件夹 (SSH)"
+      width="650px"
+      :close-on-click-modal="false"
+    >
+      <!-- 步骤 1：连接信息 -->
+      <div v-if="sshStep === 1">
+        <el-form :model="sshForm" label-width="100px">
+          <el-form-item label="服务器地址" required>
+            <el-input v-model="sshForm.host" placeholder="如 192.168.1.100 或 example.com" />
+          </el-form-item>
+          <el-form-item label="端口" required>
+            <el-input-number v-model="sshForm.port" :min="1" :max="65535" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="用户名" required>
+            <el-input v-model="sshForm.username" placeholder="SSH 登录用户名" />
+          </el-form-item>
+          <el-form-item label="密码" required>
+            <el-input v-model="sshForm.password" type="password" placeholder="SSH 登录密码" show-password />
+          </el-form-item>
+        </el-form>
+
+        <div v-if="sshTestResult" class="ssh-test-result" :class="sshTestResult.success ? 'success' : 'error'">
+          <el-icon v-if="sshTestResult.success"><SuccessFilled /></el-icon>
+          <el-icon v-else><Warning /></el-icon>
+          <span>{{ sshTestResult.message }}</span>
+        </div>
+      </div>
+
+      <!-- 步骤 2：选择文件夹 -->
+      <div v-else-if="sshStep === 2" class="ssh-folder-browser">
+        <div class="browser-header">
+          <el-button size="small" @click="sshStep = 1" :icon="ArrowLeft">返回</el-button>
+          <span class="current-path">📁 {{ sshCurrentPath || '/' }}</span>
+        </div>
+        
+        <div class="browser-tip">
+          💡 单击选择文件夹，双击进入文件夹
+        </div>
+        
+        <div class="folder-list" v-loading="sshLoadingFolders">
+          <!-- 上级目录 -->
+          <div v-if="sshCurrentPath !== '/' && sshCurrentPath !== ''" class="folder-item parent-folder" @click="sshNavigateUp">
+            <el-icon><FolderOpened /></el-icon>
+            <span>.. (返回上级)</span>
+          </div>
+          <!-- 文件夹列表 -->
+          <div 
+            v-for="folder in sshFolders" 
+            :key="folder.name" 
+            class="folder-item"
+            :class="{ selected: sshSelectedFolder === folder.path, 'is-git': folder.isGit }"
+            @click="sshSelectFolder(folder)"
+            @dblclick="sshEnterFolder(folder)"
+          >
+            <el-icon><Folder /></el-icon>
+            <span>{{ folder.name }}</span>
+            <el-tag v-if="folder.isGit" size="small" type="success">✓ Git 仓库</el-tag>
+          </div>
+          <div v-if="sshFolders.length === 0 && !sshLoadingFolders" class="empty-hint">
+            此目录下没有子文件夹
+          </div>
+        </div>
+
+        <div v-if="sshSelectedFolder" class="selected-info">
+          <el-icon><SuccessFilled /></el-icon>
+          <span>已选择：{{ sshSelectedFolder }}</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <template v-if="sshStep === 1">
+          <el-button @click="showSSHDialog = false">取消</el-button>
+          <el-button 
+            type="primary" 
+            @click="testSSHConnection" 
+            :loading="sshTesting"
+            :disabled="!sshForm.host || !sshForm.username || !sshForm.password"
+          >
+            测试连接
+          </el-button>
+        </template>
+        <template v-else>
+          <el-button @click="showSSHDialog = false">取消</el-button>
+          <el-button type="primary" @click="confirmSSHConnect" :loading="sshConnecting" :disabled="!sshSelectedFolder">
+            确认关联
+          </el-button>
+        </template>
+      </template>
+    </el-dialog>
+
+    <!-- 忽略规则配置对话框 -->
+    <el-dialog
+      v-model="showIgnoreDialog"
+      title="选择不需要同步的文件类型"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <div class="ignore-config">
+        <el-alert type="info" :closable="false" style="margin-bottom: 20px;">
+          <template #title>
+            勾选不需要同步到远程仓库的文件类型
+          </template>
+        </el-alert>
+        
+        <!-- 文件类型列表 -->
+        <div class="file-type-list">
+          <div 
+            v-for="type in fileTypeOptions" 
+            :key="type.id"
+            class="file-type-item"
+            :class="{ 'is-selected': type.selected }"
+            @click="type.selected = !type.selected"
+          >
+            <el-checkbox v-model="type.selected" @click.stop />
+            <span class="type-icon">{{ type.icon }}</span>
+            <div class="type-info">
+              <span class="type-name">{{ type.name }}</span>
+              <span class="type-desc">{{ type.desc }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="skipIgnoreConfig">跳过</el-button>
+        <el-button type="primary" @click="saveFileTypeSelection" :loading="savingIgnore">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Download, FolderOpened, Refresh, Link, SuccessFilled, Warning, Upload } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Download, FolderOpened, Folder, Link, SuccessFilled, Warning, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import modelRunnerService, { type Repository, type Versions } from '@/services/modelRunner.service'
 
@@ -480,6 +683,62 @@ const pushing = ref(false)
 const showCloneDialog = ref(false)
 const clonePath = ref('')
 const showPushDialog = ref(false)
+
+// SSH 远程连接相关
+const showSSHDialog = ref(false)
+const sshStep = ref(1)  // 1=连接信息, 2=选择文件夹
+const sshTesting = ref(false)
+const sshConnecting = ref(false)
+const sshForm = ref({
+  host: '',
+  port: 22,
+  username: '',
+  password: ''
+})
+const sshTestResult = ref<{ success: boolean; message: string; osType?: string } | null>(null)
+// 文件夹浏览相关
+const sshCurrentPath = ref('')
+const sshFolders = ref<Array<{ name: string; path: string; isGit: boolean }>>([])
+const sshSelectedFolder = ref('')
+const sshLoadingFolders = ref(false)
+const sshDetectedOS = ref<'linux' | 'windows'>('linux')
+// 远程连接信息
+const remoteSSHConfig = ref<any>(null)
+
+// 忽略规则配置相关
+const showIgnoreDialog = ref(false)
+const savingIgnore = ref(false)
+const ignoreConfigType = ref<'local' | 'ssh'>('local')
+const pendingLinkPath = ref('')
+const loadingIgnoreFiles = ref(false)
+const hasGitignore = ref(false)  // 是否有 .gitignore 文件
+
+// 文件类型选项（通俗易懂）
+const fileTypeOptions = ref([
+  { id: 'log', name: '日志文件', desc: '*.log, logs/', icon: '📝', selected: true, patterns: ['*.log', 'logs/'] },
+  { id: 'tmp', name: '临时文件', desc: '*.tmp, *.temp, tmp/', icon: '🗑️', selected: true, patterns: ['*.tmp', '*.temp', 'tmp/', 'temp/'] },
+  { id: 'cache', name: '缓存文件', desc: '*.cache, __pycache__/', icon: '💾', selected: true, patterns: ['*.cache', '__pycache__/', '.cache/'] },
+  { id: 'build', name: '编译产物', desc: 'build/, bin/, dist/', icon: '🔨', selected: false, patterns: ['build/', 'bin/', 'dist/', 'out/', 'target/'] },
+  { id: 'deps', name: '依赖包', desc: 'node_modules/, venv/', icon: '📦', selected: false, patterns: ['node_modules/', 'venv/', '.venv/', 'vendor/'] },
+  { id: 'ide', name: '编辑器配置', desc: '.idea/, .vscode/', icon: '⚙️', selected: false, patterns: ['.idea/', '.vscode/', '*.swp', '*.swo'] },
+  { id: 'env', name: '环境配置', desc: '.env, *.local', icon: '🔐', selected: false, patterns: ['.env', '.env.*', '*.local'] },
+  { id: 'backup', name: '备份文件', desc: '*.bak, *.backup', icon: '📋', selected: false, patterns: ['*.bak', '*.backup', '*~'] },
+])
+
+// 是否已关联（本地或远程）
+const isLinked = computed(() => !!localPath.value || !!remoteSSHConfig.value)
+// 关联类型
+const linkType = computed(() => {
+  if (localPath.value) return 'local'
+  if (remoteSSHConfig.value) return 'ssh'
+  return null
+})
+// 关联路径显示
+const linkedPath = computed(() => {
+  if (localPath.value) return localPath.value
+  if (remoteSSHConfig.value) return `${remoteSSHConfig.value.host}:${remoteSSHConfig.value.remotePath}`
+  return ''
+})
 
 // 变更相关
 const showChangesDialog = ref(false)
@@ -579,17 +838,35 @@ const loadData = async () => {
 // 检查本地路径
 const checkLocalPath = async () => {
   try {
+    // 先检查本地路径
     const result = await window.electronAPI.git.getLocalPath(repoFullName.value)
     if (result.success && result.data) {
       localPath.value = result.data
       await refreshChanges()
-      updateLatestTag()  // 更新最新标签显示
-    } else {
-      localPath.value = null
-      latestTag.value = ''
+      updateLatestTag()
+      await checkGitignoreExists()
+      return
     }
+    
+    // 再检查 SSH 配置
+    const sshResult = await window.electronAPI.ssh.getRepoConfig(repoFullName.value)
+    if (sshResult.success && sshResult.data) {
+      remoteSSHConfig.value = sshResult.data
+      // 重新连接并刷新变更
+      await window.electronAPI.ssh.connect(sshResult.data)
+      await refreshChanges()
+      updateLatestTag()
+      await checkGitignoreExists()
+      return
+    }
+    
+    // 都没有，清空状态
+    localPath.value = null
+    remoteSSHConfig.value = null
+    latestTag.value = ''
+    hasGitignore.value = false
   } catch (e) {
-    console.error('检查本地路径失败:', e)
+    console.error('检查关联状态失败:', e)
   }
 }
 
@@ -621,18 +898,44 @@ const updateLatestTag = () => {
 
 // 刷新变更列表
 const refreshChanges = async () => {
-  if (!localPath.value) return
-  
-  loadingChanges.value = true
-  try {
-    const result = await window.electronAPI.git.status(localPath.value)
-    if (result.success && result.data) {
-      changedFiles.value = result.data.map(f => ({ ...f, selected: false }))
+  // 本地关联
+  if (localPath.value) {
+    loadingChanges.value = true
+    try {
+      const result = await window.electronAPI.git.status(localPath.value)
+      if (result.success && result.data) {
+        changedFiles.value = result.data.map(f => ({ ...f, selected: false }))
+      }
+    } catch (e) {
+      console.error('获取本地变更失败:', e)
+    } finally {
+      loadingChanges.value = false
     }
-  } catch (e) {
-    console.error('获取变更失败:', e)
-  } finally {
-    loadingChanges.value = false
+    return
+  }
+  
+  // SSH 远程关联
+  if (remoteSSHConfig.value) {
+    loadingChanges.value = true
+    try {
+      const result = await window.electronAPI.ssh.gitStatus(remoteSSHConfig.value.id)
+      if (result.success && result.data) {
+        changedFiles.value = result.data.map((f: any) => ({ ...f, selected: false }))
+      } else {
+        // 如果连接失效，尝试重新连接
+        const reconnect = await window.electronAPI.ssh.connect(remoteSSHConfig.value)
+        if (reconnect.success) {
+          const retryResult = await window.electronAPI.ssh.gitStatus(remoteSSHConfig.value.id)
+          if (retryResult.success && retryResult.data) {
+            changedFiles.value = retryResult.data.map((f: any) => ({ ...f, selected: false }))
+          }
+        }
+      }
+    } catch (e) {
+      console.error('获取远程变更失败:', e)
+    } finally {
+      loadingChanges.value = false
+    }
   }
 }
 
@@ -709,7 +1012,7 @@ const confirmExecute = async () => {
   }
 }
 
-// 关联本地目录（智能检测 + 用户提示）
+// 关联项目文件夹（智能检测 + 用户提示）
 const linkLocalFolder = async () => {
   // 步骤1: 选择文件夹
   const selectedPath = await window.electronAPI.dialog.selectDirectory()
@@ -718,12 +1021,12 @@ const linkLocalFolder = async () => {
   try {
     // 步骤2: 检测文件夹状态
     const statusResult = await window.electronAPI.git.checkLocalStatus(selectedPath)
-    if (!statusResult.success) {
+    if (!statusResult.success || !statusResult.data) {
       ElMessage.error(statusResult.error || '检测目录状态失败')
       return
     }
     
-    const { isGitRepo, hasRemote, remoteUrl } = statusResult.data
+    const { isGitRepo, hasRemote, remoteUrl } = statusResult.data!
     
     // 步骤3: 根据状态构建提示信息
     let confirmMessage = ''
@@ -741,7 +1044,7 @@ const linkLocalFolder = async () => {
           <ol style="margin: 8px 0; padding-left: 20px;">
             <li>初始化 Git 仓库 <code>git init</code></li>
             <li>配置远程仓库地址</li>
-            <li>建立本地关联</li>
+            <li>建立项目关联</li>
           </ol>
           <p style="color: #67c23a;">✓ 完成后即可进行代码提交和版本管理</p>
         </div>
@@ -757,7 +1060,7 @@ const linkLocalFolder = async () => {
           <p><strong>系统将自动执行以下操作：</strong></p>
           <ol style="margin: 8px 0; padding-left: 20px;">
             <li>配置远程仓库地址</li>
-            <li>建立本地关联</li>
+            <li>建立项目关联</li>
           </ol>
           <p style="color: #67c23a;">✓ 完成后即可进行代码提交和版本管理</p>
         </div>
@@ -765,7 +1068,7 @@ const linkLocalFolder = async () => {
     } else {
       // 情况3: 已有 Git 仓库和远程配置
       const repoCloneUrl = repoDetail.value?.clone_url || ''
-      if (remoteUrl.includes(repoName.value)) {
+      if (remoteUrl?.includes(repoName.value)) {
         // 远程地址匹配，直接关联
         confirmTitle = '确认关联'
         confirmMessage = `
@@ -774,7 +1077,7 @@ const linkLocalFolder = async () => {
             <p><strong>目录路径：</strong><code>${selectedPath}</code></p>
             <p><strong>远程地址：</strong><code>${remoteUrl}</code></p>
             <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
-            <p style="color: #67c23a;">✓ 将直接建立本地关联</p>
+            <p style="color: #67c23a;">✓ 将直接建立项目关联</p>
           </div>
         `
       } else {
@@ -798,7 +1101,7 @@ const linkLocalFolder = async () => {
       confirmButtonText: '确认执行',
       cancelButtonText: '取消',
       dangerouslyUseHTMLString: true,
-      type: isGitRepo && hasRemote && !remoteUrl.includes(repoName.value) ? 'warning' : 'info'
+      type: isGitRepo && hasRemote && !remoteUrl?.includes(repoName.value) ? 'warning' : 'info'
     })
     
     // 步骤5: 执行关联操作
@@ -811,16 +1114,23 @@ const linkLocalFolder = async () => {
     )
     
     if (initResult.success) {
-      localPath.value = selectedPath
+      // 检查是否是新初始化的 Git 仓库
+      const wasNewRepo = initResult.steps?.includes('初始化 Git 仓库')
       
-      // 显示执行的步骤
-      const stepsMsg = initResult.steps?.join(' → ') || '关联成功'
-      ElMessage.success({
-        message: `✅ ${stepsMsg}`,
-        duration: 3000
-      })
-      
-      await refreshChanges()
+      if (wasNewRepo) {
+        // 新初始化的仓库，询问是否配置忽略规则
+        await askIgnoreConfigLocal(selectedPath)
+      } else {
+        // 已有仓库，直接完成关联
+        localPath.value = selectedPath
+        const stepsMsg = initResult.steps?.join(' → ') || '关联成功'
+        ElMessage.success({
+          message: `✅ ${stepsMsg}`,
+          duration: 3000
+        })
+        await refreshChanges()
+        updateLatestTag()
+      }
     } else {
       ElMessage.error(initResult.error || '关联失败')
     }
@@ -835,11 +1145,28 @@ const linkLocalFolder = async () => {
 // 解除关联
 const unlinkLocal = async () => {
   try {
-    await ElMessageBox.confirm('确定要解除本地目录关联吗？', '确认', {
-      type: 'warning'
-    })
-    await window.electronAPI.git.removeLocalPath(repoFullName.value)
-    localPath.value = null
+    const isSSH = linkType.value === 'ssh'
+    await ElMessageBox.confirm(
+      isSSH ? '确定要解除远程 SSH 关联吗？' : '确定要解除本地目录关联吗？', 
+      '确认', 
+      { type: 'warning' }
+    )
+    
+    if (isSSH) {
+      // 解除 SSH 关联
+      if (remoteSSHConfig.value?.id) {
+        await window.electronAPI.ssh.disconnect(remoteSSHConfig.value.id)
+        await window.electronAPI.ssh.deleteConfig(remoteSSHConfig.value.id)
+      }
+      // 删除持久化配置
+      await window.electronAPI.ssh.removeRepoConfig(repoFullName.value)
+      remoteSSHConfig.value = null
+    } else {
+      // 解除本地关联
+      await window.electronAPI.git.removeLocalPath(repoFullName.value)
+      localPath.value = null
+    }
+    
     changedFiles.value = []
     ElMessage.success('已解除关联')
   } catch (e) {
@@ -851,6 +1178,610 @@ const unlinkLocal = async () => {
 const openLocalFolder = async () => {
   if (localPath.value) {
     await window.electronAPI.shell.openPath(localPath.value)
+  }
+}
+
+// 打开 .git 文件夹
+const openGitFolder = async () => {
+  if (localPath.value) {
+    const gitPath = `${localPath.value}\\.git`
+    await window.electronAPI.shell.openPath(gitPath)
+  }
+}
+
+// ==================== 忽略规则配置 ====================
+
+// 检查 .gitignore 是否存在
+const checkGitignoreExists = async () => {
+  try {
+    if (localPath.value) {
+      const result = await window.electronAPI.git.readGitignore(localPath.value)
+      hasGitignore.value = result.success && (result.exists ?? false)
+    } else if (remoteSSHConfig.value) {
+      const config = remoteSSHConfig.value
+      const result = await window.electronAPI.ssh.readGitignore(
+        { host: config.host, port: config.port, username: config.username, password: config.password },
+        config.remotePath,
+        config.osType || 'linux'
+      )
+      hasGitignore.value = result.success && (result.exists ?? false)
+    } else {
+      hasGitignore.value = false
+    }
+  } catch {
+    hasGitignore.value = false
+  }
+}
+
+// 打开忽略规则配置
+const openIgnoreConfig = async () => {
+  loadingIgnoreFiles.value = true
+  
+  if (localPath.value) {
+    ignoreConfigType.value = 'local'
+    pendingLinkPath.value = localPath.value
+  } else if (remoteSSHConfig.value) {
+    ignoreConfigType.value = 'ssh'
+    pendingLinkPath.value = remoteSSHConfig.value.remotePath
+  }
+  
+  // 先重置所有选项
+  fileTypeOptions.value.forEach(opt => opt.selected = false)
+  
+  // 读取已有的 .gitignore 内容
+  try {
+    let content = ''
+    if (ignoreConfigType.value === 'local') {
+      const result = await window.electronAPI.git.readGitignore(pendingLinkPath.value)
+      if (result.success && result.exists) {
+        content = result.content || ''
+      }
+    } else {
+      const config = remoteSSHConfig.value
+      if (config) {
+        const result = await window.electronAPI.ssh.readGitignore(
+          { host: config.host, port: config.port, username: config.username, password: config.password },
+          config.remotePath,
+          config.osType || 'linux'
+        )
+        if (result.success && result.exists) {
+          content = result.content || ''
+        }
+      }
+    }
+    
+    // 根据内容匹配选中对应的类型
+    if (content) {
+      for (const opt of fileTypeOptions.value) {
+        // 检查是否有任何一个 pattern 在内容中
+        const hasMatch = opt.patterns.some(pattern => content.includes(pattern))
+        opt.selected = hasMatch
+      }
+    } else {
+      // 没有内容，使用默认选中
+      resetFileTypeOptions()
+    }
+  } catch (e) {
+    console.error('读取 .gitignore 失败:', e)
+    resetFileTypeOptions()
+  }
+  
+  loadingIgnoreFiles.value = false
+  showIgnoreDialog.value = true
+}
+
+// 重置文件类型选项
+const resetFileTypeOptions = () => {
+  fileTypeOptions.value.forEach(opt => {
+    // 默认选中日志、临时文件、缓存
+    opt.selected = ['log', 'tmp', 'cache'].includes(opt.id)
+  })
+}
+
+// 生成 .gitignore 内容
+const generateGitignoreFromTypes = () => {
+  const lines = ['# 自动生成的忽略规则', '']
+  const selectedTypes = fileTypeOptions.value.filter(t => t.selected)
+  
+  for (const type of selectedTypes) {
+    lines.push(`# ${type.name}`)
+    lines.push(...type.patterns)
+    lines.push('')
+  }
+  
+  return lines.join('\n')
+}
+
+// 保存文件类型选择
+const saveFileTypeSelection = async () => {
+  console.log('[前端] saveFileTypeSelection 开始')
+  const selectedTypes = fileTypeOptions.value.filter(t => t.selected)
+  
+  if (selectedTypes.length === 0) {
+    console.log('[前端] 没有选择，跳过')
+    await skipIgnoreConfig()
+    return
+  }
+  
+  savingIgnore.value = true
+  try {
+    const content = generateGitignoreFromTypes()
+    console.log('[前端] 生成内容:', content)
+    console.log('[前端] 类型:', ignoreConfigType.value, '路径:', pendingLinkPath.value)
+    
+    if (ignoreConfigType.value === 'local') {
+      console.log('[前端] 写入本地...')
+      await window.electronAPI.git.writeGitignore(pendingLinkPath.value, content)
+      console.log('[前端] 本地写入完成')
+    } else {
+      const config = remoteSSHConfig.value
+      console.log('[前端] SSH 配置:', config)
+      if (!config) {
+        ElMessage.error('SSH 配置丢失')
+        savingIgnore.value = false
+        return
+      }
+      console.log('[前端] 写入远程...')
+      const result = await window.electronAPI.ssh.writeGitignore(
+        { host: config.host, port: config.port, username: config.username, password: config.password },
+        pendingLinkPath.value,
+        content,
+        config.osType || 'linux'
+      )
+      console.log('[前端] 远程写入结果:', result)
+    }
+    
+    showIgnoreDialog.value = false
+    hasGitignore.value = true  // 保存成功，更新状态
+    ElMessage.success('忽略规则已保存')
+    
+    // 如果是从关联流程来的，完成关联
+    if (!isLinked.value) {
+      if (ignoreConfigType.value === 'local') {
+        await finishLocalLink(pendingLinkPath.value)
+      } else {
+        await finishSSHLink(pendingLinkPath.value)
+      }
+    }
+  } catch (e: any) {
+    console.error('[前端] 保存失败:', e)
+    ElMessage.error('保存失败：' + e.message)
+  } finally {
+    savingIgnore.value = false
+  }
+}
+
+// 询问是否配置忽略规则（本地）
+const askIgnoreConfigLocal = async (dirPath: string) => {
+  try {
+    await ElMessageBox.confirm(
+      '是否需要配置文件忽略规则？\n\n可以选择哪些类型的文件不需要同步（如日志、临时文件等）',
+      '关联成功',
+      { confirmButtonText: '配置', cancelButtonText: '跳过', type: 'success' }
+    )
+    ignoreConfigType.value = 'local'
+    pendingLinkPath.value = dirPath
+    resetFileTypeOptions()
+    showIgnoreDialog.value = true
+  } catch {
+    await finishLocalLink(dirPath)
+  }
+}
+
+// 询问是否配置忽略规则（SSH）
+const askIgnoreConfigSSH = async (remotePath: string) => {
+  try {
+    await ElMessageBox.confirm(
+      '是否需要配置文件忽略规则？\n\n可以选择哪些类型的文件不需要同步（如日志、临时文件等）',
+      '关联成功',
+      { confirmButtonText: '配置', cancelButtonText: '跳过', type: 'success' }
+    )
+    ignoreConfigType.value = 'ssh'
+    pendingLinkPath.value = remotePath
+    resetFileTypeOptions()
+    showIgnoreDialog.value = true
+  } catch {
+    await finishSSHLink(remotePath)
+  }
+}
+
+// 跳过
+const skipIgnoreConfig = async () => {
+  showIgnoreDialog.value = false
+  if (ignoreConfigType.value === 'local') {
+    await finishLocalLink(pendingLinkPath.value)
+  } else {
+    await finishSSHLink(pendingLinkPath.value)
+  }
+}
+
+// 完成本地关联
+const finishLocalLink = async (dirPath: string) => {
+  localPath.value = dirPath
+  await refreshChanges()
+  updateLatestTag()
+  await checkGitignoreExists()
+  ElMessage.success('关联成功！')
+}
+
+// 完成 SSH 关联
+const finishSSHLink = async (_remotePath: string) => {
+  // 已经在 confirmSSHConnect 中保存了配置
+  ElMessage.success('远程关联成功！')
+  await refreshChanges()
+  updateLatestTag()
+  await checkGitignoreExists()
+}
+
+// 打开远程目录（文件管理器）
+const openSSHTerminal = async () => {
+  if (!remoteSSHConfig.value) return
+  
+  const { host, port, username, remotePath } = remoteSSHConfig.value
+  try {
+    const result = await window.electronAPI.ssh.openTerminal(host, port, username, remotePath) as { success: boolean; message?: string; sftpUrl?: string; error?: string }
+    if (result.success) {
+      ElMessage.success('已打开远程目录')
+    } else {
+      // 打开失败，复制 SFTP 地址
+      const sftpUrl = result.sftpUrl || `sftp://${username}@${host}:${port}${remotePath}`
+      navigator.clipboard.writeText(sftpUrl)
+      ElMessage.info('已复制 SFTP 地址，可在文件管理器或 WinSCP 中打开')
+    }
+  } catch (e: any) {
+    ElMessage.error('打开失败：' + e.message)
+  }
+}
+
+// 打开远程 .git 目录（文件管理器）
+const openSSHTerminalGit = async () => {
+  if (!remoteSSHConfig.value) return
+  
+  const { host, port, username, remotePath, osType } = remoteSSHConfig.value
+  const gitPath = osType === 'windows' 
+    ? `${remotePath}\\.git`
+    : `${remotePath}/.git`
+  
+  try {
+    const result = await window.electronAPI.ssh.openTerminal(host, port, username, gitPath) as { success: boolean; message?: string; sftpUrl?: string; error?: string }
+    if (result.success) {
+      ElMessage.success('已打开 .git 目录')
+    } else {
+      const sftpUrl = result.sftpUrl || `sftp://${username}@${host}:${port}${gitPath}`
+      navigator.clipboard.writeText(sftpUrl)
+      ElMessage.info('已复制 SFTP 地址，可在文件管理器或 WinSCP 中打开')
+    }
+  } catch (e: any) {
+    ElMessage.error('打开失败：' + e.message)
+  }
+}
+
+// 关联远程文件夹（SSH）
+const linkRemoteFolder = () => {
+  // 重置状态
+  sshStep.value = 1
+  sshForm.value = {
+    host: '',
+    port: 22,
+    username: '',
+    password: ''
+  }
+  sshTestResult.value = null
+  sshCurrentPath.value = ''
+  sshFolders.value = []
+  sshSelectedFolder.value = ''
+  showSSHDialog.value = true
+}
+
+// 测试 SSH 连接
+const testSSHConnection = async () => {
+  sshTesting.value = true
+  sshTestResult.value = null
+  
+  try {
+    const result = await window.electronAPI.ssh.testConnection({
+      host: sshForm.value.host,
+      port: sshForm.value.port,
+      username: sshForm.value.username,
+      password: sshForm.value.password
+    })
+    
+    if (result.success) {
+      sshDetectedOS.value = (result.osType || 'linux') as 'linux' | 'windows'
+      sshTestResult.value = {
+        success: true,
+        message: `✅ 连接成功！检测到：${result.osType === 'windows' ? 'Windows' : 'Linux'} 服务器`,
+        osType: result.osType
+      }
+      
+      // 自动进入第二步，选择文件夹
+      setTimeout(() => {
+        sshStep.value = 2
+        // 加载起始目录
+        const startPath = result.osType === 'windows' ? 'C:\\' : '/home'
+        sshNavigateTo(startPath)
+      }, 300)
+    } else {
+      sshTestResult.value = {
+        success: false,
+        message: `连接失败：${result.error}`
+      }
+    }
+  } catch (e: any) {
+    sshTestResult.value = {
+      success: false,
+      message: `连接失败：${e.message}`
+    }
+  } finally {
+    sshTesting.value = false
+  }
+}
+
+// 浏览远程目录
+const sshNavigateTo = async (path: string) => {
+  sshLoadingFolders.value = true
+  sshCurrentPath.value = path
+  sshFolders.value = []
+  
+  try {
+    const result = await window.electronAPI.ssh.listDirectory(
+      {
+        host: sshForm.value.host,
+        port: sshForm.value.port,
+        username: sshForm.value.username,
+        password: sshForm.value.password
+      },
+      path,
+      sshDetectedOS.value
+    )
+    
+    if (result.success) {
+      sshFolders.value = result.data || []
+    } else {
+      ElMessage.error('浏览目录失败：' + result.error)
+    }
+  } catch (e: any) {
+    console.error('浏览目录失败:', e)
+    ElMessage.error('浏览目录失败：' + e.message)
+  } finally {
+    sshLoadingFolders.value = false
+  }
+}
+
+// 进入上级目录
+const sshNavigateUp = () => {
+  let parentPath: string
+  if (sshDetectedOS.value === 'windows') {
+    const parts = sshCurrentPath.value.split('\\').filter(Boolean)
+    parts.pop()
+    parentPath = parts.length > 0 ? parts.join('\\') : 'C:\\'
+    if (parentPath.length === 2 && parentPath[1] === ':') parentPath += '\\'
+  } else {
+    const parts = sshCurrentPath.value.split('/').filter(Boolean)
+    parts.pop()
+    parentPath = '/' + parts.join('/')
+  }
+  sshNavigateTo(parentPath)
+}
+
+// 选择文件夹
+const sshSelectFolder = (folder: { name: string; path: string; isGit: boolean }) => {
+  sshSelectedFolder.value = folder.path
+}
+
+// 进入文件夹
+const sshEnterFolder = (folder: { name: string; path: string; isGit: boolean }) => {
+  sshNavigateTo(folder.path)
+}
+
+// 在远程服务器初始化 Git 仓库
+const initRemoteGitRepo = async (remotePath: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const result = await window.electronAPI.ssh.initGitRepo(
+      {
+        host: sshForm.value.host,
+        port: sshForm.value.port,
+        username: sshForm.value.username,
+        password: sshForm.value.password
+      },
+      remotePath,
+      sshDetectedOS.value,
+      repoFullName.value  // 用于设置 remote origin
+    )
+    return result
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+}
+
+// 检查远程 Git 仓库的 remote 配置
+const checkRemoteGitConfig = async (remotePath: string): Promise<{ success: boolean; hasRemote: boolean; remoteUrl?: string; error?: string }> => {
+  try {
+    const result = await window.electronAPI.ssh.checkGitRemote(
+      {
+        host: sshForm.value.host,
+        port: sshForm.value.port,
+        username: sshForm.value.username,
+        password: sshForm.value.password
+      },
+      remotePath,
+      sshDetectedOS.value
+    )
+    return { ...result, hasRemote: result.hasRemote ?? false }
+  } catch (e: any) {
+    return { success: false, hasRemote: false, error: e.message }
+  }
+}
+
+// 配置远程 Git 仓库的 origin
+const configRemoteGitOrigin = async (remotePath: string, remoteUrl: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const result = await window.electronAPI.ssh.setGitRemote(
+      {
+        host: sshForm.value.host,
+        port: sshForm.value.port,
+        username: sshForm.value.username,
+        password: sshForm.value.password
+      },
+      remotePath,
+      remoteUrl,
+      sshDetectedOS.value
+    )
+    return result
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+}
+
+// 确认 SSH 关联
+const confirmSSHConnect = async () => {
+  if (!sshSelectedFolder.value) {
+    ElMessage.warning('请选择一个文件夹')
+    return
+  }
+  
+  sshConnecting.value = true
+  
+  try {
+    const expectedRemoteUrl = `http://61.151.241.233:3030/${repoFullName.value}.git`
+    
+    // 检查是否是 Git 仓库
+    const selectedFolderInfo = sshFolders.value.find(f => f.path === sshSelectedFolder.value)
+    if (!selectedFolderInfo?.isGit) {
+      // 不是 Git 仓库，询问是否初始化
+      const action = await ElMessageBox.confirm(
+        '所选文件夹不是 Git 仓库。\n\n是否自动初始化 Git 仓库并配置远程地址？',
+        '初始化 Git 仓库',
+        { 
+          type: 'warning', 
+          confirmButtonText: '自动初始化', 
+          cancelButtonText: '取消',
+          distinguishCancelAndClose: true
+        }
+      ).catch(() => false)
+      
+      if (!action) {
+        sshConnecting.value = false
+        return
+      }
+      
+      // 自动初始化 Git 仓库
+      ElMessage.info('正在初始化 Git 仓库...')
+      const initResult = await initRemoteGitRepo(sshSelectedFolder.value)
+      if (!initResult.success) {
+        ElMessage.error('初始化 Git 仓库失败：' + initResult.error)
+        sshConnecting.value = false
+        return
+      }
+      
+      // 先保存 SSH 配置，然后询问忽略规则
+      const configId = `ssh_${repoFullName.value}_${Date.now()}`
+      const config = {
+        id: configId,
+        name: `${sshForm.value.host}:${sshSelectedFolder.value}`,
+        host: sshForm.value.host,
+        port: sshForm.value.port,
+        username: sshForm.value.username,
+        password: sshForm.value.password,
+        remotePath: sshSelectedFolder.value,
+        osType: sshDetectedOS.value
+      }
+      
+      await window.electronAPI.ssh.connect(config)
+      remoteSSHConfig.value = config
+      await window.electronAPI.ssh.saveRepoConfig(repoFullName.value, config)
+      
+      showSSHDialog.value = false
+      sshConnecting.value = false
+      
+      // 询问是否配置忽略规则
+      await askIgnoreConfigSSH(sshSelectedFolder.value)
+      return
+    } else {
+      // 是 Git 仓库，检查 remote origin 配置
+      ElMessage.info('正在检查 Git 仓库配置...')
+      const checkResult = await checkRemoteGitConfig(sshSelectedFolder.value)
+      
+      if (!checkResult.success) {
+        ElMessage.error('检查 Git 配置失败：' + checkResult.error)
+        sshConnecting.value = false
+        return
+      }
+      
+      if (!checkResult.hasRemote) {
+        // 没有配置 remote，自动添加
+        const addResult = await configRemoteGitOrigin(sshSelectedFolder.value, expectedRemoteUrl)
+        if (!addResult.success) {
+          ElMessage.error('配置远程地址失败：' + addResult.error)
+          sshConnecting.value = false
+          return
+        }
+        ElMessage.success('已自动配置远程仓库地址')
+      } else if (checkResult.remoteUrl !== expectedRemoteUrl) {
+        // remote URL 不匹配，询问是否修改
+        const confirmChange = await ElMessageBox.confirm(
+          `检测到该 Git 仓库已关联其他远程地址：\n\n当前：${checkResult.remoteUrl}\n\n是否修改为当前仓库地址？\n${expectedRemoteUrl}`,
+          '远程地址不匹配',
+          { 
+            type: 'warning', 
+            confirmButtonText: '修改地址', 
+            cancelButtonText: '取消'
+          }
+        ).catch(() => false)
+        
+        if (!confirmChange) {
+          sshConnecting.value = false
+          return
+        }
+        
+        const updateResult = await configRemoteGitOrigin(sshSelectedFolder.value, expectedRemoteUrl)
+        if (!updateResult.success) {
+          ElMessage.error('修改远程地址失败：' + updateResult.error)
+          sshConnecting.value = false
+          return
+        }
+        ElMessage.success('远程仓库地址已更新')
+      } else {
+        ElMessage.success('Git 仓库配置正确')
+      }
+    }
+    
+    // 生成正式的配置 ID
+    const configId = `ssh_${repoFullName.value}_${Date.now()}`
+    
+    const config = {
+      id: configId,
+      name: `${sshForm.value.host}:${sshSelectedFolder.value}`,
+      host: sshForm.value.host,
+      port: sshForm.value.port,
+      username: sshForm.value.username,
+      password: sshForm.value.password,
+      remotePath: sshSelectedFolder.value,
+      osType: sshDetectedOS.value
+    }
+    
+    // 连接
+    const connectResult = await window.electronAPI.ssh.connect(config)
+    if (!connectResult.success) {
+      ElMessage.error(`连接失败：${connectResult.error}`)
+      return
+    }
+    
+    // 保存远程连接信息到内存
+    remoteSSHConfig.value = config
+    
+    // 持久化保存到存储
+    await window.electronAPI.ssh.saveRepoConfig(repoFullName.value, config)
+    
+    showSSHDialog.value = false
+    sshConnecting.value = false
+    
+    // 检测并询问 .gitignore 配置
+    await askIgnoreConfigSSH(sshSelectedFolder.value)
+  } catch (e: any) {
+    ElMessage.error(`关联失败：${e.message}`)
+  } finally {
+    sshConnecting.value = false
   }
 }
 
@@ -1024,9 +1955,9 @@ const commitChanges = async () => {
   try {
     // 0. 检查标签是否已存在（忽略大小写，避免 v1.7.6 和 V1.7.6 重复）
     const localTagsResult = await window.electronAPI.git.getLocalTags(localPath.value)
-    if (localTagsResult.success && localTagsResult.data) {
+    if (localTagsResult.success && localTagsResult.data && localTagsResult.data.length > 0) {
       const newTagLower = tagName.value.toLowerCase()
-      const existingTag = localTagsResult.data.find(
+      const existingTag = localTagsResult.data!.find(
         (t: string) => t.toLowerCase() === newTagLower
       )
       if (existingTag) {
@@ -1183,9 +2114,53 @@ onMounted(() => {
 
 // 本地管理样式
 .local-management {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+
+  .section-group {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 20px;
+    
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #f0f0f0;
+      
+      .section-icon {
+        font-size: 24px;
+      }
+      
+      h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #303133;
+      }
+      
+      .section-desc {
+        margin-left: auto;
+        font-size: 13px;
+        color: #909399;
+      }
+    }
+    
+    .section-cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    
+    &.sync-section {
+      background: linear-gradient(135deg, #f6ffed 0%, #fff 50%);
+      border-color: #d9f7be;
+    }
+  }
 
   .local-card {
     background: #fafafa;
@@ -1251,6 +2226,32 @@ onMounted(() => {
     display: flex;
     gap: 10px;
   }
+  
+  .gitignore-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: #f0f2f5;
+    }
+    
+    .status-text {
+      flex: 1;
+      font-size: 13px;
+      color: #606266;
+      
+      &.success {
+        color: #67c23a;
+      }
+    }
+  }
 
   .unlinked-info {
     display: flex;
@@ -1259,6 +2260,85 @@ onMounted(() => {
     margin-bottom: 16px;
     color: #909399;
   }
+  
+  .link-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .link-option-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid #e4e7ed;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      border-color: #409eff;
+      background: #f0f7ff;
+      
+      .option-arrow {
+        transform: translateX(4px);
+      }
+    }
+    
+    &.disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      
+      &:hover {
+        border-color: #e4e7ed;
+        background: #f5f7fa;
+      }
+    }
+    
+    .option-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      
+      &.local {
+        background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+        color: white;
+      }
+      
+      &.remote {
+        background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+        color: white;
+      }
+    }
+    
+    .option-content {
+      flex: 1;
+      
+      h5 {
+        margin: 0 0 4px 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: #303133;
+      }
+      
+      p {
+        margin: 0;
+        font-size: 13px;
+        color: #909399;
+      }
+    }
+    
+    .option-arrow {
+      color: #c0c4cc;
+      transition: transform 0.2s ease;
+    }
+  }
+  
 
   .changes-summary {
     margin-bottom: 16px;
@@ -1502,6 +2582,291 @@ onMounted(() => {
     margin: 16px 0 8px 0;
     font-size: 14px;
     color: #303133;
+  }
+}
+</style>
+
+<!-- SSH 对话框样式（非 scoped，因为 el-dialog 渲染到 body） -->
+<style lang="scss">
+.ssh-test-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-top: 16px;
+  font-size: 14px;
+  
+  &.success {
+    background: linear-gradient(135deg, #f0f9eb 0%, #e1f3d8 100%);
+    color: #52c41a;
+    border: 1px solid #b3e19d;
+  }
+  
+  &.error {
+    background: linear-gradient(135deg, #fff2f0 0%, #ffebe8 100%);
+    color: #ff4d4f;
+    border: 1px solid #ffccc7;
+  }
+}
+
+.ssh-folder-browser {
+  .browser-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    
+    .el-button {
+      background: rgba(255, 255, 255, 0.2) !important;
+      border: 1px solid rgba(255, 255, 255, 0.3) !important;
+      color: #fff !important;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.35) !important;
+      }
+    }
+    
+    .current-path {
+      flex: 1;
+      font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 10px 16px;
+      border-radius: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+  
+  .browser-tip {
+    font-size: 13px;
+    color: #909399;
+    margin-bottom: 14px;
+    padding: 0 4px;
+  }
+  
+  .folder-list {
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    background: #f8f9fa;
+    padding: 8px;
+    
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: #c0c4cc;
+      border-radius: 3px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    .folder-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #fff;
+      margin-bottom: 6px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      
+      &:last-child {
+        margin-bottom: 0;
+      }
+      
+      &:hover {
+        background: linear-gradient(135deg, #f0f5ff 0%, #e8f4fd 100%);
+        transform: translateX(4px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+      }
+      
+      &.parent-folder {
+        background: #fafafa;
+        border: 2px dashed #e0e0e0;
+        
+        .el-icon {
+          color: #faad14 !important;
+          font-size: 22px;
+        }
+        
+        span {
+          color: #8c8c8c;
+          font-style: italic;
+        }
+        
+        &:hover {
+          background: #fff7e6;
+          border-color: #faad14;
+        }
+      }
+      
+      &.selected {
+        background: linear-gradient(135deg, #e6f7ff 0%, #d6ecff 100%);
+        border-color: #1890ff;
+        box-shadow: 0 3px 12px rgba(24, 144, 255, 0.2);
+        
+        .el-icon {
+          color: #1890ff !important;
+        }
+      }
+      
+      &.is-git {
+        background: linear-gradient(135deg, #f6ffed 0%, #e8f8e0 100%);
+        border-color: #b7eb8f;
+        
+        .el-icon {
+          color: #52c41a !important;
+        }
+        
+        &:hover {
+          background: linear-gradient(135deg, #e8f8e0 0%, #d9f7be 100%);
+          box-shadow: 0 3px 12px rgba(82, 196, 26, 0.15);
+        }
+        
+        &.selected {
+          border-color: #52c41a;
+          box-shadow: 0 3px 12px rgba(82, 196, 26, 0.25);
+        }
+      }
+      
+      .el-icon {
+        font-size: 26px;
+        color: #bfbfbf;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      }
+      
+      span {
+        flex: 1;
+        font-size: 14px;
+        font-weight: 500;
+        color: #262626;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      .el-tag {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+    }
+    
+    .empty-hint {
+      padding: 50px 20px;
+      text-align: center;
+      color: #8c8c8c;
+      font-size: 14px;
+      
+      &::before {
+        content: '📂';
+        display: block;
+        font-size: 36px;
+        margin-bottom: 10px;
+        opacity: 0.6;
+      }
+    }
+  }
+  
+  .selected-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, #f6ffed 0%, #e8f8e0 100%);
+    border: 1px solid #b7eb8f;
+    border-radius: 10px;
+    color: #389e0d;
+    font-size: 13px;
+    box-shadow: 0 2px 8px rgba(82, 196, 26, 0.12);
+    
+    .el-icon {
+      font-size: 20px;
+      color: #52c41a;
+    }
+    
+    span {
+      font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+      font-weight: 500;
+      word-break: break-all;
+    }
+  }
+}
+
+/* 忽略规则配置对话框 */
+.ignore-config {
+  .file-type-list {
+    max-height: 400px;
+    overflow-y: auto;
+    
+    .file-type-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        background: #f5f7fa;
+        border-color: #d0d0d0;
+      }
+      
+      &.is-selected {
+        background: linear-gradient(135deg, #ecf5ff 0%, #e8f4fd 100%);
+        border-color: #409eff;
+        
+        .type-name {
+          color: #409eff;
+        }
+      }
+      
+      .type-icon {
+        font-size: 24px;
+      }
+      
+      .type-info {
+        flex: 1;
+        
+        .type-name {
+          display: block;
+          font-size: 15px;
+          font-weight: 500;
+          color: #303133;
+          margin-bottom: 2px;
+        }
+        
+        .type-desc {
+          display: block;
+          font-size: 12px;
+          color: #909399;
+          font-family: 'Consolas', 'Monaco', monospace;
+        }
+      }
+    }
   }
 }
 </style>

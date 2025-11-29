@@ -24,7 +24,7 @@ export function setCurrentUserPinyin(pinyin: string) {
 }
 
 // 设置 Gitea Admin Token（主进程中已配置，这里保留接口兼容性）
-export function setGiteaAdminToken(token: string) {
+export function setGiteaAdminToken(_token: string) {
   // Token 已在主进程中配置，此函数保留但不执行
   console.log('Gitea Token 已在主进程中配置')
 }

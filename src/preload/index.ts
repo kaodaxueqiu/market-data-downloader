@@ -254,7 +254,63 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('git:initAndLink', localPath, repoFullName, remoteUrl),
     // 文件内容
     getFileContent: (localPath: string, filePath: string) => ipcRenderer.invoke('git:getFileContent', localPath, filePath),
-    getRemoteFileContent: (localPath: string, filePath: string) => ipcRenderer.invoke('git:getRemoteFileContent', localPath, filePath)
+    getRemoteFileContent: (localPath: string, filePath: string) => ipcRenderer.invoke('git:getRemoteFileContent', localPath, filePath),
+    // 忽略规则配置
+    listFiles: (dirPath: string) => ipcRenderer.invoke('git:listFiles', dirPath),
+    readGitignore: (dirPath: string) => ipcRenderer.invoke('git:readGitignore', dirPath),
+    writeGitignore: (dirPath: string, content: string) => ipcRenderer.invoke('git:writeGitignore', dirPath, content)
+  },
+
+  // SSH 远程连接管理
+  ssh: {
+    // 测试连接
+    testConnection: (config: { host: string; port: number; username: string; password: string }) => 
+      ipcRenderer.invoke('ssh:testConnection', config),
+    // 连接管理
+    connect: (config: any) => ipcRenderer.invoke('ssh:connect', config),
+    disconnect: (id: string) => ipcRenderer.invoke('ssh:disconnect', id),
+    getStatus: (id: string) => ipcRenderer.invoke('ssh:getStatus', id),
+    // 配置管理
+    getConfigs: () => ipcRenderer.invoke('ssh:getConfigs'),
+    deleteConfig: (id: string) => ipcRenderer.invoke('ssh:deleteConfig', id),
+    // 远程路径检查
+    checkRemotePath: (id: string, remotePath: string) => ipcRenderer.invoke('ssh:checkRemotePath', id, remotePath),
+    // 远程 Git 操作
+    execGit: (id: string, command: string) => ipcRenderer.invoke('ssh:execGit', id, command),
+    gitStatus: (id: string) => ipcRenderer.invoke('ssh:gitStatus', id),
+    gitTags: (id: string) => ipcRenderer.invoke('ssh:gitTags', id),
+    gitCommit: (id: string, files: string[], message: string, tagName?: string) => 
+      ipcRenderer.invoke('ssh:gitCommit', id, files, message, tagName),
+    gitPush: (id: string) => ipcRenderer.invoke('ssh:gitPush', id),
+    gitPull: (id: string) => ipcRenderer.invoke('ssh:gitPull', id),
+    // 浏览远程目录
+    listDirectory: (config: { host: string; port: number; username: string; password: string }, path: string, osType: 'linux' | 'windows') =>
+      ipcRenderer.invoke('ssh:listDirectory', config, path, osType),
+    // 列出远程目录所有文件（用于 .gitignore）
+    listFiles: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') =>
+      ipcRenderer.invoke('ssh:listFiles', config, remotePath, osType),
+    // 读取远程 .gitignore
+    readGitignore: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') =>
+      ipcRenderer.invoke('ssh:readGitignore', config, remotePath, osType),
+    // 写入远程 .gitignore
+    writeGitignore: (config: { host: string; port: number; username: string; password: string }, remotePath: string, content: string, osType: 'linux' | 'windows') =>
+      ipcRenderer.invoke('ssh:writeGitignore', config, remotePath, content, osType),
+    // 远程初始化 Git 仓库
+    initGitRepo: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows', repoFullName: string) =>
+      ipcRenderer.invoke('ssh:initGitRepo', config, remotePath, osType, repoFullName),
+    // 检查远程 Git remote 配置
+    checkGitRemote: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') =>
+      ipcRenderer.invoke('ssh:checkGitRemote', config, remotePath, osType),
+    // 设置远程 Git remote
+    setGitRemote: (config: { host: string; port: number; username: string; password: string }, remotePath: string, remoteUrl: string, osType: 'linux' | 'windows') =>
+      ipcRenderer.invoke('ssh:setGitRemote', config, remotePath, remoteUrl, osType),
+    // 打开 SSH 终端
+    openTerminal: (host: string, port: number, username: string, remotePath: string) =>
+      ipcRenderer.invoke('ssh:openTerminal', host, port, username, remotePath),
+    // 仓库级 SSH 配置管理
+    getRepoConfig: (repoFullName: string) => ipcRenderer.invoke('ssh:getRepoConfig', repoFullName),
+    saveRepoConfig: (repoFullName: string, config: any) => ipcRenderer.invoke('ssh:saveRepoConfig', repoFullName, config),
+    removeRepoConfig: (repoFullName: string) => ipcRenderer.invoke('ssh:removeRepoConfig', repoFullName)
   },
 
   // Gitea API（通过主进程调用，避免CORS）
@@ -528,6 +584,7 @@ declare global {
         diffStaged: (localPath: string, filePath?: string) => Promise<{ success: boolean; data?: string; error?: string }>
         add: (localPath: string, files: string | string[]) => Promise<{ success: boolean; message?: string; error?: string }>
         commit: (localPath: string, message: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        getLocalTags: (localPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>
         tagExists: (localPath: string, tagName: string) => Promise<{ success: boolean; exists?: boolean; error?: string }>
         createTag: (localPath: string, tagName: string, message?: string) => Promise<{ success: boolean; message?: string; error?: string }>
         pushTags: (localPath: string) => Promise<{ success: boolean; message?: string; error?: string }>
@@ -535,8 +592,39 @@ declare global {
         setLocalPath: (repoFullName: string, localPath: string) => Promise<{ success: boolean; error?: string }>
         removeLocalPath: (repoFullName: string) => Promise<{ success: boolean }>
         getAllLocalPaths: () => Promise<{ success: boolean; data?: Record<string, string> }>
+        checkLocalStatus: (localPath: string) => Promise<{ success: boolean; data?: { isGitRepo: boolean; hasRemote: boolean; remoteUrl?: string }; error?: string }>
+        initAndLink: (localPath: string, repoFullName: string, remoteUrl: string) => Promise<{ success: boolean; message?: string; steps?: string[]; error?: string }>
         getFileContent: (localPath: string, filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
         getRemoteFileContent: (localPath: string, filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
+        listFiles: (dirPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>
+        readGitignore: (dirPath: string) => Promise<{ success: boolean; exists: boolean; content?: string; error?: string }>
+        writeGitignore: (dirPath: string, content: string) => Promise<{ success: boolean; error?: string }>
+      }
+      ssh: {
+        testConnection: (config: { host: string; port: number; username: string; password: string }) => Promise<{ success: boolean; osType?: 'linux' | 'windows'; error?: string }>
+        connect: (config: any) => Promise<{ success: boolean; id?: string; error?: string }>
+        disconnect: (id: string) => Promise<{ success: boolean }>
+        getStatus: (id: string) => Promise<{ success: boolean; connected?: boolean }>
+        getConfigs: () => Promise<{ success: boolean; data?: any[] }>
+        deleteConfig: (id: string) => Promise<{ success: boolean }>
+        checkRemotePath: (id: string, remotePath: string) => Promise<{ success: boolean; exists?: boolean; isGitRepo?: boolean; error?: string }>
+        execGit: (id: string, command: string) => Promise<{ success: boolean; stdout?: string; stderr?: string; error?: string }>
+        gitStatus: (id: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        gitTags: (id: string) => Promise<{ success: boolean; tags?: string[]; error?: string }>
+        gitCommit: (id: string, files: string[], message: string, tagName?: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        gitPush: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        gitPull: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        listDirectory: (config: { host: string; port: number; username: string; password: string }, path: string, osType: 'linux' | 'windows') => Promise<{ success: boolean; data?: any[]; error?: string }>
+        listFiles: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') => Promise<{ success: boolean; data?: string[]; error?: string }>
+        readGitignore: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') => Promise<{ success: boolean; exists: boolean; content?: string; error?: string }>
+        writeGitignore: (config: { host: string; port: number; username: string; password: string }, remotePath: string, content: string, osType: 'linux' | 'windows') => Promise<{ success: boolean; error?: string }>
+        initGitRepo: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows', repoFullName: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        checkGitRemote: (config: { host: string; port: number; username: string; password: string }, remotePath: string, osType: 'linux' | 'windows') => Promise<{ success: boolean; hasRemote: boolean; remoteUrl?: string; error?: string }>
+        setGitRemote: (config: { host: string; port: number; username: string; password: string }, remotePath: string, remoteUrl: string, osType: 'linux' | 'windows') => Promise<{ success: boolean; message?: string; error?: string }>
+        openTerminal: (host: string, port: number, username: string, remotePath: string) => Promise<{ success: boolean; message?: string; sftpUrl?: string; error?: string }>
+        getRepoConfig: (repoFullName: string) => Promise<{ success: boolean; data?: any }>
+        saveRepoConfig: (repoFullName: string, config: any) => Promise<{ success: boolean }>
+        removeRepoConfig: (repoFullName: string) => Promise<{ success: boolean }>
       }
       gitea: {
         getOrgRepos: (org: string) => Promise<{ success: boolean; data?: any[]; error?: string }>

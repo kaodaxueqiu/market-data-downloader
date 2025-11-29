@@ -1106,7 +1106,7 @@ const handleCreateRepo = async () => {
   creating.value = true
   try {
     // 构建仓库数据
-    const repoData: Record<string, any> = {
+    const repoData: { name: string; description?: string; private?: boolean; auto_init?: boolean; default_branch?: string; gitignores?: string; license?: string } = {
       name: repoForm.value.name,
       description: repoForm.value.description,
       private: repoForm.value.private,
@@ -1172,20 +1172,21 @@ const handleEditRepo = async () => {
   }
 }
 
-const handleDeleteRepo = async (repo: any) => {
-  await ElMessageBox.confirm(`确定删除仓库 "${repo.name}" 吗？此操作不可恢复！`, '确认删除', { type: 'error' })
-  try {
-    const result = await window.electronAPI.gitea.deleteRepo(ORG, repo.name)
-    if (result.success) {
-      ElMessage.success('仓库已删除')
-      loadRepos()
-    } else {
-      ElMessage.error('删除失败: ' + result.error)
-    }
-  } catch (e) {
-    // 取消
-  }
-}
+// 删除仓库功能（暂未启用）
+// const handleDeleteRepo = async (repo: any) => {
+//   await ElMessageBox.confirm(`确定删除仓库 "${repo.name}" 吗？此操作不可恢复！`, '确认删除', { type: 'error' })
+//   try {
+//     const result = await window.electronAPI.gitea.deleteRepo(ORG, repo.name)
+//     if (result.success) {
+//       ElMessage.success('仓库已删除')
+//       loadRepos()
+//     } else {
+//       ElMessage.error('删除失败: ' + result.error)
+//     }
+//   } catch (e) {
+//     // 取消
+//   }
+// }
 
 const showRepoCollaborators = async (repo: any) => {
   currentRepo.value = repo

@@ -1,36 +1,39 @@
 # Dependencies
 node_modules/
 
-# Build output
+# Build outputs - 整个 dist 目录
 dist/
 
 # Logs
-logs/
 *.log
+logs/
 npm-debug.log*
 
-# Editor
-.vscode/
+# Temp files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Cache
+*.cache
+__pycache__/
+.cache/
+
+# Backup
+*.bak
+*.backup
+*~
+
+# IDE
 .idea/
+.vscode/
 *.swp
-*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Electron
-out/
-
 # Environment
 .env
 .env.local
-
-# Package manager
-yarn.lock
-pnpm-lock.yaml
-
-# Source files (不应该被打包)
-1.svg
-2222.png
-123.png

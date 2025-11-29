@@ -201,10 +201,7 @@ import {
   DataBoard,
   TrendCharts,
   Grid,
-  Folder,
-  Document,
-  Timer,
-  User
+  Folder
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
