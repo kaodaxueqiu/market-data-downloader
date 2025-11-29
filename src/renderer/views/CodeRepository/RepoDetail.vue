@@ -393,13 +393,28 @@
           </el-scrollbar>
         </div>
 
-        <!-- Diff 预览 -->
+        <!-- Diff 预览（GitHub Desktop 风格） -->
         <div class="diff-preview">
           <div class="diff-header">
             <span>{{ selectedFile || '选择文件查看差异' }}</span>
           </div>
           <el-scrollbar height="300px">
-            <pre v-if="currentDiff" class="diff-content" v-html="formatDiff(currentDiff)"></pre>
+            <div v-if="currentDiff" class="diff-content-wrapper">
+              <table class="diff-table">
+                <tbody>
+                  <tr 
+                    v-for="(line, idx) in parseDiffLines(currentDiff)" 
+                    :key="idx"
+                    :class="['diff-line', line.type]"
+                  >
+                    <td class="line-num old">{{ line.oldNum || '' }}</td>
+                    <td class="line-num new">{{ line.newNum || '' }}</td>
+                    <td class="line-sign">{{ line.sign }}</td>
+                    <td class="line-content">{{ line.content }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <el-empty v-else description="选择文件查看差异" />
           </el-scrollbar>
         </div>
@@ -1897,22 +1912,90 @@ const selectFile = async (file: { file: string; type: string; staged: boolean })
   }
 }
 
-// 格式化 diff 输出
-const formatDiff = (diff: string): string => {
-  return diff.split('\n').map(line => {
-    if (line.startsWith('+') && !line.startsWith('+++')) {
-      return `<span class="diff-add">${escapeHtml(line)}</span>`
-    } else if (line.startsWith('-') && !line.startsWith('---')) {
-      return `<span class="diff-del">${escapeHtml(line)}</span>`
-    } else if (line.startsWith('@@')) {
-      return `<span class="diff-info">${escapeHtml(line)}</span>`
-    }
-    return escapeHtml(line)
-  }).join('\n')
+// 解析 diff 为带行号的行数组（GitHub Desktop 风格）
+interface DiffLine {
+  type: 'add' | 'del' | 'context' | 'info' | 'header'
+  sign: string
+  content: string
+  oldNum: number | null
+  newNum: number | null
 }
 
-const escapeHtml = (text: string): string => {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const parseDiffLines = (diff: string): DiffLine[] => {
+  const lines = diff.split('\n')
+  const result: DiffLine[] = []
+  let oldLine = 0
+  let newLine = 0
+  
+  for (const line of lines) {
+    // 解析 @@ -x,y +a,b @@ 行号信息
+    const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
+    if (hunkMatch) {
+      oldLine = parseInt(hunkMatch[1]) - 1
+      newLine = parseInt(hunkMatch[2]) - 1
+      result.push({
+        type: 'info',
+        sign: '@@',
+        content: line.replace(/^@@ .* @@/, '').trim(),
+        oldNum: null,
+        newNum: null
+      })
+      continue
+    }
+    
+    // 文件头信息
+    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('diff ') || line.startsWith('index ')) {
+      result.push({
+        type: 'header',
+        sign: '',
+        content: line,
+        oldNum: null,
+        newNum: null
+      })
+      continue
+    }
+    
+    // 新增行
+    if (line.startsWith('+')) {
+      newLine++
+      result.push({
+        type: 'add',
+        sign: '+',
+        content: line.substring(1),
+        oldNum: null,
+        newNum: newLine
+      })
+      continue
+    }
+    
+    // 删除行
+    if (line.startsWith('-')) {
+      oldLine++
+      result.push({
+        type: 'del',
+        sign: '-',
+        content: line.substring(1),
+        oldNum: oldLine,
+        newNum: null
+      })
+      continue
+    }
+    
+    // 上下文（未变更）
+    if (line.startsWith(' ') || line === '') {
+      oldLine++
+      newLine++
+      result.push({
+        type: 'context',
+        sign: '',
+        content: line.startsWith(' ') ? line.substring(1) : line,
+        oldNum: oldLine,
+        newNum: newLine
+      })
+    }
+  }
+  
+  return result
 }
 
 // 全选/取消全选
@@ -2472,25 +2555,91 @@ onMounted(() => {
     flex: 1;
     border: 1px solid #ebeef5;
     border-radius: 8px;
+    overflow: hidden;
     
     .diff-header {
       padding: 12px 16px;
       border-bottom: 1px solid #ebeef5;
       font-weight: 600;
+      background: #fafafa;
     }
     
-    .diff-content {
-      padding: 16px;
-      font-family: 'Consolas', 'Monaco', monospace;
+    .diff-content-wrapper {
+      background: #fff;
+    }
+    
+    .diff-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
       font-size: 12px;
-      line-height: 1.6;
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-all;
+      line-height: 1.5;
       
-      :deep(.diff-add) { color: #67c23a; background: #e1f3d8; display: block; }
-      :deep(.diff-del) { color: #f56c6c; background: #fef0f0; display: block; }
-      :deep(.diff-info) { color: #409eff; background: #ecf5ff; display: block; }
+      .diff-line {
+        &.add {
+          background: #e6ffec;
+          .line-num { background: #ccffd8; color: #22863a; }
+          .line-sign { color: #22863a; }
+          .line-content { color: #22863a; }
+        }
+        
+        &.del {
+          background: #ffebe9;
+          .line-num { background: #ffd7d5; color: #cb2431; }
+          .line-sign { color: #cb2431; }
+          .line-content { color: #cb2431; }
+        }
+        
+        &.context {
+          background: #fff;
+          .line-num { background: #f6f8fa; color: #6e7781; }
+        }
+        
+        &.info {
+          background: #ddf4ff;
+          .line-num { background: #ddf4ff; }
+          .line-sign { color: #0969da; font-weight: 600; }
+          .line-content { color: #0969da; font-weight: 600; }
+        }
+        
+        &.header {
+          background: #f6f8fa;
+          .line-content { color: #6e7781; font-style: italic; }
+        }
+      }
+      
+      td {
+        padding: 0 8px;
+        vertical-align: top;
+        white-space: pre;
+        border: none;
+      }
+      
+      .line-num {
+        width: 40px;
+        min-width: 40px;
+        text-align: right;
+        color: #6e7781;
+        user-select: none;
+        border-right: 1px solid #eaeef2;
+        
+        &.old { border-right: 1px solid #eaeef2; }
+        &.new { border-right: 1px solid #eaeef2; }
+      }
+      
+      .line-sign {
+        width: 20px;
+        min-width: 20px;
+        text-align: center;
+        user-select: none;
+        font-weight: 600;
+      }
+      
+      .line-content {
+        width: 100%;
+        word-break: break-all;
+        white-space: pre-wrap;
+      }
     }
   }
 }

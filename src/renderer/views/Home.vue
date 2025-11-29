@@ -13,24 +13,33 @@
       </div>
     </el-card>
     
-    <!-- 功能模块快捷入口 -->
+    <!-- 功能模块快捷入口（全量展示，无权限的显示锁定状态） -->
     <div class="modules-grid">
       <el-card 
-        v-for="module in modules" 
-        :key="module.name" 
+        v-for="module in allModules" 
+        :key="module.id" 
         class="module-card"
+        :class="{ 'module-locked': !hasPermission(module.id) }"
         shadow="hover"
-        @click="goToModule(module.path)"
+        @click="handleModuleClick(module)"
       >
         <div class="module-content">
           <div class="module-icon">
-            <el-icon :size="48" :color="module.color">
+            <el-icon :size="48" :color="hasPermission(module.id) ? module.color : '#C0C4CC'">
               <component :is="module.icon" />
             </el-icon>
           </div>
           <div class="module-info">
-            <div class="module-name">{{ module.name }}</div>
+            <div class="module-name">
+              {{ module.name }}
+              <el-icon v-if="!hasPermission(module.id)" class="lock-icon" color="#C0C4CC">
+                <Lock />
+              </el-icon>
+            </div>
             <div class="module-desc">{{ module.description }}</div>
+            <el-tag v-if="!hasPermission(module.id)" type="info" size="small" class="premium-tag">
+              需要开通
+            </el-tag>
           </div>
         </div>
       </el-card>
@@ -99,117 +108,46 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  Download,
-  Setting,
-  DataAnalysis,
-  Connection,
-  Box,
-  Coin,
-  List,
-  Clock,
-  Key,
-  Monitor
-} from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { DataAnalysis, Lock } from '@element-plus/icons-vue'
+import { getHomeModules, getMenuFirstPath, type MenuItem } from '@/config/menuConfig'
 
 const router = useRouter()
 
 // 用户菜单权限
 const menuPermissions = ref<string[]>([])
 
-// 所有功能模块配置（与菜单ID对应）
-const allModules = [
-  {
-    name: '数据中心',
-    description: '查询市场数据、财务数据',
-    icon: Connection,
-    color: '#409EFF',
-    path: '/data-center',
-    menuId: 'data_center'
-  },
-  {
-    name: '因子库',
-    description: '因子数据管理与查询',
-    icon: Box,
-    color: '#67C23A',
-    path: '/factor-library',
-    menuId: 'factor_library'
-  },
-  {
-    name: '基金管理',
-    description: '基金运维、净值、申赎',
-    icon: Coin,
-    color: '#E6A23C',
-    path: '/fund-management',
-    menuId: 'fund_management'
-  },
-  {
-    name: '任务管理',
-    description: '查看数据任务状态',
-    icon: List,
-    color: '#F56C6C',
-    path: '/tasks',
-    menuId: 'task_management'
-  },
-  {
-    name: '历史记录',
-    description: '查看操作历史',
-    icon: Clock,
-    color: '#909399',
-    path: '/history',
-    menuId: 'history'
-  },
-  {
-    name: 'SDK下载',
-    description: '下载开发工具包',
-    icon: Download,
-    color: '#5470C6',
-    path: '/sdk-download',
-    menuId: 'sdk_download'
-  },
-  {
-    name: 'API Key管理',
-    description: '管理用户和权限',
-    icon: Key,
-    color: '#91CC75',
-    path: '/api-key-management',
-    menuId: 'api_key_management'
-  },
-  {
-    name: '系统监控',
-    description: 'Redis/市场/服务/定时任务监控',
-    icon: Monitor,
-    color: '#EE6666',
-    path: '/monitoring/redis',
-    menuId: 'system_monitor'
-  },
-  {
-    name: '系统设置',
-    description: '系统参数配置',
-    icon: Setting,
-    color: '#FAC858',
-    path: '/settings',
-    menuId: 'settings'
-  }
-]
-
-// 根据权限过滤可见模块
-const modules = computed(() => {
-  if (menuPermissions.value.length === 0) {
-    // 没有权限数据，显示所有模块
-    return allModules
-  }
-  // 只显示有权限的模块
-  return allModules.filter(m => menuPermissions.value.includes(m.menuId))
-})
+// 从统一配置获取首页模块（自动同步，无需硬编码！）
+const allModules = getHomeModules()
 
 const todayQueries = ref(0)
 const activeTasks = ref(0)
 
-const goToModule = (path: string) => {
-  router.push(path)
+// 检查是否有权限
+const hasPermission = (menuId: string) => {
+  // 如果没有权限数据，默认有权限（兼容模式）
+  if (menuPermissions.value.length === 0) {
+    return true
+  }
+  return menuPermissions.value.includes(menuId)
+}
+
+// 处理模块点击
+const handleModuleClick = (module: MenuItem) => {
+  if (hasPermission(module.id)) {
+    // 有权限，跳转到第一个可用路径
+    const targetPath = getMenuFirstPath(module)
+    router.push(targetPath)
+  } else {
+    // 无权限，提示用户
+    ElMessage.warning({
+      message: `「${module.name}」功能需要开通后才能使用，请联系管理员开通权限`,
+      duration: 3000,
+      showClose: true
+    })
+  }
 }
 
 // 加载菜单权限
@@ -287,10 +225,29 @@ onMounted(async () => {
     
     .module-card {
       cursor: pointer;
-      transition: transform 0.2s;
+      transition: all 0.2s;
+      position: relative;
       
       &:hover {
         transform: translateY(-4px);
+      }
+      
+      // 无权限的卡片样式
+      &.module-locked {
+        opacity: 0.75;
+        background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+        
+        &:hover {
+          transform: translateY(-2px);
+        }
+        
+        .module-name {
+          color: #909399 !important;
+        }
+        
+        .module-desc {
+          color: #C0C4CC !important;
+        }
       }
       
       .module-content {
@@ -311,11 +268,23 @@ onMounted(async () => {
             font-weight: bold;
             color: #303133;
             margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            
+            .lock-icon {
+              font-size: 16px;
+            }
           }
           
           .module-desc {
             font-size: 14px;
             color: #909399;
+            margin-bottom: 6px;
+          }
+          
+          .premium-tag {
+            font-size: 11px;
           }
         }
       }
