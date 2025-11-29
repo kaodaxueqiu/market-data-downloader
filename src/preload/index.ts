@@ -239,6 +239,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add: (localPath: string, files: string | string[]) => ipcRenderer.invoke('git:add', localPath, files),
     commit: (localPath: string, message: string) => ipcRenderer.invoke('git:commit', localPath, message),
     // 标签操作
+    getLocalTags: (localPath: string) => ipcRenderer.invoke('git:getLocalTags', localPath),
     tagExists: (localPath: string, tagName: string) => ipcRenderer.invoke('git:tagExists', localPath, tagName),
     createTag: (localPath: string, tagName: string, message?: string) => ipcRenderer.invoke('git:createTag', localPath, tagName, message),
     pushTags: (localPath: string) => ipcRenderer.invoke('git:pushTags', localPath),
@@ -247,6 +248,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setLocalPath: (repoFullName: string, localPath: string) => ipcRenderer.invoke('git:setLocalPath', repoFullName, localPath),
     removeLocalPath: (repoFullName: string) => ipcRenderer.invoke('git:removeLocalPath', repoFullName),
     getAllLocalPaths: () => ipcRenderer.invoke('git:getAllLocalPaths'),
+    // 智能关联（检测状态 + 自动初始化）
+    checkLocalStatus: (localPath: string) => ipcRenderer.invoke('git:checkLocalStatus', localPath),
+    initAndLink: (localPath: string, repoFullName: string, remoteUrl: string) => 
+      ipcRenderer.invoke('git:initAndLink', localPath, repoFullName, remoteUrl),
     // 文件内容
     getFileContent: (localPath: string, filePath: string) => ipcRenderer.invoke('git:getFileContent', localPath, filePath),
     getRemoteFileContent: (localPath: string, filePath: string) => ipcRenderer.invoke('git:getRemoteFileContent', localPath, filePath)

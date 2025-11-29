@@ -46,7 +46,7 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',  // 只监听IPv4，避免IPv6权限问题
-    port: 5173
+    port: 3000
   },
   build: {
     outDir: 'dist/renderer'

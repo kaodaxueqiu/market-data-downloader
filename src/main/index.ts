@@ -76,7 +76,7 @@ function createWindow() {
 
   // 开发环境
   if (process.env.NODE_ENV === 'development') {
-    console.log('正在加载开发服务器: http://localhost:5173')
+    console.log('正在加载开发服务器: http://localhost:3000')
     
     // 延迟加载，确保Vite服务器准备就绪
     let retryCount = 0
@@ -86,7 +86,7 @@ function createWindow() {
       try {
         retryCount++
         console.log(`🔄 尝试加载页面... (第${retryCount}次)`)
-        await mainWindow!.loadURL('http://localhost:5173')
+        await mainWindow!.loadURL('http://localhost:3000')
         console.log('✅ 页面加载成功！')
         // 开发模式下启用DevTools
         mainWindow!.webContents.openDevTools()
@@ -1263,6 +1263,25 @@ ipcMain.handle('git:commit', async (_event, localPath: string, message: string) 
   }
 })
 
+// Git: 获取本地仓库所有标签
+ipcMain.handle('git:getLocalTags', async (_event, localPath: string) => {
+  try {
+    if (!fs.existsSync(localPath)) {
+      return { success: false, error: '本地仓库不存在' }
+    }
+    
+    // 获取所有标签，按版本号排序
+    const { stdout } = await execGitCommand('git tag -l --sort=-v:refname', localPath)
+    const tags = stdout.trim().split('\n').filter(Boolean)
+    
+    console.log(`[Git] 本地标签列表: ${tags.join(', ')}`)
+    return { success: true, data: tags }
+  } catch (error: any) {
+    console.error('[Git] getLocalTags 错误:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
 // Git: 检查标签是否存在
 ipcMain.handle('git:tagExists', async (_event, localPath: string, tagName: string) => {
   try {
@@ -1339,7 +1358,117 @@ ipcMain.handle('git:getLocalPath', async (_event, repoFullName: string) => {
   return { success: false, data: null }
 })
 
-// Git: 设置本地路径映射（建立关联）
+// Git: 检测本地目录状态（用于关联前的检测）
+ipcMain.handle('git:checkLocalStatus', async (_event, localPath: string) => {
+  console.log(`[Git] 检测本地目录状态: ${localPath}`)
+  
+  // 检查目录是否存在
+  if (!fs.existsSync(localPath)) {
+    return { success: false, error: '目录不存在' }
+  }
+  
+  const gitDir = path.join(localPath, '.git')
+  const isGitRepo = fs.existsSync(gitDir)
+  
+  // 如果是 Git 仓库，检查是否已有远程配置
+  let hasRemote = false
+  let remoteUrl = ''
+  if (isGitRepo) {
+    try {
+      const { stdout } = await execGitCommand('git remote get-url origin', localPath)
+      remoteUrl = stdout.trim()
+      hasRemote = !!remoteUrl
+    } catch (e) {
+      // 没有配置远程仓库
+      hasRemote = false
+    }
+  }
+  
+  return {
+    success: true,
+    data: {
+      isGitRepo,
+      hasRemote,
+      remoteUrl
+    }
+  }
+})
+
+// Git: 初始化本地仓库并关联远程（一键操作）
+ipcMain.handle('git:initAndLink', async (_event, localPath: string, repoFullName: string, remoteUrl: string) => {
+  console.log(`[Git] 初始化并关联: ${localPath} -> ${remoteUrl}`)
+  
+  const gitDir = path.join(localPath, '.git')
+  const isGitRepo = fs.existsSync(gitDir)
+  const steps: string[] = []
+  
+  try {
+    // 步骤1: 如果不是 Git 仓库，执行 git init
+    if (!isGitRepo) {
+      console.log('[Git] 执行 git init...')
+      await execGitCommand('git init', localPath)
+      steps.push('初始化 Git 仓库')
+    }
+    
+    // 步骤2: 检查是否已有 origin 远程配置
+    let hasOrigin = false
+    try {
+      await execGitCommand('git remote get-url origin', localPath)
+      hasOrigin = true
+    } catch (e) {
+      hasOrigin = false
+    }
+    
+    // 步骤3: 配置远程仓库
+    if (hasOrigin) {
+      // 已有 origin，更新它
+      console.log('[Git] 更新远程仓库地址...')
+      await execGitCommand(`git remote set-url origin "${remoteUrl}"`, localPath)
+      steps.push('更新远程仓库地址')
+    } else {
+      // 没有 origin，添加它
+      console.log('[Git] 添加远程仓库...')
+      await execGitCommand(`git remote add origin "${remoteUrl}"`, localPath)
+      steps.push('配置远程仓库地址')
+    }
+    
+    // 步骤4: 配置默认分支为 main
+    console.log('[Git] 配置默认分支...')
+    await execGitCommand('git config init.defaultBranch main', localPath)
+    
+    // 检查当前分支，如果是 master 则重命名为 main
+    try {
+      const { stdout: currentBranch } = await execGitCommand('git branch --show-current', localPath)
+      if (currentBranch.trim() === 'master') {
+        await execGitCommand('git branch -m master main', localPath)
+        steps.push('重命名分支 master → main')
+      }
+    } catch (e) {
+      // 可能还没有任何提交，忽略
+    }
+    
+    // 步骤5: 保存关联关系
+    setRepoLocalPath(repoFullName, localPath)
+    steps.push('建立本地关联')
+    
+    console.log(`[Git] 初始化并关联完成，执行了: ${steps.join(' → ')}`)
+    
+    return {
+      success: true,
+      steps,
+      message: '关联成功'
+    }
+  } catch (error: any) {
+    console.error('[Git] 初始化并关联失败:', error)
+    return {
+      success: false,
+      steps,
+      error: error.message || '操作失败'
+    }
+  }
+})
+
+// Git: 设置本地路径映射（建立关联）- 保留原有接口兼容
 ipcMain.handle('git:setLocalPath', async (_event, repoFullName: string, localPath: string) => {
   // 验证路径是否存在且是 git 仓库
   if (!fs.existsSync(localPath)) {

@@ -176,11 +176,11 @@
               </div>
             </div>
 
-            <!-- 本地变更与推送卡片（仅关联后显示） -->
+            <!-- 本地 Git 仓库变更卡片（仅关联后显示） -->
             <template v-if="localPath">
               <div class="local-card changes-card">
                 <div class="card-header">
-                  <h4>📄 本地变更</h4>
+                  <h4>📄 本地 Git 仓库变更</h4>
                   <el-button size="small" @click="refreshChanges" :loading="loadingChanges">
                     刷新
                   </el-button>
@@ -188,7 +188,7 @@
                 <div class="card-body">
                   <template v-if="changedFiles.length > 0">
                     <div class="changes-summary">
-                      <el-tag type="warning">{{ changedFiles.length }} 个文件有变更</el-tag>
+                      <el-tag type="warning">{{ changedFiles.length }} 个文件与本地 Git 仓库不一致</el-tag>
                     </div>
                     <div class="files-list-mini">
                       <div 
@@ -206,13 +206,13 @@
                       </div>
                     </div>
                     <el-button type="warning" @click="showChangesDialog = true">
-                      提交变更到本地
+                      比对 / 提交到本地 Git 仓库
                     </el-button>
                   </template>
                   <template v-else>
                     <div class="no-changes-info">
                       <el-icon color="#67c23a"><SuccessFilled /></el-icon>
-                      <span>暂无本地变更</span>
+                      <span>本地 Git 仓库没有待提交的修改</span>
                     </div>
                   </template>
                 </div>
@@ -226,7 +226,7 @@
                   <template v-if="changedFiles.length > 0">
                     <div class="push-disabled-info">
                       <el-icon color="#e6a23c"><Warning /></el-icon>
-                      <span>请先提交本地变更</span>
+                      <span>请先提交到本地 Git 仓库</span>
                     </div>
                     <el-button type="primary" disabled>
                       <el-icon><Upload /></el-icon>
@@ -286,7 +286,7 @@
     <!-- 变更文件对话框 -->
     <el-dialog
       v-model="showChangesDialog"
-      title="本地变更"
+      title="本地 Git 仓库变更"
       width="900px"
       :close-on-click-modal="false"
     >
@@ -347,16 +347,33 @@
           show-word-limit
         />
         
-        <!-- 创建标签选项 -->
+        <!-- 版本标签（必填，强制小写 v 前缀） -->
         <div class="tag-option">
-          <el-checkbox v-model="createTag">创建版本标签</el-checkbox>
-          <el-input
-            v-if="createTag"
-            v-model="tagName"
-            placeholder="标签名，如 v1.0.0"
-            style="width: 200px; margin-left: 10px;"
-            size="small"
-          />
+          <div class="tag-input-row">
+            <span class="tag-label">版本标签 <span style="color: #f56c6c;">*</span></span>
+            <div class="tag-input-wrapper">
+              <span class="tag-prefix">v</span>
+              <el-input
+                v-model="tagVersion"
+                placeholder="如 1.7.7"
+                style="width: 150px;"
+                size="small"
+                @input="onTagVersionInput"
+              />
+            </div>
+          </div>
+          <div class="tag-info">
+            <span v-if="latestTag" class="latest-tag">
+              📌 当前最新标签：<el-tag size="small" type="info">{{ latestTag }}</el-tag>
+              <span v-if="suggestedNextVersion" class="suggested-version">
+                → 建议下一个：<el-tag size="small" type="success">v{{ suggestedNextVersion }}</el-tag>
+              </span>
+            </span>
+            <span v-else class="latest-tag">
+              📌 暂无标签，这将是第一个版本标签
+            </span>
+            <span class="tag-tip">版本号格式：v主版本.次版本.修订号（如 v1.7.7）</span>
+          </div>
         </div>
       </div>
 
@@ -366,9 +383,9 @@
           type="primary" 
           @click="commitChanges"
           :loading="committing"
-          :disabled="!hasSelectedFiles || (createTag && !tagName.trim())"
+          :disabled="!hasSelectedFiles || !tagVersion.trim()"
         >
-          提交到本地
+          提交到本地 Git 仓库
         </el-button>
       </template>
     </el-dialog>
@@ -478,8 +495,41 @@ const selectedFile = ref<string | null>(null)
 const currentDiff = ref('')
 const commitMessage = ref('')
 const committing = ref(false)
-const createTag = ref(false)
-const tagName = ref('')
+const tagVersion = ref('')  // 用户输入的版本号（不含 v 前缀）
+const latestTag = ref('')  // 当前最新标签
+
+// 计算完整的标签名（加上 v 前缀）
+const tagName = computed(() => {
+  const version = tagVersion.value.trim()
+  if (!version) return ''
+  return `v${version}`
+})
+
+// 计算建议的下一个版本号
+const suggestedNextVersion = computed(() => {
+  if (!latestTag.value) return '1.0.0'
+  
+  // 移除 v/V 前缀，解析版本号
+  const version = latestTag.value.replace(/^[vV]/, '')
+  const parts = version.split('.').map(n => parseInt(n) || 0)
+  
+  // 修订号 +1
+  if (parts.length >= 3) {
+    parts[2] = (parts[2] || 0) + 1
+  } else if (parts.length === 2) {
+    parts.push(1)
+  } else {
+    return '1.0.1'
+  }
+  
+  return parts.join('.')
+})
+
+// 版本号输入处理（只允许数字和点）
+const onTagVersionInput = (value: string) => {
+  // 移除非法字符，只保留数字和点
+  tagVersion.value = value.replace(/[^0-9.]/g, '')
+}
 
 // 计算属性
 const hasChanges = computed(() => changedFiles.value.length > 0)
@@ -515,6 +565,9 @@ const loadData = async () => {
       tags: tagsData || [],
       commits: commitsData || []
     }
+    
+    // 更新最新标签（从远程数据中获取）
+    updateLatestTag()
   } catch (err: any) {
     console.error('加载失败:', err)
     error.value = err.message || '加载数据失败，请检查网络连接'
@@ -530,11 +583,39 @@ const checkLocalPath = async () => {
     if (result.success && result.data) {
       localPath.value = result.data
       await refreshChanges()
+      updateLatestTag()  // 更新最新标签显示
     } else {
       localPath.value = null
+      latestTag.value = ''
     }
   } catch (e) {
     console.error('检查本地路径失败:', e)
+  }
+}
+
+// 更新最新标签（从远程仓库获取，因为这是团队共享的版本号）
+const updateLatestTag = () => {
+  // 从已加载的远程标签数据中获取
+  if (versions.value.tags && versions.value.tags.length > 0) {
+    // 按版本号排序，取最新的（忽略 v/V 前缀的大小写）
+    const sortedTags = [...versions.value.tags].sort((a, b) => {
+      // 移除 v/V 前缀，只比较数字部分
+      const versionA = a.name.replace(/^[vV]/, '').split('.').map(n => parseInt(n) || 0)
+      const versionB = b.name.replace(/^[vV]/, '').split('.').map(n => parseInt(n) || 0)
+      
+      // 逐位比较版本号
+      for (let i = 0; i < Math.max(versionA.length, versionB.length); i++) {
+        const numA = versionA[i] || 0
+        const numB = versionB[i] || 0
+        if (numA !== numB) return numB - numA  // 降序，大的在前
+      }
+      return 0
+    })
+    
+    latestTag.value = sortedTags[0]?.name || ''
+    console.log('最新标签:', latestTag.value, '（共', versions.value.tags.length, '个标签）')
+  } else {
+    latestTag.value = ''
   }
 }
 
@@ -628,22 +709,126 @@ const confirmExecute = async () => {
   }
 }
 
-// 关联本地目录
+// 关联本地目录（智能检测 + 用户提示）
 const linkLocalFolder = async () => {
-  const result = await window.electronAPI.dialog.selectDirectory()
-  if (!result) return
+  // 步骤1: 选择文件夹
+  const selectedPath = await window.electronAPI.dialog.selectDirectory()
+  if (!selectedPath) return
   
   try {
-    const linkResult = await window.electronAPI.git.setLocalPath(repoFullName.value, result)
-    if (linkResult.success) {
-      localPath.value = result
-      ElMessage.success('关联成功')
+    // 步骤2: 检测文件夹状态
+    const statusResult = await window.electronAPI.git.checkLocalStatus(selectedPath)
+    if (!statusResult.success) {
+      ElMessage.error(statusResult.error || '检测目录状态失败')
+      return
+    }
+    
+    const { isGitRepo, hasRemote, remoteUrl } = statusResult.data
+    
+    // 步骤3: 根据状态构建提示信息
+    let confirmMessage = ''
+    let confirmTitle = ''
+    
+    if (!isGitRepo) {
+      // 情况1: 普通文件夹，需要初始化
+      confirmTitle = '初始化 Git 仓库'
+      confirmMessage = `
+        <div style="line-height: 1.8;">
+          <p><strong>检测结果：</strong>该目录尚未初始化为 Git 仓库</p>
+          <p><strong>目录路径：</strong><code>${selectedPath}</code></p>
+          <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
+          <p><strong>系统将自动执行以下操作：</strong></p>
+          <ol style="margin: 8px 0; padding-left: 20px;">
+            <li>初始化 Git 仓库 <code>git init</code></li>
+            <li>配置远程仓库地址</li>
+            <li>建立本地关联</li>
+          </ol>
+          <p style="color: #67c23a;">✓ 完成后即可进行代码提交和版本管理</p>
+        </div>
+      `
+    } else if (!hasRemote) {
+      // 情况2: 已是 Git 仓库，但没有远程配置
+      confirmTitle = '配置远程仓库'
+      confirmMessage = `
+        <div style="line-height: 1.8;">
+          <p><strong>检测结果：</strong>该目录已是 Git 仓库，但未配置远程地址</p>
+          <p><strong>目录路径：</strong><code>${selectedPath}</code></p>
+          <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
+          <p><strong>系统将自动执行以下操作：</strong></p>
+          <ol style="margin: 8px 0; padding-left: 20px;">
+            <li>配置远程仓库地址</li>
+            <li>建立本地关联</li>
+          </ol>
+          <p style="color: #67c23a;">✓ 完成后即可进行代码提交和版本管理</p>
+        </div>
+      `
+    } else {
+      // 情况3: 已有 Git 仓库和远程配置
+      const repoCloneUrl = repoDetail.value?.clone_url || ''
+      if (remoteUrl.includes(repoName.value)) {
+        // 远程地址匹配，直接关联
+        confirmTitle = '确认关联'
+        confirmMessage = `
+          <div style="line-height: 1.8;">
+            <p><strong>检测结果：</strong>该目录已是 Git 仓库，且远程地址匹配</p>
+            <p><strong>目录路径：</strong><code>${selectedPath}</code></p>
+            <p><strong>远程地址：</strong><code>${remoteUrl}</code></p>
+            <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
+            <p style="color: #67c23a;">✓ 将直接建立本地关联</p>
+          </div>
+        `
+      } else {
+        // 远程地址不匹配，询问是否覆盖
+        confirmTitle = '⚠️ 远程地址不匹配'
+        confirmMessage = `
+          <div style="line-height: 1.8;">
+            <p><strong>检测结果：</strong>该目录已关联其他远程仓库</p>
+            <p><strong>目录路径：</strong><code>${selectedPath}</code></p>
+            <p><strong>当前远程：</strong><code>${remoteUrl}</code></p>
+            <p><strong>目标仓库：</strong><code>${repoCloneUrl}</code></p>
+            <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
+            <p style="color: #e6a23c;">⚠️ 继续操作将覆盖现有远程配置</p>
+          </div>
+        `
+      }
+    }
+    
+    // 步骤4: 用户确认
+    await ElMessageBox.confirm(confirmMessage, confirmTitle, {
+      confirmButtonText: '确认执行',
+      cancelButtonText: '取消',
+      dangerouslyUseHTMLString: true,
+      type: isGitRepo && hasRemote && !remoteUrl.includes(repoName.value) ? 'warning' : 'info'
+    })
+    
+    // 步骤5: 执行关联操作
+    const remoteUrlToUse = repoDetail.value?.clone_url || `http://61.151.241.233:3030/zizhou/${repoName.value}.git`
+    
+    const initResult = await window.electronAPI.git.initAndLink(
+      selectedPath,
+      repoFullName.value,
+      remoteUrlToUse
+    )
+    
+    if (initResult.success) {
+      localPath.value = selectedPath
+      
+      // 显示执行的步骤
+      const stepsMsg = initResult.steps?.join(' → ') || '关联成功'
+      ElMessage.success({
+        message: `✅ ${stepsMsg}`,
+        duration: 3000
+      })
+      
       await refreshChanges()
     } else {
-      ElMessage.error(linkResult.error || '关联失败')
+      ElMessage.error(initResult.error || '关联失败')
     }
   } catch (e: any) {
-    ElMessage.error(e.message || '关联失败')
+    if (e !== 'cancel' && e?.message !== 'cancel') {
+      ElMessage.error(e.message || '操作失败')
+    }
+    // 用户取消，不提示
   }
 }
 
@@ -819,8 +1004,16 @@ const commitChanges = async () => {
     return
   }
   
-  if (createTag.value && !tagName.value.trim()) {
-    ElMessage.warning('请输入标签名')
+  // 版本标签必填
+  if (!tagVersion.value.trim()) {
+    ElMessage.warning('请输入版本号')
+    return
+  }
+  
+  // 验证版本号格式
+  const versionPattern = /^\d+\.\d+\.\d+$/
+  if (!versionPattern.test(tagVersion.value.trim())) {
+    ElMessage.warning('版本号格式不正确，请使用 x.y.z 格式（如 1.7.7）')
     return
   }
   
@@ -829,11 +1022,15 @@ const commitChanges = async () => {
   
   committing.value = true
   try {
-    // 0. 如果需要创建标签，先检查标签是否已存在
-    if (createTag.value && tagName.value.trim()) {
-      const existsResult = await window.electronAPI.git.tagExists(localPath.value, tagName.value.trim())
-      if (existsResult.success && existsResult.exists) {
-        ElMessage.error(`标签 "${tagName.value.trim()}" 已存在，请使用其他标签名`)
+    // 0. 检查标签是否已存在（忽略大小写，避免 v1.7.6 和 V1.7.6 重复）
+    const localTagsResult = await window.electronAPI.git.getLocalTags(localPath.value)
+    if (localTagsResult.success && localTagsResult.data) {
+      const newTagLower = tagName.value.toLowerCase()
+      const existingTag = localTagsResult.data.find(
+        (t: string) => t.toLowerCase() === newTagLower
+      )
+      if (existingTag) {
+        ElMessage.error(`版本 "${tagVersion.value}" 已存在（标签：${existingTag}），请使用其他版本号`)
         committing.value = false
         return
       }
@@ -853,21 +1050,20 @@ const commitChanges = async () => {
       return
     }
     
-    // 3. 如果需要创建标签
-    if (createTag.value && tagName.value.trim()) {
-      const tagResult = await window.electronAPI.git.createTag(localPath.value, tagName.value.trim(), message)
-      if (!tagResult.success) {
-        ElMessage.error('创建标签失败：' + (tagResult.error || '未知错误'))
-        return
-      }
+    // 3. 创建版本标签（强制）
+    const tagResult = await window.electronAPI.git.createTag(localPath.value, tagName.value.trim(), message)
+    if (!tagResult.success) {
+      ElMessage.error('创建标签失败：' + (tagResult.error || '未知错误'))
+      return
     }
     
-    ElMessage.success(createTag.value ? '提交成功，标签已创建（请点击"推送到远程"同步到服务器）' : '提交成功（请点击"推送到远程"同步到服务器）')
+    ElMessage.success('提交成功，版本标签已创建（请点击"推送到远程"同步到服务器）')
     showChangesDialog.value = false
     commitMessage.value = ''
-    createTag.value = false
-    tagName.value = ''
+    tagVersion.value = ''
     
+    // 刷新标签列表
+    await loadData()
     await refreshChanges()
   } catch (e: any) {
     ElMessage.error(e.message || '操作失败')
@@ -1226,8 +1422,66 @@ onMounted(() => {
 
   .tag-option {
     margin-top: 16px;
-    display: flex;
-    align-items: center;
+    
+    .tag-input-row {
+      display: flex;
+      align-items: center;
+    }
+    
+    .tag-label {
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    
+    .tag-input-wrapper {
+      display: flex;
+      align-items: center;
+      margin-left: 10px;
+      
+      .tag-prefix {
+        background: #f0f2f5;
+        border: 1px solid #dcdfe6;
+        border-right: none;
+        border-radius: 4px 0 0 4px;
+        padding: 0 10px;
+        height: 24px;
+        line-height: 24px;
+        font-family: monospace;
+        font-weight: 600;
+        color: #606266;
+      }
+      
+      :deep(.el-input__wrapper) {
+        border-radius: 0 4px 4px 0;
+      }
+    }
+    
+    .tag-info {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-left: 2px;
+    }
+    
+    .latest-tag {
+      font-size: 13px;
+      color: #606266;
+      
+      .el-tag {
+        margin-left: 6px;
+      }
+      
+      .suggested-version {
+        margin-left: 10px;
+        color: #67c23a;
+      }
+    }
+    
+    .tag-tip {
+      font-size: 12px;
+      color: #909399;
+    }
   }
 }
 
