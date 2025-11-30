@@ -17,8 +17,34 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/factor-library',
     name: 'FactorLibrary',
-    component: () => import('../views/FactorLibrary.vue'),
-    meta: { menuId: 'factor_library' }
+    component: () => import('../views/FactorLibrary/index.vue'),
+    meta: { menuId: 'factor_library' },
+    children: [
+      {
+        path: 'plaza',
+        name: 'FactorPlaza',
+        component: () => import('../views/FactorLibrary/Plaza.vue'),
+        meta: { menuId: 'factor_plaza' }
+      },
+      {
+        path: 'my-factors',
+        name: 'MyFactors',
+        component: () => import('../views/FactorLibrary/MyFactors.vue'),
+        meta: { menuId: 'my_factors' }
+      },
+      {
+        path: 'submit',
+        name: 'FactorSubmit',
+        component: () => import('../views/FactorLibrary/Submit.vue'),
+        meta: { menuId: 'factor_submit' }
+      },
+      {
+        path: 'manage',
+        name: 'FactorManage',
+        component: () => import('../views/FactorLibrary/Manage.vue'),
+        meta: { menuId: 'factor_manage' }
+      }
+    ]
   },
   {
     path: '/fund-management',
@@ -295,6 +321,30 @@ router.beforeEach((to, _from, next) => {
     } else if (userMenuPermissions.includes('code_repository')) {
       // 有父菜单权限但没有子菜单权限，显示提示
       console.warn('⚠️ 有代码仓库权限，但没有子菜单权限')
+      next('/')  // 跳转到首页
+      return
+    }
+  }
+  
+  // 特殊处理：访问 /factor-library 时，自动跳转到第一个有权限的子路由
+  if (to.path === '/factor-library') {
+    const subRoutes = [
+      { path: '/factor-library/plaza', menuId: 'factor_plaza' },
+      { path: '/factor-library/my-factors', menuId: 'my_factors' },
+      { path: '/factor-library/submit', menuId: 'factor_submit' },
+      { path: '/factor-library/manage', menuId: 'factor_manage' }
+    ]
+    
+    // 找到第一个有权限的子路由
+    const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
+    
+    if (allowedRoute) {
+      console.log('🔀 自动跳转到:', allowedRoute.path)
+      next(allowedRoute.path)
+      return
+    } else if (userMenuPermissions.includes('factor_library')) {
+      // 有父菜单权限但没有子菜单权限，显示提示
+      console.warn('⚠️ 有因子库权限，但没有子菜单权限')
       next('/')  // 跳转到首页
       return
     }

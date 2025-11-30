@@ -563,6 +563,216 @@ ipcMain.handle('gitea:createRepo', async (_event, org: string, repoData: { name:
   }
 })
 
+// Gitea: 基于模板创建仓库
+ipcMain.handle('gitea:generateFromTemplate', async (_event, templateOwner: string, templateRepo: string, options: {
+  owner: string  // 新仓库的所有者（组织名）
+  name: string   // 新仓库名称
+  description?: string
+  private?: boolean
+  git_content?: boolean
+  topics?: boolean
+}) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 基于模板创建仓库: ${templateOwner}/${templateRepo} -> ${options.owner}/${options.name}`)
+    const response = await axios.post(`${GITEA_BASE_URL}/repos/${templateOwner}/${templateRepo}/generate`, {
+      owner: options.owner,
+      name: options.name,
+      description: options.description || '',
+      private: options.private !== false,  // 默认私有
+      git_content: options.git_content !== false,  // 默认复制内容
+      topics: options.topics !== false  // 默认复制主题
+    }, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] generateFromTemplate 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 获取仓库文件树（递归）
+ipcMain.handle('gitea:getRepoTree', async (_event, owner: string, repo: string, ref: string = 'main') => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 获取仓库文件树: ${owner}/${repo}@${ref}`)
+    const response = await axios.get(`${GITEA_BASE_URL}/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getRepoTree 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 获取文件内容
+ipcMain.handle('gitea:getFileContent', async (_event, owner: string, repo: string, filepath: string, ref?: string) => {
+  try {
+    const axios = require('axios')
+    const url = ref 
+      ? `${GITEA_BASE_URL}/repos/${owner}/${repo}/contents/${filepath}?ref=${ref}`
+      : `${GITEA_BASE_URL}/repos/${owner}/${repo}/contents/${filepath}`
+    const response = await axios.get(url, {
+      headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] getFileContent 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 创建或更新文件
+ipcMain.handle('gitea:putFileContent', async (_event, owner: string, repo: string, filepath: string, options: {
+  content: string  // base64 编码的内容
+  message: string  // 提交信息
+  sha?: string     // 如果是更新文件，需要提供当前文件的 SHA
+  branch?: string  // 分支名，默认 main
+}) => {
+  try {
+    const axios = require('axios')
+    console.log(`[Gitea] 创建/更新文件: ${owner}/${repo}/${filepath}`)
+    const response = await axios.put(`${GITEA_BASE_URL}/repos/${owner}/${repo}/contents/${filepath}`, {
+      content: options.content,
+      message: options.message,
+      sha: options.sha,
+      branch: options.branch || 'main'
+    }, {
+      headers: {
+        'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('[Gitea] putFileContent 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
+// Gitea: 批量下发模板文件到目标仓库
+ipcMain.handle('gitea:deployTemplate', async (_event, templateOwner: string, templateRepo: string, targetOwner: string, targetRepo: string, options?: {
+  branch?: string
+  commitMessage?: string
+}) => {
+  try {
+    const axios = require('axios')
+    const commitMessage = options?.commitMessage || `从模板 ${templateRepo} 下发文件`
+    
+    console.log(`[Gitea] 下发模板: ${templateOwner}/${templateRepo} -> ${targetOwner}/${targetRepo}`)
+    
+    // 1. 获取模板仓库信息，确定默认分支
+    const templateRepoInfo = await axios.get(
+      `${GITEA_BASE_URL}/repos/${templateOwner}/${templateRepo}`,
+      { headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` } }
+    )
+    const templateBranch = templateRepoInfo.data.default_branch || 'main'
+    
+    // 2. 获取模板仓库的文件树
+    const treeResponse = await axios.get(
+      `${GITEA_BASE_URL}/repos/${templateOwner}/${templateRepo}/git/trees/${templateBranch}?recursive=1`,
+      { headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` } }
+    )
+    
+    const treeFiles = treeResponse.data.tree.filter((item: any) => item.type === 'blob')
+    console.log(`[Gitea] 模板文件数: ${treeFiles.length}`)
+    
+    // 3. 获取所有文件内容
+    const filesData: { path: string; content: string }[] = []
+    for (const file of treeFiles) {
+      try {
+        const contentResponse = await axios.get(
+          `${GITEA_BASE_URL}/repos/${templateOwner}/${templateRepo}/contents/${file.path}?ref=${templateBranch}`,
+          { headers: { 'Authorization': `token ${GITEA_ADMIN_TOKEN}` } }
+        )
+        // content 已经是 base64，需要解码后再使用
+        const base64Content = contentResponse.data.content
+        // 去除 base64 中的换行符
+        const cleanContent = base64Content.replace(/\n/g, '')
+        filesData.push({
+          path: file.path,
+          content: cleanContent
+        })
+      } catch (e: any) {
+        console.error(`[Gitea] 获取文件 ${file.path} 内容失败:`, e.message)
+      }
+    }
+    
+    console.log(`[Gitea] 成功获取 ${filesData.length} 个文件内容`)
+    
+    // 4. 使用批量创建文件 API (POST /repos/{owner}/{repo}/contents)
+    // 这个 API 可以一次性创建多个文件，对空仓库也有效
+    try {
+      const postData = {
+        branch: 'main',
+        files: filesData.map(f => ({
+          path: f.path,
+          content: f.content,
+          operation: 'create'
+        })),
+        message: commitMessage,
+        new_branch: 'main',  // 如果分支不存在则创建
+        author: {
+          name: 'Admin',
+          email: 'admin@zizhou.com'
+        },
+        committer: {
+          name: 'Admin', 
+          email: 'admin@zizhou.com'
+        }
+      }
+      
+      console.log(`[Gitea] 批量创建文件, 数量: ${filesData.length}`)
+      
+      await axios.post(
+        `${GITEA_BASE_URL}/repos/${targetOwner}/${targetRepo}/contents`,
+        postData,
+        {
+          headers: {
+            'Authorization': `token ${GITEA_ADMIN_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+      
+      console.log(`[Gitea] 批量创建成功`)
+      
+      return { 
+        success: true, 
+        data: {
+          total: filesData.length,
+          success: filesData.length,
+          failed: 0,
+          results: filesData.map(f => ({ path: f.path, success: true }))
+        }
+      }
+    } catch (batchError: any) {
+      const errorDetail = batchError.response?.data || batchError.message
+      const statusCode = batchError.response?.status
+      console.error(`[Gitea] 批量创建文件失败 (${statusCode}):`, JSON.stringify(errorDetail))
+      
+      return { 
+        success: false, 
+        error: batchError.response?.data?.message || batchError.message,
+        data: {
+          total: filesData.length,
+          success: 0,
+          failed: filesData.length,
+          results: filesData.map(f => ({ path: f.path, success: false, error: errorDetail?.message || '批量创建失败' }))
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('[Gitea] deployTemplate 错误:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.message || error.message }
+  }
+})
+
 // Gitea: 编辑仓库
 ipcMain.handle('gitea:editRepo', async (_event, owner: string, repo: string, repoData: {
   description?: string
@@ -2397,6 +2607,110 @@ ipcMain.handle('factor:getFactorPerformance', async (_event, factorId: number, d
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取因子性能数据失败')
+  }
+})
+
+// ========== 因子仓库API ==========
+
+// 获取当前用户的仓库列表
+ipcMain.handle('factor:getMyRepos', async () => {
+  try {
+    const result = await factorAPI.getMyRepos()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取仓库列表失败')
+  }
+})
+
+// 获取仓库中的因子列表
+ipcMain.handle('factor:getRepoFactors', async (_event, owner: string, repo: string) => {
+  try {
+    const result = await factorAPI.getRepoFactors(owner, repo)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取因子列表失败')
+  }
+})
+
+// 管理员：获取所有仓库
+ipcMain.handle('factor:getAllRepos', async () => {
+  try {
+    const result = await factorAPI.getAllRepos()
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取所有仓库失败')
+  }
+})
+
+// ========== 因子执行任务API ==========
+
+// 创建执行任务
+ipcMain.handle('factor:createJob', async (_event, params: any) => {
+  try {
+    const result = await factorAPI.createJob(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '创建任务失败')
+  }
+})
+
+// 获取我的任务列表
+ipcMain.handle('factor:getMyJobs', async (_event, params?: any) => {
+  try {
+    const result = await factorAPI.getMyJobs(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取任务列表失败')
+  }
+})
+
+// 获取任务详情
+ipcMain.handle('factor:getJobDetail', async (_event, jobId: string) => {
+  try {
+    const result = await factorAPI.getJobDetail(jobId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取任务详情失败')
+  }
+})
+
+// 获取执行日志
+ipcMain.handle('factor:getJobLogs', async (_event, jobId: string) => {
+  try {
+    const result = await factorAPI.getJobLogs(jobId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取执行日志失败')
+  }
+})
+
+// 下载执行结果
+ipcMain.handle('factor:getJobResult', async (_event, jobId: string) => {
+  try {
+    const result = await factorAPI.getJobResult(jobId)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取执行结果失败')
+  }
+})
+
+// 管理员：获取所有任务
+ipcMain.handle('factor:getAllJobs', async (_event, params?: any) => {
+  try {
+    const result = await factorAPI.getAllJobs(params)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取所有任务失败')
+  }
+})
+
+// 获取文件内容
+ipcMain.handle('factor:getFileContent', async (_event, owner: string, repo: string, filePath: string, ref?: string) => {
+  try {
+    const result = await factorAPI.getFileContent(owner, repo, filePath, ref)
+    return result
+  } catch (error: any) {
+    throw new Error(error.message || '获取文件内容失败')
   }
 })
 

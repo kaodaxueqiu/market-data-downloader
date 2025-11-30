@@ -164,7 +164,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFactorList: (params: any) => ipcRenderer.invoke('factor:getFactorList', params),
     getFactorDetail: (factorId: number) => ipcRenderer.invoke('factor:getFactorDetail', factorId),
     downloadFactorData: (params: any) => ipcRenderer.invoke('factor:downloadFactorData', params),
-    getFactorPerformance: (factorId: number, days?: number) => ipcRenderer.invoke('factor:getFactorPerformance', factorId, days)
+    getFactorPerformance: (factorId: number, days?: number) => ipcRenderer.invoke('factor:getFactorPerformance', factorId, days),
+    // 仓库相关
+    getMyRepos: () => ipcRenderer.invoke('factor:getMyRepos'),
+    getRepoFactors: (owner: string, repo: string) => ipcRenderer.invoke('factor:getRepoFactors', owner, repo),
+    getAllRepos: () => ipcRenderer.invoke('factor:getAllRepos'),
+    // 执行任务相关
+    createJob: (params: any) => ipcRenderer.invoke('factor:createJob', params),
+    getMyJobs: (params?: any) => ipcRenderer.invoke('factor:getMyJobs', params),
+    getJobDetail: (jobId: string) => ipcRenderer.invoke('factor:getJobDetail', jobId),
+    getJobLogs: (jobId: string) => ipcRenderer.invoke('factor:getJobLogs', jobId),
+    getJobResult: (jobId: string) => ipcRenderer.invoke('factor:getJobResult', jobId),
+    getAllJobs: (params?: any) => ipcRenderer.invoke('factor:getAllJobs', params),
+    // 获取文件内容
+    getFileContent: (owner: string, repo: string, filePath: string, ref?: string) => 
+      ipcRenderer.invoke('factor:getFileContent', owner, repo, filePath, ref)
   },
 
   // 基金管理API
@@ -326,6 +340,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 仓库管理（管理员）
     createRepo: (org: string, repoData: { name: string; description?: string; private?: boolean }) => 
       ipcRenderer.invoke('gitea:createRepo', org, repoData),
+    generateFromTemplate: (templateOwner: string, templateRepo: string, options: { 
+      owner: string; name: string; description?: string; private?: boolean; git_content?: boolean; topics?: boolean 
+    }) => ipcRenderer.invoke('gitea:generateFromTemplate', templateOwner, templateRepo, options),
+    // 文件操作
+    getRepoTree: (owner: string, repo: string, ref?: string) => 
+      ipcRenderer.invoke('gitea:getRepoTree', owner, repo, ref),
+    getFileContent: (owner: string, repo: string, filepath: string, ref?: string) => 
+      ipcRenderer.invoke('gitea:getFileContent', owner, repo, filepath, ref),
+    putFileContent: (owner: string, repo: string, filepath: string, options: { 
+      content: string; message: string; sha?: string; branch?: string 
+    }) => ipcRenderer.invoke('gitea:putFileContent', owner, repo, filepath, options),
+    // 下发模板（仓库到仓库）
+    deployTemplate: (templateOwner: string, templateRepo: string, targetOwner: string, targetRepo: string, options?: { 
+      branch?: string; commitMessage?: string 
+    }) => ipcRenderer.invoke('gitea:deployTemplate', templateOwner, templateRepo, targetOwner, targetRepo, options),
     editRepo: (owner: string, repo: string, repoData: any) => ipcRenderer.invoke('gitea:editRepo', owner, repo, repoData),
     deleteRepo: (owner: string, repo: string) => ipcRenderer.invoke('gitea:deleteRepo', owner, repo),
     // 协作者管理
@@ -526,6 +555,19 @@ declare global {
         getFactorDetail: (factorId: number) => Promise<any>
         downloadFactorData: (params: any) => Promise<any>
         getFactorPerformance: (factorId: number, days?: number) => Promise<any>
+        // 仓库相关
+        getMyRepos: () => Promise<any>
+        getRepoFactors: (owner: string, repo: string) => Promise<any>
+        getAllRepos: () => Promise<any>
+        // 执行任务相关
+        createJob: (params: any) => Promise<any>
+        getMyJobs: (params?: any) => Promise<any>
+        getJobDetail: (jobId: string) => Promise<any>
+        getJobLogs: (jobId: string) => Promise<any>
+        getJobResult: (jobId: string) => Promise<any>
+        getAllJobs: (params?: any) => Promise<any>
+        // 文件内容
+        getFileContent: (owner: string, repo: string, filePath: string, ref?: string) => Promise<any>
       }
       fund: {
         setApiKey: (apiKey: string) => Promise<boolean>
@@ -635,6 +677,11 @@ declare global {
         getTags: (owner: string, repo: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
         getCommits: (owner: string, repo: string, params?: any) => Promise<{ success: boolean; data?: any[]; error?: string }>
         createRepo: (org: string, repoData: { name: string; description?: string; private?: boolean }) => Promise<{ success: boolean; data?: any; error?: string }>
+        generateFromTemplate: (templateOwner: string, templateRepo: string, options: { owner: string; name: string; description?: string; private?: boolean; git_content?: boolean; topics?: boolean }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getRepoTree: (owner: string, repo: string, ref?: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getFileContent: (owner: string, repo: string, filepath: string, ref?: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        putFileContent: (owner: string, repo: string, filepath: string, options: { content: string; message: string; sha?: string; branch?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        deployTemplate: (templateOwner: string, templateRepo: string, targetOwner: string, targetRepo: string, options?: { branch?: string; commitMessage?: string }) => Promise<{ success: boolean; data?: { total: number; success: number; failed: number; results: any[] }; error?: string }>
         editRepo: (owner: string, repo: string, repoData: any) => Promise<{ success: boolean; data?: any; error?: string }>
         deleteRepo: (owner: string, repo: string) => Promise<{ success: boolean; error?: string }>
         getRepoCollaborators: (owner: string, repo: string) => Promise<{ success: boolean; data?: any[]; error?: string }>

@@ -225,6 +225,150 @@ export class FactorAPI {
   clearCache() {
     this.cache.clear()
   }
+
+  // ========== 新增：仓库相关 API ==========
+
+  // 7. 获取当前用户的仓库列表
+  async getMyRepos(): Promise<{ code: number; data: any[] }> {
+    const response = await this.client.get('/repos')
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取仓库列表失败')
+  }
+
+  // 8. 获取仓库中的因子列表
+  async getRepoFactors(owner: string, repo: string): Promise<{ code: number; data: any[] }> {
+    const response = await this.client.get(`/repos/${owner}/${repo}/factors`)
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取因子列表失败')
+  }
+
+  // 9. 管理员：获取所有仓库
+  async getAllRepos(): Promise<{ code: number; data: any[] }> {
+    const response = await this.client.get('/repos/admin/all')
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取所有仓库失败')
+  }
+
+  // ========== 新增：因子执行任务 API ==========
+
+  // 10. 创建执行任务
+  async createJob(params: {
+    repo_owner: string
+    repo_name: string
+    branch: string
+    factor_code: string
+    factor_file: string
+    factor_func: string
+    calc_date: string
+  }): Promise<{ code: number; data: any }> {
+    const response = await this.client.post('/jobs', params)
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '创建任务失败')
+  }
+
+  // 11. 获取我的任务列表
+  async getMyJobs(params?: {
+    status?: string
+    page?: number
+    page_size?: number
+  }): Promise<{ code: number; data: { jobs: any[]; total: number } }> {
+    const response = await this.client.get('/jobs', { params })
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取任务列表失败')
+  }
+
+  // 12. 获取任务详情
+  async getJobDetail(jobId: string): Promise<{ code: number; data: any }> {
+    const response = await this.client.get(`/jobs/${jobId}`)
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取任务详情失败')
+  }
+
+  // 13. 获取执行日志
+  async getJobLogs(jobId: string): Promise<{ code: number; data: { logs: string } }> {
+    const response = await this.client.get(`/jobs/${jobId}/logs`)
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取执行日志失败')
+  }
+
+  // 14. 下载执行结果
+  async getJobResult(jobId: string): Promise<{ code: number; data: any }> {
+    const response = await this.client.get(`/jobs/${jobId}/result`)
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取执行结果失败')
+  }
+
+  // 15. 管理员：获取所有任务
+  async getAllJobs(params?: {
+    status?: string
+    page?: number
+    page_size?: number
+  }): Promise<{ code: number; data: { jobs: any[]; total: number } }> {
+    const response = await this.client.get('/jobs/admin/all', { params })
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取所有任务失败')
+  }
+
+  // 16. 获取文件内容
+  async getFileContent(owner: string, repo: string, filePath: string, ref?: string): Promise<{
+    code: number
+    data: {
+      path: string
+      content: string
+      encoding: string
+      size: number
+    }
+  }> {
+    // 对文件路径进行 URL 编码
+    const encodedPath = filePath.split('/').map(encodeURIComponent).join('/')
+    const url = `/repos/${owner}/${repo}/files/${encodedPath}`
+    
+    const response = await this.client.get(url, {
+      params: ref ? { ref } : undefined
+    })
+    
+    if (response.data.success) {
+      return { code: 200, data: response.data.data }
+    }
+    
+    throw new Error(response.data.message || '获取文件内容失败')
+  }
 }
 
 // 导出单例

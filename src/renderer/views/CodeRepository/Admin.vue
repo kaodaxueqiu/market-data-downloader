@@ -119,6 +119,15 @@
             </template>
           </el-table-column>
           <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+          <el-table-column label="性质" width="100">
+            <template #default="{ row }">
+              <el-tag v-if="row.template" type="success" size="small">
+                <el-icon style="vertical-align: middle; margin-right: 2px;"><Document /></el-icon>
+                模板
+              </el-tag>
+              <el-tag v-else type="info" size="small">普通</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="可见性" width="100">
             <template #default="{ row }">
               <el-tag :type="row.private ? 'warning' : 'success'" size="small">
@@ -146,13 +155,22 @@
               <span v-else class="no-collaborators">暂无</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="280" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link size="small" @click="showEditRepoDialog(row)">
                 编辑
               </el-button>
               <el-button type="primary" link size="small" @click="showRepoCollaborators(row)">
                 协作者
+              </el-button>
+              <el-button 
+                v-if="!row.template && row.empty" 
+                type="success" 
+                link 
+                size="small" 
+                @click="showDeployToRepoDialog(row)"
+              >
+                下发模板
               </el-button>
             </template>
           </el-table-column>
@@ -510,12 +528,109 @@
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <!-- 下发模板对话框 -->
+    <el-dialog v-model="deployTemplateVisible" :title="`下发模板到 ${currentTargetRepo?.name}`" width="500px">
+      <el-alert 
+        type="info" 
+        :closable="false" 
+        show-icon
+        style="margin-bottom: 16px"
+      >
+        将模板仓库的文件内容同步到目标仓库 <strong>{{ currentTargetRepo?.name }}</strong>
+      </el-alert>
+      
+      <el-form :model="deployForm" label-width="100px">
+        <el-form-item label="目标仓库">
+          <div class="target-repo-info">
+            <el-icon><Folder /></el-icon>
+            <span class="repo-name">{{ currentTargetRepo?.name }}</span>
+            <el-tag type="success" size="small">空仓库</el-tag>
+          </div>
+          <div class="form-tip">{{ currentTargetRepo?.description || '无描述' }}</div>
+        </el-form-item>
+        <el-form-item label="选择模板" required>
+          <el-select 
+            v-model="deployForm.templateRepo" 
+            placeholder="请选择模板仓库"
+            style="width: 100%"
+          >
+            <el-option 
+              v-for="repo in templateRepos" 
+              :key="repo.name" 
+              :label="`${repo.name} - ${repo.description || '无描述'}`"
+              :value="repo.name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="提交信息">
+          <el-input 
+            v-model="deployForm.commitMessage" 
+            placeholder="输入 Git 提交信息"
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <el-button @click="deployTemplateVisible = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="handleDeployTemplate" 
+          :loading="deploying"
+          :disabled="!deployForm.templateRepo"
+        >
+          开始下发
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 下发进度对话框 -->
+    <el-dialog 
+      v-model="deployProgressVisible" 
+      title="下发进度" 
+      width="500px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="!deploying"
+    >
+      <div class="deploy-progress">
+        <el-progress 
+          :percentage="deployProgress" 
+          :status="deployProgress === 100 ? 'success' : ''"
+          :stroke-width="20"
+        />
+        <div class="progress-info">
+          {{ deployCurrentStep }} / {{ deployTotalSteps }}
+        </div>
+        <div class="progress-logs">
+          <div 
+            v-for="(log, index) in deployLogs" 
+            :key="index" 
+            :class="['log-item', log.type]"
+          >
+            <el-icon v-if="log.type === 'success'"><SuccessFilled /></el-icon>
+            <el-icon v-else-if="log.type === 'error'"><CircleCloseFilled /></el-icon>
+            <el-icon v-else><Loading /></el-icon>
+            <span>{{ log.message }}</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button 
+          v-if="!deploying" 
+          type="primary" 
+          @click="deployProgressVisible = false; loadRepos()"
+        >
+          完成
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Plus, Search, Folder } from '@element-plus/icons-vue'
+import { Plus, Search, Folder, Document, SuccessFilled, CircleCloseFilled, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const ORG = 'zizhou'
@@ -550,6 +665,7 @@ const editUserVisible = ref(false)
 const createRepoVisible = ref(false)
 const editRepoVisible = ref(false)
 const collaboratorsVisible = ref(false)
+// deployTemplateVisible 和 deployProgressVisible 已在上方定义
 
 // 当前操作对象
 const currentTeam = ref<any>(null)
@@ -557,6 +673,20 @@ const currentRepo = ref<any>(null)
 const currentUser = ref<any>(null)
 const selectedUser = ref('')
 const selectedCollaborator = ref('')
+
+// 下发模板相关
+const deployTemplateVisible = ref(false)
+const deployProgressVisible = ref(false)
+const deploying = ref(false)
+const deployProgress = ref(0)
+const deployCurrentStep = ref(0)
+const deployTotalSteps = ref(0)
+const deployLogs = ref<{ type: 'info' | 'success' | 'error'; message: string }[]>([])
+const currentTargetRepo = ref<any>(null)  // 当前要下发的目标仓库
+const deployForm = ref({
+  templateRepo: '',
+  commitMessage: '从模板下发文件'
+})
 
 // 团队单元权限选项
 const TEAM_UNITS = [
@@ -653,6 +783,11 @@ const availableUsersForRepo = computed(() => {
   return users.value.filter(u => !collabNames.includes(u.username))
 })
 
+// 模板仓库列表
+const templateRepos = computed(() => {
+  return repos.value.filter(r => r.template)
+})
+
 // 获取团队的代码权限（优先使用 units_map.repo.code）
 const getCodePermission = (team: any): string => {
   // 优先使用 units_map 中的代码权限
@@ -747,7 +882,7 @@ const loadRepos = async () => {
     const result = await window.electronAPI.gitea.getOrgRepos(ORG)
     if (result.success) {
       const repoList = result.data || []
-      // 获取每个仓库的协作者
+      // 获取每个仓库的协作者和检查是否为空
       for (const repo of repoList) {
         try {
           const collabResult = await window.electronAPI.gitea.getRepoCollaborators(ORG, repo.name)
@@ -756,6 +891,20 @@ const loadRepos = async () => {
           }
         } catch (e) {
           repo.collaborators = []
+        }
+        
+        // 检查仓库是否为空（非模板仓库才检查）
+        if (!repo.template) {
+          try {
+            const treeResult = await window.electronAPI.gitea.getRepoTree(ORG, repo.name, repo.default_branch || 'main')
+            // 如果能获取到文件树，说明不是空仓库
+            repo.empty = !treeResult.success || !treeResult.data?.tree || treeResult.data.tree.length === 0
+          } catch (e) {
+            // 获取失败，可能是空仓库
+            repo.empty = true
+          }
+        } else {
+          repo.empty = false
         }
       }
       repos.value = repoList
@@ -1236,6 +1385,82 @@ const handleRemoveCollaborator = async (collab: any) => {
   }
 }
 
+// ========== 下发模板 ==========
+
+// 显示下发模板对话框（针对单个仓库）
+const showDeployToRepoDialog = (repo: any) => {
+  if (templateRepos.value.length === 0) {
+    ElMessage.warning('没有可用的模板仓库，请先创建模板仓库')
+    return
+  }
+  currentTargetRepo.value = repo
+  deployForm.value = {
+    templateRepo: templateRepos.value.length === 1 ? templateRepos.value[0].name : '',
+    commitMessage: '从模板下发文件'
+  }
+  deployTemplateVisible.value = true
+}
+
+// 执行下发（单个仓库）
+const handleDeployTemplate = async () => {
+  if (!deployForm.value.templateRepo || !currentTargetRepo.value) {
+    ElMessage.warning('请选择模板仓库')
+    return
+  }
+  
+  const targetRepo = currentTargetRepo.value.name
+  const repoDesc = currentTargetRepo.value.description || targetRepo
+  
+  deploying.value = true
+  deployTemplateVisible.value = false
+  deployProgressVisible.value = true
+  deployLogs.value = []
+  deployProgress.value = 0
+  deployCurrentStep.value = 0
+  deployTotalSteps.value = 1
+  
+  // 添加"正在..."提示
+  deployLogs.value.push({ type: 'info', message: `正在向 ${targetRepo} 下发模板文件...` })
+  
+  try {
+    const result = await window.electronAPI.gitea.deployTemplate(
+      ORG,
+      deployForm.value.templateRepo,
+      ORG,
+      targetRepo,
+      {
+        branch: 'main',
+        commitMessage: deployForm.value.commitMessage
+      }
+    )
+    
+    deployCurrentStep.value = 1
+    deployProgress.value = 100
+    
+    // 清空日志，只显示结果
+    deployLogs.value = []
+    
+    if (result.success && result.data) {
+      const { total, success, failed } = result.data
+      if (failed === 0) {
+        deployLogs.value.push({ type: 'success', message: `✓ ${targetRepo}（${repoDesc}）- 成功同步 ${success} 个文件` })
+      } else {
+        deployLogs.value.push({ type: 'error', message: `⚠ ${targetRepo}（${repoDesc}）- 同步 ${success}/${total} 个文件，${failed} 个失败` })
+      }
+    } else {
+      deployLogs.value.push({ type: 'error', message: `✗ ${targetRepo}（${repoDesc}）- 下发失败: ${result.error}` })
+    }
+  } catch (error: any) {
+    deployCurrentStep.value = 1
+    deployProgress.value = 100
+    deployLogs.value = []
+    deployLogs.value.push({ type: 'error', message: `✗ ${targetRepo}（${repoDesc}）- 下发失败: ${error.message}` })
+  }
+  
+  deploying.value = false
+  ElMessage.success('模板下发完成')
+}
+
 // 初始化
 onMounted(() => {
   loadTeams()
@@ -1333,6 +1558,109 @@ onMounted(() => {
     :deep(.el-radio) {
       margin-right: 0;
     }
+  }
+
+  // 下发模板相关样式
+  .target-repo-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    .el-icon {
+      color: #e6a23c;
+    }
+    
+    .repo-name {
+      font-weight: 500;
+      color: #303133;
+    }
+  }
+
+  .deploy-preview {
+    margin-top: 16px;
+    
+    .preview-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ebeef5;
+      border-radius: 4px;
+      padding: 8px;
+    }
+    
+    .preview-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
+      
+      &:last-child {
+        border-bottom: none;
+      }
+      
+      .el-icon {
+        color: #e6a23c;
+      }
+      
+      .repo-name {
+        font-weight: 500;
+        color: #303133;
+      }
+      
+      .repo-desc {
+        color: #909399;
+        font-size: 13px;
+        margin-left: auto;
+      }
+    }
+  }
+
+  .deploy-progress {
+    .progress-info {
+      text-align: center;
+      margin-top: 12px;
+      color: #606266;
+      font-size: 14px;
+    }
+    
+    .progress-logs {
+      margin-top: 16px;
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ebeef5;
+      border-radius: 4px;
+      padding: 12px;
+      background: #fafafa;
+      
+      .log-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
+        font-size: 13px;
+        
+        &.success {
+          color: #67c23a;
+        }
+        
+        &.error {
+          color: #f56c6c;
+        }
+        
+        &.info {
+          color: #909399;
+          
+          .el-icon {
+            animation: spin 1s linear infinite;
+          }
+        }
+      }
+    }
+  }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 }
 </style>
