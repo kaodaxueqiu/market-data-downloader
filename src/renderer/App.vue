@@ -180,30 +180,39 @@
       <!-- 🆕 全局更新下载进度对话框 -->
       <el-dialog
         v-model="showUpdateProgress"
-        title="正在下载更新"
+        :title="updateDownloadProgress >= 100 ? '下载完成' : '正在下载更新'"
         width="400px"
-        :close-on-click-modal="false"
-        :close-on-press-escape="false"
-        :show-close="false"
+        :close-on-click-modal="updateDownloadProgress >= 100"
+        :close-on-press-escape="updateDownloadProgress >= 100"
+        :show-close="updateDownloadProgress >= 100"
         center
       >
         <div class="update-progress-content">
           <div class="progress-icon">
-            <el-icon :size="48" color="#409EFF" class="rotating">
+            <el-icon v-if="updateDownloadProgress < 100" :size="48" color="#409EFF" class="rotating">
               <Loading />
+            </el-icon>
+            <el-icon v-else :size="48" color="#67C23A">
+              <SuccessFilled />
             </el-icon>
           </div>
           <div class="progress-info">
             <el-progress 
               :percentage="updateDownloadProgress" 
               :stroke-width="20"
-              :status="updateDownloadProgress === 100 ? 'success' : undefined"
+              :status="updateDownloadProgress >= 100 ? 'success' : undefined"
             />
             <div class="progress-text">
               {{ updateDownloadStatus }}
             </div>
           </div>
         </div>
+        <template #footer v-if="updateDownloadProgress >= 100">
+          <div class="update-footer">
+            <el-button @click="showUpdateProgress = false">稍后安装</el-button>
+            <el-button type="primary" @click="installDownloadedUpdate">立即安装</el-button>
+          </div>
+        </template>
       </el-dialog>
     </div>
   </el-config-provider>
@@ -219,7 +228,8 @@ import {
   DArrowRight,
   Refresh,
   List,
-  Loading
+  Loading,
+  SuccessFilled
 } from '@element-plus/icons-vue'
 import { allMenus, type MenuItem } from '@/config/menuConfig'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
@@ -240,6 +250,7 @@ const activeSubscriptionCount = ref(0)
 const showUpdateProgress = ref(false)
 const updateDownloadProgress = ref(0)
 const updateDownloadStatus = ref('准备下载...')
+const updateFilePath = ref('')
 
 // 🆕 定时器引用（用于清理）
 let statusRefreshTimer: NodeJS.Timeout | null = null
@@ -497,6 +508,19 @@ const loadMenuPermissions = async () => {
   }
 }
 
+// 🆕 安装下载好的更新
+const installDownloadedUpdate = async () => {
+  if (!updateFilePath.value) {
+    ElMessage.error('未找到更新文件')
+    return
+  }
+  try {
+    await window.electronAPI.updater.quitAndInstall(updateFilePath.value)
+  } catch (error: any) {
+    ElMessage.error('安装失败: ' + error.message)
+  }
+}
+
 // 🆕 刷新菜单权限（从后端获取最新权限）
 const refreshMenuPermissions = async (showMessage: boolean = false) => {
   try {
@@ -685,10 +709,8 @@ onMounted(async () => {
   
   window.electronAPI.on('updater:update-downloaded', (filePath: string) => {
     updateDownloadProgress.value = 100
-    updateDownloadStatus.value = '下载完成！'
-    setTimeout(() => {
-      showUpdateProgress.value = false
-    }, 1500)
+    updateDownloadStatus.value = '下载完成！点击下方按钮安装更新'
+    updateFilePath.value = filePath
     console.log('✅ 更新下载完成:', filePath)
   })
   
@@ -980,6 +1002,12 @@ onUnmounted(() => {
       color: #606266;
     }
   }
+}
+
+.update-footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
 }
 
 @keyframes rotate {

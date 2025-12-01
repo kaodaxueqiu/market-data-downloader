@@ -1,7 +1,7 @@
 {
   "name": "zizhou-quant-platform",
   "productName": "资舟量化研究平台",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "资舟量化研究平台 - 专业的量化研究与数据管理工具",
   "author": "ZiZhou Quant Team",
   "license": "Commercial",
@@ -28,6 +28,7 @@
     "exceljs": "^4.4.0",
     "papaparse": "^5.4.1",
     "pinia": "^2.1.7",
+    "pinyin": "^4.0.0",
     "ssh2": "^1.17.0",
     "vue": "^3.3.10",
     "vue-router": "^4.2.5",

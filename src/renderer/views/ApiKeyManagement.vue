@@ -745,6 +745,64 @@
         </el-descriptions-item>
       </el-descriptions>
       
+      <!-- 🆕 数据库配置信息 -->
+      <div v-if="selectedKey?.database_config" style="margin-top: 20px;">
+        <el-divider content-position="left">
+          <el-icon><Key /></el-icon>
+          数据库配置
+        </el-divider>
+        <el-descriptions :column="2" border :label-style="{ width: '150px' }" size="default">
+          <el-descriptions-item label="PostgreSQL 用户名">
+            <el-tag type="info" size="small">{{ selectedKey.database_config.postgresql_username || '-' }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="PostgreSQL 密码">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <el-text style="font-family: monospace;">{{ selectedKey.database_config.postgresql_password || '-' }}</el-text>
+              <el-button 
+                :icon="CopyDocument" 
+                size="small" 
+                text
+                @click="copyToClipboard(selectedKey.database_config.postgresql_password || '')"
+              />
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="ClickHouse 用户名">
+            <el-tag type="warning" size="small">{{ selectedKey.database_config.clickhouse_username || '-' }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="ClickHouse 密码">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <el-text style="font-family: monospace;">{{ selectedKey.database_config.clickhouse_password || '-' }}</el-text>
+              <el-button 
+                :icon="CopyDocument" 
+                size="small" 
+                text
+                @click="copyToClipboard(selectedKey.database_config.clickhouse_password || '')"
+              />
+            </div>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      
+      <!-- 无数据库配置时的提示 -->
+      <div v-else-if="selectedKey" style="margin-top: 20px;">
+        <el-divider content-position="left">
+          <el-icon><Key /></el-icon>
+          数据库配置
+        </el-divider>
+        <el-alert 
+          type="warning" 
+          :closable="false"
+          show-icon
+        >
+          <template #title>
+            该用户暂无数据库配置信息
+          </template>
+          <template #default>
+            可能是旧版本创建的用户，请在"数据库配置"标签页中手动配置
+          </template>
+        </el-alert>
+      </div>
+      
       <template #footer>
         <el-button @click="detailsVisible = false">关闭</el-button>
       </template>
@@ -920,6 +978,19 @@ import {
   Loading,
   Key
 } from '@element-plus/icons-vue'
+import pinyin from 'pinyin'
+
+// 🆕 生成数据库凭证（中文名转拼音）
+function generateDBCredentials(chineseName: string): { username: string; password: string } {
+  // 转拼音，小写，去除空格
+  const pinyinArr = pinyin(chineseName, { style: pinyin.STYLE_NORMAL })
+  const username = pinyinArr.flat().join('').toLowerCase()
+  
+  // 密码：首字母大写 + 拼音 + 2025
+  const password = username.charAt(0).toUpperCase() + username.slice(1) + '2025'
+  
+  return { username, password }
+}
 
 interface ApiKeyItem {
   id: string
@@ -942,6 +1013,13 @@ interface ApiKeyItem {
   phone?: string
   company?: string
   expires_at?: string
+  // 🆕 数据库配置
+  database_config?: {
+    postgresql_username?: string
+    postgresql_password?: string
+    clickhouse_username?: string
+    clickhouse_password?: string
+  }
 }
 
 const activeTab = ref('list')
@@ -1214,12 +1292,21 @@ const handleCreateSubmit = async () => {
     creating.value = true
     
     try {
-      // TODO: 调用后端接口 POST /api/v1/admin/apikeys
+      // 🆕 生成数据库凭证
+      const { username, password } = generateDBCredentials(createFormData.name)
+      console.log('🔑 生成数据库凭证:', { username, password })
+      
+      // 调用后端接口 POST /api/v1/admin/apikeys
       const requestData: any = {
         name: createFormData.name,
         email: createFormData.email,
         phone: createFormData.phone,
-        company: createFormData.company
+        company: createFormData.company,
+        // 🆕 数据库配置（自动生成）
+        postgresql_username: username,
+        postgresql_password: password,
+        clickhouse_username: username,
+        clickhouse_password: password
       }
       
       // 可选字段
@@ -1235,11 +1322,39 @@ const handleCreateSubmit = async () => {
       const result = await window.electronAPI.config.createApiKey(requestData)
       
       if (result.success) {
-        ElMessage.success('创建成功！请通过"权限配置"按钮设置该用户的权限')
+        // 🆕 显示创建成功信息，包含数据库配置
+        const dbConfig = result.data?.database_config
+        if (dbConfig) {
+          ElMessageBox.alert(
+            `<div style="line-height: 2;">
+              <p><strong>✅ 用户创建成功！</strong></p>
+              <p>请通过"权限配置"按钮设置该用户的权限</p>
+              <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
+              <p><strong>📋 数据库配置信息：</strong></p>
+              <p>PostgreSQL 用户名：<code>${dbConfig.postgresql_username}</code></p>
+              <p>PostgreSQL 密码：<code>${dbConfig.postgresql_password}</code></p>
+              <p>ClickHouse 用户名：<code>${dbConfig.clickhouse_username}</code></p>
+              <p>ClickHouse 密码：<code>${dbConfig.clickhouse_password}</code></p>
+            </div>`,
+            '创建成功',
+            {
+              dangerouslyUseHTMLString: true,
+              confirmButtonText: '我知道了'
+            }
+          )
+        } else {
+          ElMessage.success('创建成功！请通过"权限配置"按钮设置该用户的权限')
+        }
         createDialogVisible.value = false
         await loadApiKeys()
       } else {
-        ElMessage.error(result.error || '创建失败')
+        // 🆕 处理校验失败的错误
+        const errorResult = result as any
+        if (errorResult.field) {
+          ElMessage.error(`${errorResult.field}: ${errorResult.error}`)
+        } else {
+          ElMessage.error(result.error || '创建失败')
+        }
       }
       
     } catch (error: any) {
@@ -1256,34 +1371,51 @@ const handleViewDetails = async (row: ApiKeyItem) => {
     detailsVisible.value = true
     selectedKey.value = null  // 先清空，显示loading
     
-    // 调用详情接口获取完整信息
-    const result = await window.electronAPI.config.fetchApiKeyDetail(row.id)
+    // 并行调用详情接口和数据库配置接口
+    const [detailResult, dbConfigResult] = await Promise.all([
+      window.electronAPI.config.fetchApiKeyDetail(row.id),
+      window.electronAPI.config.fetchDatabaseConfig(row.id)
+    ])
     
-    if (result.success && result.data) {
+    if (detailResult.success && detailResult.data) {
+      // 🆕 从数据库配置接口获取配置
+      let dbConfig: ApiKeyItem['database_config'] = undefined
+      if (dbConfigResult.success && dbConfigResult.data) {
+        const config = dbConfigResult.data.database_config || dbConfigResult.data
+        dbConfig = {
+          postgresql_username: config.postgresql_username || '',
+          postgresql_password: config.postgresql_password || '',
+          clickhouse_username: config.clickhouse_username || '',
+          clickhouse_password: config.clickhouse_password || ''
+        }
+      }
+      
       selectedKey.value = {
-        id: result.data.key || row.id,
-        name: result.data.name || '',
-        apiKey: result.data.masked_key || '',
-        fullKey: result.data.key,
+        id: detailResult.data.key || row.id,
+        name: detailResult.data.name || '',
+        apiKey: detailResult.data.masked_key || '',
+        fullKey: detailResult.data.key,
         showFull: false,
         isDefault: false,
-        createdAt: result.data.created_at || '',
-        menu_permissions: result.data.menu_permissions || [],
-        permissions: result.data.permissions || [],  // 注意：详情接口可能返回 permissions 字段
-        accountName: result.data.name || '',
-        status: result.data.status || 'active',
-        rate_limit: result.data.rate_limit,
-        data_level: result.data.data_level,
-        last_used: result.data.last_used,
-        description: result.data.description || '',
-        email: result.data.email || '',
-        phone: result.data.phone || '',
-        company: result.data.company || '',
-        expires_at: result.data.expires_at || ''
+        createdAt: detailResult.data.created_at || '',
+        menu_permissions: detailResult.data.menu_permissions || [],
+        permissions: detailResult.data.permissions || [],  // 注意：详情接口可能返回 permissions 字段
+        accountName: detailResult.data.name || '',
+        status: detailResult.data.status || 'active',
+        rate_limit: detailResult.data.rate_limit,
+        data_level: detailResult.data.data_level,
+        last_used: detailResult.data.last_used,
+        description: detailResult.data.description || '',
+        email: detailResult.data.email || '',
+        phone: detailResult.data.phone || '',
+        company: detailResult.data.company || '',
+        expires_at: detailResult.data.expires_at || '',
+        // 🆕 数据库配置（从独立接口获取）
+        database_config: dbConfig
       }
     } else {
       detailsVisible.value = false
-      ElMessage.error(result.error || '获取详情失败')
+      ElMessage.error(detailResult.error || '获取详情失败')
     }
   } catch (error: any) {
     detailsVisible.value = false
