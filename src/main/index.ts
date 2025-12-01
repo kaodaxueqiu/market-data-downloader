@@ -16,6 +16,52 @@ import { getSSHManager, SSHConfig } from './sshManager'
 // 禁用GPU加速，避免Windows上的GPU崩溃问题
 app.disableHardwareAcceleration()
 
+// 🆕 解码 Git 八进制转义路径（处理中文文件名）
+// Git 使用八进制转义来表示非 ASCII 字符，格式: \351\207\217 -> 量
+function decodeGitPath(path: string): string {
+  try {
+    // 去掉可能的引号
+    if (path.startsWith('"') && path.endsWith('"')) {
+      path = path.slice(1, -1)
+    }
+    
+    // 收集所有八进制转义序列并转换为字节数组
+    const bytes: number[] = []
+    let i = 0
+    let result = ''
+    
+    while (i < path.length) {
+      if (path[i] === '\\' && i + 3 < path.length) {
+        const octal = path.substring(i + 1, i + 4)
+        if (/^[0-7]{3}$/.test(octal)) {
+          bytes.push(parseInt(octal, 8))
+          i += 4
+          continue
+        }
+      }
+      
+      // 如果有累积的字节，先解码
+      if (bytes.length > 0) {
+        result += Buffer.from(bytes).toString('utf8')
+        bytes.length = 0
+      }
+      
+      result += path[i]
+      i++
+    }
+    
+    // 处理剩余的字节
+    if (bytes.length > 0) {
+      result += Buffer.from(bytes).toString('utf8')
+    }
+    
+    return result
+  } catch (e) {
+    console.error('[Git] 解码路径失败:', e)
+    return path
+  }
+}
+
 // 配置存储 - 延迟初始化，确保app准备就绪
 let store: Store
 let configManager: ConfigManager
@@ -1314,7 +1360,7 @@ ipcMain.handle('git:pull', async (_event, localPath: string) => {
   }
 })
 
-// Git: 推送代码
+// Git: 推送代码（自动拉取后重试）
 ipcMain.handle('git:push', async (_event, localPath: string) => {
   try {
     console.log(`[Git] 推送代码: ${localPath}`)
@@ -1323,13 +1369,47 @@ ipcMain.handle('git:push', async (_event, localPath: string) => {
       return { success: false, error: '本地仓库不存在' }
     }
     
-    const { stdout, stderr } = await execGitCommand(
-      `git -c http.extraHeader="Authorization: token ${GITEA_ADMIN_TOKEN}" push`,
-      localPath
-    )
-    
-    console.log(`[Git] 推送成功: ${stdout || stderr}`)
-    return { success: true, message: stdout || stderr || '推送成功' }
+    // 第一次尝试推送
+    try {
+      const { stdout, stderr } = await execGitCommand(
+        `git -c http.extraHeader="Authorization: token ${GITEA_ADMIN_TOKEN}" push`,
+        localPath
+      )
+      console.log(`[Git] 推送成功: ${stdout || stderr}`)
+      return { success: true, message: stdout || stderr || '推送成功' }
+    } catch (pushError: any) {
+      // 🆕 检查是否是因为远程有新提交
+      if (pushError.message && (
+        pushError.message.includes('fetch first') ||
+        pushError.message.includes('non-fast-forward') ||
+        pushError.message.includes('rejected')
+      )) {
+        console.log('[Git] 远程有新提交，先拉取再推送...')
+        
+        // 自动拉取
+        try {
+          const { stdout: pullOut, stderr: pullErr } = await execGitCommand(
+            `git -c http.extraHeader="Authorization: token ${GITEA_ADMIN_TOKEN}" pull --rebase`,
+            localPath
+          )
+          console.log(`[Git] 自动拉取成功: ${pullOut || pullErr}`)
+        } catch (pullError: any) {
+          console.error('[Git] 自动拉取失败:', pullError.message)
+          return { success: false, error: '自动拉取失败: ' + pullError.message }
+        }
+        
+        // 重试推送
+        const { stdout, stderr } = await execGitCommand(
+          `git -c http.extraHeader="Authorization: token ${GITEA_ADMIN_TOKEN}" push`,
+          localPath
+        )
+        console.log(`[Git] 重试推送成功: ${stdout || stderr}`)
+        return { success: true, message: '已自动同步远程更新并推送成功' }
+      }
+      
+      // 其他错误直接返回
+      throw pushError
+    }
   } catch (error: any) {
     console.error('[Git] push 错误:', error.message)
     return { success: false, error: error.message }
@@ -1371,10 +1451,8 @@ ipcMain.handle('git:status', async (_event, localPath: string) => {
         }
       }
       
-      // 去掉可能的引号
-      if (file.startsWith('"') && file.endsWith('"')) {
-        file = file.slice(1, -1)
-      }
+      // 🆕 解码 Git 八进制转义路径（处理中文文件名）
+      file = decodeGitPath(file)
       
       console.log(`[Git] status 解析: line="${line}" -> status="${status}", file="${file}"`)
       
@@ -3420,7 +3498,11 @@ ipcMain.handle('ssh:gitStatus', async (_event, id: string) => {
     // 解析 git status 输出
     const files = (result.stdout || '').trim().split('\n').filter(Boolean).map(line => {
       const status = line.substring(0, 2)
-      const file = line.substring(3).trim()
+      let file = line.substring(3).trim()
+      
+      // 🆕 解码 Git 八进制转义路径（处理中文文件名）
+      file = decodeGitPath(file)
+      
       return {
         status: status.trim() || 'M',
         file,
@@ -3486,11 +3568,40 @@ ipcMain.handle('ssh:gitCommit', async (_event, id: string, files: string[], mess
   }
 })
 
-// 远程 Git 推送
+// 远程 Git 推送（自动拉取后重试）
 ipcMain.handle('ssh:gitPush', async (_event, id: string) => {
   try {
-    // 推送代码
-    const pushResult = await sshManager.execGit(id, 'push')
+    // 第一次尝试推送代码
+    let pushResult = await sshManager.execGit(id, 'push')
+    
+    // 🆕 检查是否是因为远程有新提交
+    if (!pushResult.success && pushResult.error && (
+      pushResult.error.includes('fetch first') ||
+      pushResult.error.includes('non-fast-forward') ||
+      pushResult.error.includes('rejected')
+    )) {
+      console.log('[SSH] 远程有新提交，先拉取再推送...')
+      
+      // 自动拉取
+      const pullResult = await sshManager.execGit(id, 'pull --rebase')
+      if (!pullResult.success) {
+        console.error('[SSH] 自动拉取失败:', pullResult.error)
+        return { success: false, error: '自动拉取失败: ' + pullResult.error }
+      }
+      console.log('[SSH] 自动拉取成功')
+      
+      // 重试推送
+      pushResult = await sshManager.execGit(id, 'push')
+      if (!pushResult.success) {
+        return { success: false, error: '推送失败: ' + pushResult.error }
+      }
+      
+      // 推送标签
+      await sshManager.execGit(id, 'push --tags')
+      
+      return { success: true, message: '已自动同步远程更新并推送成功' }
+    }
+    
     if (!pushResult.success) {
       return { success: false, error: '推送失败: ' + pushResult.error }
     }
