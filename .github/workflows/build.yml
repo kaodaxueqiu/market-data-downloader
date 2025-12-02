@@ -50,15 +50,15 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: windows-portable
-          path: dist/*.exe
+          name: windows-zip
+          path: dist/*.zip
           
       - name: Upload macOS artifacts
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-portable
-          path: dist/*.zip
+          name: macos-dmg
+          path: dist/*.dmg
           
       - name: Get version from package.json
         id: package-version
@@ -72,9 +72,8 @@ jobs:
         with:
           tag_name: v${{ steps.package-version.outputs.version }}
           files: |
-            dist/*.exe
+            dist/*.zip
             dist/*.yml
-            dist/*.blockmap
           draft: false
           prerelease: false
         env:
@@ -86,9 +85,8 @@ jobs:
         with:
           tag_name: v${{ steps.package-version.outputs.version }}
           files: |
-            dist/*.zip
+            dist/*.dmg
             dist/*.yml
-            dist/*.blockmap
           draft: false
           prerelease: false
         env:
