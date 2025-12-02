@@ -190,8 +190,8 @@ function createWindow() {
                 // 显示保存对话框
                 const platform = process.platform
                 const filename = platform === 'win32' 
-                  ? `Market-Data-Downloader-${updateInfo.version}.exe`
-                  : `Market-Data-Downloader-${updateInfo.version}-mac.zip`
+                  ? `ZiZhou-Quant-Platform-${updateInfo.version}.zip`
+                  : `ZiZhou-Quant-Platform-${updateInfo.version}.dmg`
                 
                 const defaultPath = join(app.getPath('downloads'), filename)
                 
@@ -201,8 +201,8 @@ function createWindow() {
                   buttonLabel: '开始下载',
                   filters: [
                     { 
-                      name: platform === 'win32' ? 'Windows应用程序' : 'macOS应用程序', 
-                      extensions: platform === 'win32' ? ['exe'] : ['zip'] 
+                      name: platform === 'win32' ? 'Windows压缩包' : 'macOS安装包', 
+                      extensions: platform === 'win32' ? ['zip'] : ['dmg'] 
                     }
                   ]
                 })
@@ -3312,8 +3312,8 @@ ipcMain.handle('updater:downloadUpdate', async () => {
     // 先在主进程中显示保存对话框
     const platform = process.platform
     const filename = platform === 'win32' 
-      ? `Market-Data-Downloader-${currentUpdateInfo.version}.exe`
-      : `Market-Data-Downloader-${currentUpdateInfo.version}-mac.zip`
+      ? `ZiZhou-Quant-Platform-${currentUpdateInfo.version}.zip`
+      : `ZiZhou-Quant-Platform-${currentUpdateInfo.version}.dmg`
     
     const defaultPath = join(app.getPath('downloads'), filename)
     
@@ -3324,8 +3324,8 @@ ipcMain.handle('updater:downloadUpdate', async () => {
       buttonLabel: '开始下载',
       filters: [
         { 
-          name: platform === 'win32' ? 'Windows应用程序' : 'macOS应用程序', 
-          extensions: platform === 'win32' ? ['exe'] : ['zip'] 
+          name: platform === 'win32' ? 'Windows压缩包' : 'macOS安装包', 
+          extensions: platform === 'win32' ? ['zip'] : ['dmg'] 
         }
       ]
     })

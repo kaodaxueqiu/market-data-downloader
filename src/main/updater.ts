@@ -123,8 +123,8 @@ export async function downloadUpdate(
     buttonLabel: '开始下载',
     filters: [
       { 
-        name: platform === 'win32' ? 'Windows应用程序' : 'macOS应用程序', 
-        extensions: platform === 'win32' ? ['exe'] : ['zip'] 
+        name: platform === 'win32' ? 'Windows压缩包' : 'macOS安装包', 
+        extensions: platform === 'win32' ? ['zip'] : ['dmg'] 
       },
       { name: '所有文件', extensions: ['*'] }
     ]
@@ -227,7 +227,7 @@ export async function installUpdate(filePath: string): Promise<void> {
       type: 'info',
       title: '新版本已下载',
       message: `新版本文件已下载完成`,
-      detail: `使用说明：\n1. 关闭当前应用\n2. 将新版本exe复制到您想要的位置\n3. 运行新版本exe\n4. 删除旧版本（可选）\n\n文件路径：${filePath}`,
+      detail: `使用说明：\n1. 关闭当前应用\n2. 解压下载的zip文件\n3. 运行解压后的exe文件\n4. 删除旧版本（可选）\n\n文件路径：${filePath}`,
       buttons: ['我知道了', '立即退出应用'],
       defaultId: 0,
       cancelId: 0
@@ -242,7 +242,7 @@ export async function installUpdate(filePath: string): Promise<void> {
       type: 'info',
       title: '新版本已下载',
       message: '新版本已下载完成',
-      detail: `使用说明：\n1. 解压zip文件\n2. 将新版本app拖到应用程序文件夹替换旧版本\n3. 运行新版本\n\n文件路径：${filePath}`,
+      detail: `使用说明：\n1. 双击打开dmg文件\n2. 将新版本app拖到应用程序文件夹替换旧版本\n3. 运行新版本\n\n文件路径：${filePath}`,
       buttons: ['知道了']
     })
   }
