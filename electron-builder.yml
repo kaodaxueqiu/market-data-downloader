@@ -48,14 +48,26 @@ dmg:
   icon: build/icon.icns
 win:
   target:
-    - target: zip
+    - target: nsis
       arch:
         - x64
   icon: build/icon.ico
   requestedExecutionLevel: asInvoker
   forceCodeSigning: false
   verifyUpdateCodeSignature: false
-  artifactName: ${productName}-${version}.${ext}
+  artifactName: ${productName}-${version}-Setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 资舟量化研究平台
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  runAfterFinish: true
 linux:
   target:
     - target: AppImage

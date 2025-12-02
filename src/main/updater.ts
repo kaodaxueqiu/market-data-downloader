@@ -109,7 +109,7 @@ export async function downloadUpdate(
   const expectedMD5 = downloadInfo.md5
   const fileSize = downloadInfo.size
   
-  // 让用户选择保存位置
+  // 让用户选择保存位置（从URL提取文件名）
   const filename = path.basename(downloadUrl)
   const defaultPath = path.join(app.getPath('downloads'), filename)
   
