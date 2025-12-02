@@ -32,7 +32,7 @@ extraMetadata:
   main: dist/electron/main/index.js
 mac:
   target:
-    - target: zip
+    - target: dmg
       arch:
         - x64
         - arm64
@@ -42,9 +42,13 @@ mac:
   identity: null
   type: distribution
   icon: build/icon.icns
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  title: ${productName}
+  icon: build/icon.icns
 win:
   target:
-    - target: portable
+    - target: zip
       arch:
         - x64
   icon: build/icon.ico

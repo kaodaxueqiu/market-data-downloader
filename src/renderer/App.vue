@@ -515,6 +515,8 @@ const installDownloadedUpdate = async () => {
     return
   }
   try {
+    // 先关闭下载进度弹窗
+    showUpdateProgress.value = false
     await window.electronAPI.updater.quitAndInstall(updateFilePath.value)
   } catch (error: any) {
     ElMessage.error('安装失败: ' + error.message)

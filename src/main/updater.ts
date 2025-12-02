@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { app, dialog, shell } from 'electron'
+import { app, dialog } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
@@ -222,15 +222,12 @@ export async function installUpdate(filePath: string): Promise<void> {
   console.log('准备安装更新:', filePath)
   
   if (platform === 'win32') {
-    // Windows绿色版: 显示文件位置，让用户手动替换
-    console.log('显示文件位置...')
-    shell.showItemInFolder(filePath)
-    
+    // Windows绿色版: 显示提示信息
     const result = await dialog.showMessageBox({
       type: 'info',
       title: '新版本已下载',
       message: `新版本文件已下载完成`,
-      detail: `文件位置已打开。\n\n使用说明：\n1. 关闭当前应用\n2. 将新版本exe复制到您想要的位置\n3. 运行新版本exe\n4. 删除旧版本（可选）\n\n文件路径：${filePath}`,
+      detail: `使用说明：\n1. 关闭当前应用\n2. 将新版本exe复制到您想要的位置\n3. 运行新版本exe\n4. 删除旧版本（可选）\n\n文件路径：${filePath}`,
       buttons: ['我知道了', '立即退出应用'],
       defaultId: 0,
       cancelId: 0
@@ -240,15 +237,12 @@ export async function installUpdate(filePath: string): Promise<void> {
       app.quit()
     }
   } else if (platform === 'darwin') {
-    // macOS: 显示文件位置，用户手动安装
-    console.log('显示文件位置...')
-    shell.showItemInFolder(filePath)
-    
+    // macOS: 显示提示信息
     await dialog.showMessageBox({
       type: 'info',
       title: '新版本已下载',
       message: '新版本已下载完成',
-      detail: `文件位置已打开。\n\n使用说明：\n1. 解压zip文件\n2. 将新版本app拖到应用程序文件夹替换旧版本\n3. 运行新版本\n\n文件路径：${filePath}`,
+      detail: `使用说明：\n1. 解压zip文件\n2. 将新版本app拖到应用程序文件夹替换旧版本\n3. 运行新版本\n\n文件路径：${filePath}`,
       buttons: ['知道了']
     })
   }
