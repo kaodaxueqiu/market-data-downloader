@@ -187,24 +187,19 @@ function createWindow() {
             if (result.response === 0) {
               // 用户选择立即更新，直接下载
               try {
-                // 显示保存对话框
+                // 显示保存对话框（从 URL 提取文件名）
                 const platform = process.platform
-                const filename = platform === 'win32' 
-                  ? `ZiZhou-Quant-Platform-${updateInfo.version}.zip`
-                  : `ZiZhou-Quant-Platform-${updateInfo.version}.dmg`
+                const downloadUrl = platform === 'win32'
+                  ? updateInfo.downloads.windows.url
+                  : (process.arch === 'arm64' ? updateInfo.downloads.mac_arm64.url : updateInfo.downloads.mac_intel.url)
+                const filename = basename(downloadUrl)
                 
                 const defaultPath = join(app.getPath('downloads'), filename)
                 
                 const saveResult = await dialog.showSaveDialog(mainWindow, {
                   title: '选择保存位置',
                   defaultPath: defaultPath,
-                  buttonLabel: '开始下载',
-                  filters: [
-                    { 
-                      name: platform === 'win32' ? 'Windows压缩包' : 'macOS安装包', 
-                      extensions: platform === 'win32' ? ['zip'] : ['dmg'] 
-                    }
-                  ]
+                  buttonLabel: '开始下载'
                 })
                 
                 if (saveResult.canceled || !saveResult.filePath) {
@@ -3309,11 +3304,12 @@ ipcMain.handle('updater:downloadUpdate', async () => {
   }
   
   try {
-    // 先在主进程中显示保存对话框
+    // 先在主进程中显示保存对话框（从 URL 提取文件名）
     const platform = process.platform
-    const filename = platform === 'win32' 
-      ? `ZiZhou-Quant-Platform-${currentUpdateInfo.version}.zip`
-      : `ZiZhou-Quant-Platform-${currentUpdateInfo.version}.dmg`
+    const downloadUrl = platform === 'win32'
+      ? currentUpdateInfo.downloads.windows.url
+      : (process.arch === 'arm64' ? currentUpdateInfo.downloads.mac_arm64.url : currentUpdateInfo.downloads.mac_intel.url)
+    const filename = basename(downloadUrl)
     
     const defaultPath = join(app.getPath('downloads'), filename)
     
@@ -3321,13 +3317,7 @@ ipcMain.handle('updater:downloadUpdate', async () => {
     const saveResult = await dialog.showSaveDialog(mainWindow!, {
       title: '选择保存位置',
       defaultPath: defaultPath,
-      buttonLabel: '开始下载',
-      filters: [
-        { 
-          name: platform === 'win32' ? 'Windows压缩包' : 'macOS安装包', 
-          extensions: platform === 'win32' ? ['zip'] : ['dmg'] 
-        }
-      ]
+      buttonLabel: '开始下载'
     })
     
     console.log('对话框结果:', saveResult)
