@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
-import { join } from 'path'
+import { join, basename } from 'path'
 import Store from 'electron-store'
 import axios from 'axios'
 import downloadManager from './download'
