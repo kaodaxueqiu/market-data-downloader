@@ -148,7 +148,7 @@ const total = ref(0)
 const statusFilter = ref('all')
 const searchKeyword = ref('')
 
-const stats = reactive({
+const stats = reactive<Record<string, number>>({
   pending: 0,
   processing: 0,
   completed: 0,

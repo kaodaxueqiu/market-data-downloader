@@ -661,6 +661,17 @@ declare global {
         getResult: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         cancelTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
+        getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        download: (taskId: string, options: { format: 'csv' | 'xlsx'; type: 'summary' | 'daily' | 'all'; period?: number }) => Promise<{ success: boolean; filePath?: string; error?: string }>
+        report: (taskId: string, options: any) => Promise<{ success: boolean; filePath?: string; error?: string }>
+      }
+      workorder: {
+        getStats: () => Promise<{ success: boolean; data?: any; error?: string }>
+        getMyList: (params?: { page?: number; page_size?: number; status?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getAllList: (params?: { page?: number; page_size?: number; status?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getDetail: (id: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        submit: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        updateStatus: (id: number, data: any) => Promise<{ success: boolean; error?: string }>
       }
       fund: {
         setApiKey: (apiKey: string) => Promise<boolean>

@@ -1934,18 +1934,6 @@ const getTagTypeColor = (type: string) => {
   return colors[type] || ''
 }
 
-// 标签类型标签
-const getTagTypeLabel = (type: string) => {
-  const labels: Record<string, string> = {
-    frequency: '频率',
-    data_source: '数据来源',
-    market: '市场',
-    strategy: '策略',
-    custom: '自定义'
-  }
-  return labels[type] || type
-}
-
 // 标签分组（用于表单选择）
 const groupedTags = computed(() => {
   const groups: Record<string, { type: string; label: string; tags: any[] }> = {}

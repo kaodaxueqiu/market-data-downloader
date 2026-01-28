@@ -309,7 +309,7 @@ const currentOrder = ref<WorkOrder | null>(null)
 const adminNote = ref('')
 const rejectReason = ref('')
 
-const stats = reactive({
+const stats = reactive<Record<string, number>>({
   pending: 0,
   processing: 0,
   completed: 0,

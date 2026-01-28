@@ -556,7 +556,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { 
-  Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts, Files,
+  Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts,
   Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, CopyDocument, Check,
   Warning, CircleCheck, CircleClose, Close, Folder
 } from '@element-plus/icons-vue'
@@ -581,10 +581,6 @@ const stockPools = ref<StockPool[]>([])
 const stockPoolsLoading = ref(false)
 
 // 表搜索和字段列表
-const tableSearchKeyword = ref<Record<number, string>>({})
-const tableSearchResults = ref<Record<number, any>>({}) // 存储原始搜索结果
-const tableSearchLoading = ref<Record<number, boolean>>({})
-const showSearchDropdown = ref<Record<number, boolean>>({})
 const tableMetaMap = ref<Record<string, any>>({}) // 表元数据，key: table_name
 
 // 搜索弹窗相关
@@ -864,7 +860,7 @@ const runCodeCheck = async () => {
       // 搜索表是否存在 - 分别搜索两个数据源
       try {
         let foundTable: any = null
-        let foundDatabase: string | undefined
+        let foundDatabase: 'postgresql' | 'clickhouse' | 'clickhouse_data' | undefined
         
         // 搜索两个数据源：clickhouse 和 postgresql
         for (const datasource of ['clickhouse', 'postgresql'] as const) {
@@ -918,8 +914,6 @@ const runCodeCheck = async () => {
 
 // 自动配置数据源
 const autoConfigDataSources = () => {
-  const existingTables = new Set(formData.data_sources.map(ds => ds.table))
-  
   for (const [tableName, info] of Object.entries(codeCheckResult.value)) {
     if (!info.tableExists) continue
     
@@ -954,62 +948,6 @@ const autoConfigDataSources = () => {
   }
   
   ElMessage.success('已自动配置数据源，请检查日期字段和代码字段')
-}
-
-// 搜索表（防抖）
-let searchTimer: NodeJS.Timeout | null = null
-const handleTableSearch = (index: number) => {
-  const keyword = tableSearchKeyword.value[index]?.trim()
-  
-  if (!keyword || keyword.length < 2) {
-    showSearchDropdown.value[index] = false
-    tableSearchResults.value[index] = null
-    return
-  }
-  
-  // 防抖
-  if (searchTimer) clearTimeout(searchTimer)
-  
-  searchTimer = setTimeout(async () => {
-    tableSearchLoading.value[index] = true
-    showSearchDropdown.value[index] = true
-    
-    try {
-      // 调用全局搜索 API
-      const result = await window.electronAPI.search.global(keyword, 20)
-      console.log('搜索结果:', result)
-      
-      // 保存原始搜索结果
-      tableSearchResults.value[index] = result.data
-      
-      // 缓存表元数据
-      const cacheResults = (results: any[], datasource: string) => {
-        results?.forEach((t: any) => {
-          if (t.table_name) {
-            tableMetaMap.value[t.table_name] = {
-              ...t,
-              datasource
-            }
-          }
-        })
-      }
-      
-      cacheResults(result.data?.static?.results, 'postgresql')
-      cacheResults(result.data?.processed?.results, 'clickhouse')
-      cacheResults(result.data?.mirror?.results, 'clickhouse_data')
-      
-    } catch (error) {
-      console.error('搜索表失败:', error)
-    } finally {
-      tableSearchLoading.value[index] = false
-    }
-  }, 300)
-}
-
-// 清空搜索
-const handleSearchClear = (index: number) => {
-  showSearchDropdown.value[index] = false
-  tableSearchResults.value[index] = null
 }
 
 // 打开搜索弹窗
@@ -1095,49 +1033,6 @@ const selectDialogResult = async (item: any, database: string) => {
   ds.code_field = ''
   
   searchDialogVisible.value = false
-  
-  // 加载字段列表
-  await loadFieldList(index)
-}
-
-// 获取指定类型的搜索结果（只保留表名匹配，过滤字段匹配，并去重）
-const getSearchResultsByType = (index: number, type: 'static' | 'processed' | 'mirror') => {
-  const results = tableSearchResults.value[index]
-  if (!results?.[type]?.results) return []
-  
-  // 过滤：只保留表名匹配（match_type !== 'field'），并按 table_name 去重
-  const seen = new Set<string>()
-  return results[type].results.filter((item: any) => {
-    if (item.match_type === 'field') return false
-    if (seen.has(item.table_name)) return false
-    seen.add(item.table_name)
-    return true
-  })
-}
-
-// 判断是否有搜索结果
-const hasSearchResults = (index: number) => {
-  return getSearchResultsByType(index, 'static').length > 0 ||
-         getSearchResultsByType(index, 'processed').length > 0 ||
-         getSearchResultsByType(index, 'mirror').length > 0
-}
-
-// 选择搜索结果
-const selectSearchResult = async (index: number, item: any, datasource: string) => {
-  const ds = formData.data_sources[index]
-  
-  ds.table = item.table_name
-  ds.database = datasource
-  ds.name = item.table_comment || item.table_name
-  
-  // 清空字段
-  ds.fields = []
-  ds.date_field = ''
-  ds.code_field = ''
-  
-  // 关闭下拉框，清空搜索词
-  showSearchDropdown.value[index] = false
-  tableSearchKeyword.value[index] = ''
   
   // 加载字段列表
   await loadFieldList(index)

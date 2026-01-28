@@ -530,21 +530,7 @@ import {
   CircleCheck, TrendCharts, Histogram, DataLine, Document, Download, Tickets
 } from '@element-plus/icons-vue'
 
-// 声明 electronAPI 类型
-declare global {
-  interface Window {
-    electronAPI: {
-      backtest: {
-        getTasks: (params?: any) => Promise<any>
-        getTaskDetail: (taskId: string) => Promise<any>
-        getResult: (taskId: string) => Promise<any>
-        getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<any>
-        cancelTask: (taskId: string) => Promise<any>
-        getStockPools: () => Promise<any>
-      }
-    }
-  }
-}
+// electronAPI 类型已在 preload/index.ts 中全局定义
 
 const props = defineProps<{
   taskId?: string
@@ -581,15 +567,6 @@ const dailyMetricsPageSize = ref(100)
 
 // 每个因子选中的周期
 const selectedPeriods = ref<Record<number, number>>({})
-
-// 获取周期选项
-const getPeriodOptions = (factor: any) => {
-  if (!factor.period_ic_stats?.length) return []
-  return factor.period_ic_stats.map((p: any) => ({
-    label: `${p.period}日`,
-    value: p.period
-  }))
-}
 
 // 获取当前选中周期的数据
 const getCurrentPeriodData = (factor: any, index: number) => {
