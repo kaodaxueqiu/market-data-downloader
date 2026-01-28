@@ -107,17 +107,11 @@ export class FactorAPI {
     this.client.defaults.headers['X-API-Key'] = apiKey
   }
 
-  // 1. 获取因子分类树
+  // 1. 获取因子分类树（不缓存，每次请求最新数据）
   async getCategories(): Promise<{ code: number; data: FactorCategory[] }> {
-    const cacheKey = 'categories'
-    if (this.cache.has(cacheKey)) {
-      return { code: 200, data: this.cache.get(cacheKey) }
-    }
-
     const response = await this.client.get('/categories')
     
     if (response.data.success) {
-      this.cache.set(cacheKey, response.data.data)
       return { code: 200, data: response.data.data }
     }
     

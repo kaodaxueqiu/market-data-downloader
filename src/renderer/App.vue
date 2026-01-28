@@ -69,6 +69,61 @@
               <h2>{{ pageTitle }}</h2>
             </div>
             <div class="header-right">
+              <!-- 🆕 消息中心 -->
+              <el-popover
+                placement="bottom-end"
+                :width="380"
+                trigger="click"
+                popper-class="notification-popover"
+              >
+                <template #reference>
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0" class="notification-badge">
+                    <el-button circle size="small">
+                      <el-icon :size="18"><Bell /></el-icon>
+                    </el-button>
+                  </el-badge>
+                </template>
+
+                <!-- 消息中心面板 -->
+                <div class="notification-panel">
+                  <div class="panel-header">
+                    <span class="panel-title">消息中心</span>
+                    <div class="panel-actions">
+                      <el-button link size="small" @click="markAllAsRead" :disabled="unreadCount === 0">
+                        全部已读
+                      </el-button>
+                      <el-button link size="small" type="danger" @click="clearAllNotifications" :disabled="notifications.length === 0">
+                        清空
+                      </el-button>
+                    </div>
+                  </div>
+                  
+                  <div class="notification-list" v-if="notifications.length > 0">
+                    <div 
+                      v-for="item in notifications.slice(0, 10)" 
+                      :key="item.id"
+                      class="notification-item"
+                      :class="{ unread: !item.read }"
+                      @click="handleNotificationClick(item)"
+                    >
+                      <div class="notification-icon">
+                        <el-icon v-if="item.type === 'workorder'" color="#409eff"><Tickets /></el-icon>
+                        <el-icon v-else-if="item.type === 'system'" color="#e6a23c"><InfoFilled /></el-icon>
+                        <el-icon v-else color="#67c23a"><Bell /></el-icon>
+                      </div>
+                      <div class="notification-content">
+                        <div class="notification-title">{{ item.title }}</div>
+                        <div class="notification-message">{{ item.message }}</div>
+                        <div class="notification-time">{{ formatTime(item.time) }}</div>
+                      </div>
+                      <div class="notification-dot" v-if="!item.read"></div>
+                    </div>
+                  </div>
+                  
+                  <el-empty v-else description="暂无消息" :image-size="60" />
+                </div>
+              </el-popover>
+              
               <!-- 🆕 系统状态面板 -->
               <el-popover
                 placement="bottom-end"
@@ -219,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { setMenuPermissions } from './router/index'
 import { ElMessage } from 'element-plus'
@@ -229,7 +284,12 @@ import {
   Refresh,
   List,
   Loading,
-  SuccessFilled
+  SuccessFilled,
+  Bell,
+  Tickets,
+  InfoFilled,
+  Key,
+  Connection
 } from '@element-plus/icons-vue'
 import { allMenus, type MenuItem } from '@/config/menuConfig'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
@@ -284,9 +344,100 @@ let statusRefreshTimer: NodeJS.Timeout | null = null
 const menuPermissions = ref<string[]>([])
 let permissionRefreshTimer: NodeJS.Timeout | null = null
 
+// 提供菜单权限给子组件使用
+provide('menuPermissions', menuPermissions)
+
 // 🆕 数据源权限相关
 const datasourcePermissions = ref<string[]>([])
 let datasourceRefreshTimer: NodeJS.Timeout | null = null
+
+// 🆕 消息中心相关
+interface NotificationItem {
+  id: string
+  type: 'workorder' | 'system' | 'task'  // 消息类型
+  title: string
+  message: string
+  time: Date
+  read: boolean
+  link?: string  // 跳转链接
+}
+// 从 localStorage 加载消息历史
+const loadNotifications = (): NotificationItem[] => {
+  try {
+    const saved = localStorage.getItem('notificationHistory')
+    if (saved) {
+      const items = JSON.parse(saved)
+      // 恢复 Date 对象
+      return items.map((item: any) => ({
+        ...item,
+        time: new Date(item.time)
+      }))
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+// 保存消息到 localStorage
+const saveNotifications = () => {
+  try {
+    // 最多保存50条
+    const toSave = notifications.value.slice(0, 50)
+    localStorage.setItem('notificationHistory', JSON.stringify(toSave))
+  } catch (e) {
+    console.error('保存消息历史失败:', e)
+  }
+}
+
+const notifications = ref<NotificationItem[]>(loadNotifications())
+const unreadCount = computed(() => notifications.value.filter(n => !n.read).length)
+let notificationRefreshTimer: NodeJS.Timeout | null = null
+let lastWorkorderStats = { pending: 0 }
+
+// 记录已通知过的工单状态，避免重复通知（从 localStorage 恢复）
+const loadNotifiedStatus = (): Record<string, string> => {
+  try {
+    const saved = localStorage.getItem('notifiedWorkorderStatus')
+    return saved ? JSON.parse(saved) : {}
+  } catch {
+    return {}
+  }
+}
+const notifiedWorkorderStatus = ref<Record<string, string>>(loadNotifiedStatus())
+
+// 保存已通知状态到 localStorage
+const saveNotifiedStatus = () => {
+  try {
+    localStorage.setItem('notifiedWorkorderStatus', JSON.stringify(notifiedWorkorderStatus.value))
+  } catch (e) {
+    console.error('保存通知状态失败:', e)
+  }
+}
+
+// 🆕 记录已通知过的回测任务状态
+const loadNotifiedTaskStatus = (): Record<string, string> => {
+  try {
+    const saved = localStorage.getItem('notifiedBacktestTaskStatus')
+    return saved ? JSON.parse(saved) : {}
+  } catch {
+    return {}
+  }
+}
+const notifiedTaskStatus = ref<Record<string, string>>(loadNotifiedTaskStatus())
+
+// 保存回测任务已通知状态到 localStorage
+const saveNotifiedTaskStatus = () => {
+  try {
+    localStorage.setItem('notifiedBacktestTaskStatus', JSON.stringify(notifiedTaskStatus.value))
+  } catch (e) {
+    console.error('保存回测任务通知状态失败:', e)
+  }
+}
+
+// 提供消息中心给子组件使用
+provide('notifications', notifications)
+provide('unreadCount', unreadCount)
 
 // 菜单配置从 @/config/menuConfig.ts 统一导入
 
@@ -334,6 +485,14 @@ const pageTitle = computed(() => {
     '/': '首页',
     '/data-center': '数据中心',
     '/factor-library': '因子库',
+    '/factor-library/plaza': '因子广场',
+    '/factor-library/my-factors': '我的因子',
+    '/factor-library/submit': '提交因子',
+    '/factor-library/backtest': '因子回测',
+    '/factor-library/backtest/submit': '因子回测',
+    '/factor-library/backtest/tasks': '因子回测',
+    '/factor-library/backtest/result': '因子回测',
+    '/factor-library/backtest/expression-dict': '因子回测',
     '/fund-management': '基金管理',
     '/fund-management/list': '基金列表',
     '/fund-management/performance': '业绩分析',
@@ -345,6 +504,10 @@ const pageTitle = computed(() => {
     '/code-repository/execute': '执行模型',
     '/code-repository/history': '执行记录',
     '/code-repository/admin': '仓库管理',
+    '/factor-library/workorder': '数据工单',
+    '/factor-library/workorder/submit': '数据工单',
+    '/factor-library/workorder/my': '数据工单',
+    '/factor-library/workorder/admin': '数据工单',
     '/tasks': '任务管理',
     '/history': '历史记录',
     '/dictionary': '行情数据字典',
@@ -358,7 +521,14 @@ const pageTitle = computed(() => {
     '/monitoring/clickhouse-cron': 'ClickHouse定时任务',
     '/settings': '系统设置'
   }
-  return titles[route.path] || '市场数据下载工具'
+  // 处理动态路由
+  if (route.path.startsWith('/factor-library/backtest/result/')) {
+    return '因子回测'
+  }
+  if (route.path.startsWith('/factor-library/workorder/detail/')) {
+    return '数据工单'
+  }
+  return titles[route.path] || '资舟量化研究平台'
 })
 
 const handleMenuSelect = (index: string) => {
@@ -657,6 +827,275 @@ const stopDatasourceRefresh = () => {
   }
 }
 
+// 🆕 添加通知消息
+const addNotification = (type: 'workorder' | 'system' | 'task', title: string, message: string, link?: string) => {
+  const id = `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  notifications.value.unshift({
+    id,
+    type,
+    title,
+    message,
+    time: new Date(),
+    read: false,
+    link
+  })
+  
+  // 最多保留50条消息
+  if (notifications.value.length > 50) {
+    notifications.value = notifications.value.slice(0, 50)
+  }
+  
+  // 保存到 localStorage
+  saveNotifications()
+  console.log('📬 新消息:', title, message)
+}
+
+// 🆕 标记消息已读
+const markAsRead = (id: string) => {
+  const notification = notifications.value.find(n => n.id === id)
+  if (notification) {
+    notification.read = true
+    saveNotifications()
+  }
+}
+
+// 🆕 标记全部已读
+const markAllAsRead = () => {
+  notifications.value.forEach(n => n.read = true)
+  saveNotifications()
+}
+
+// 🆕 清空所有消息
+const clearAllNotifications = () => {
+  notifications.value = []
+  saveNotifications()
+}
+
+// 提供消息操作方法给子组件
+provide('markAsRead', markAsRead)
+provide('markAllAsRead', markAllAsRead)
+provide('clearAllNotifications', clearAllNotifications)
+
+// 🆕 点击通知项
+const handleNotificationClick = (item: NotificationItem) => {
+  markAsRead(item.id)
+  if (item.link) {
+    router.push(item.link)
+  }
+}
+
+// 🆕 格式化时间
+const formatTime = (time: Date) => {
+  const now = new Date()
+  const diff = now.getTime() - new Date(time).getTime()
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (hours < 24) return `${hours}小时前`
+  if (days < 7) return `${days}天前`
+  
+  return new Date(time).toLocaleDateString()
+}
+
+// 🆕 检查工单更新并添加到消息中心
+const checkWorkorderUpdates = async () => {
+  try {
+    // 检查是否有工单相关权限
+    const hasWorkorderPermission = menuPermissions.value.length === 0 || 
+      menuPermissions.value.includes('data_workorder') ||
+      menuPermissions.value.includes('workorder_submit') ||
+      menuPermissions.value.includes('workorder_my') ||
+      menuPermissions.value.includes('workorder_manage')
+    
+    if (!hasWorkorderPermission) return
+    
+    const isITAdmin = menuPermissions.value.includes('workorder_manage')
+    
+    // IT管理员：检查新工单
+    if (isITAdmin) {
+      const statsResult = await window.electronAPI.workorder.getStats()
+      if (statsResult.success) {
+        const stats = statsResult.data
+        const pendingCount = stats.pending || 0
+        
+        // 有新工单
+        if (pendingCount > lastWorkorderStats.pending && lastWorkorderStats.pending > 0) {
+          const newCount = pendingCount - lastWorkorderStats.pending
+          addNotification(
+            'workorder',
+            '新工单提醒',
+            `有 ${newCount} 个新的字段申请待处理`,
+            '/factor-library/workorder/admin'
+          )
+        }
+        
+        lastWorkorderStats.pending = pendingCount
+      }
+    }
+    
+    // 普通用户：检查自己工单的状态变化
+    const myResult = await window.electronAPI.workorder.getMyList({ page: 1, page_size: 20 })
+    if (myResult.success && myResult.data?.list) {
+      const myList = myResult.data.list
+      
+      let statusChanged = false
+      
+      myList.forEach((item: any) => {
+        const workorderId = String(item.id)
+        const currentStatus = item.status
+        const lastStatus = notifiedWorkorderStatus.value[workorderId]
+        
+        // 首次记录或状态发生变化
+        if (lastStatus === undefined) {
+          // 首次加载，只记录状态，不通知
+          notifiedWorkorderStatus.value[workorderId] = currentStatus
+          statusChanged = true
+        } else if (lastStatus !== currentStatus && currentStatus !== 'pending') {
+          // 状态发生变化，且不是变回 pending
+          const statusText: Record<string, string> = {
+            processing: '已被接单，正在处理中',
+            completed: '已完成',
+            rejected: '已被拒绝'
+          }
+          
+          if (statusText[currentStatus]) {
+            addNotification(
+              'workorder',
+              '工单状态更新',
+              `您的工单"${item.field_name}"${statusText[currentStatus]}`,
+              `/factor-library/workorder/detail/${item.id}`
+            )
+          }
+          
+          // 更新记录的状态
+          notifiedWorkorderStatus.value[workorderId] = currentStatus
+          statusChanged = true
+        }
+      })
+      
+      // 状态有变化时保存到 localStorage
+      if (statusChanged) {
+        saveNotifiedStatus()
+      }
+    }
+  } catch (error: any) {
+    console.error('检查工单更新失败:', error)
+  }
+}
+
+// 🆕 检查回测任务状态并添加通知
+const checkBacktestTaskUpdates = async () => {
+  try {
+    // 检查是否有因子回测权限
+    const hasBacktestPermission = menuPermissions.value.length === 0 || 
+      menuPermissions.value.includes('factor_backtest') ||
+      menuPermissions.value.includes('backtest_submit') ||
+      menuPermissions.value.includes('backtest_list')
+    
+    if (!hasBacktestPermission) {
+      console.log('🔕 无回测权限，跳过任务检查')
+      return
+    }
+    
+    // 获取最近的回测任务（只获取最近50个，增加覆盖范围）
+    const result = await window.electronAPI.backtest.getTasks({
+      page: 1,
+      page_size: 50
+    })
+    
+    if (!result.success || !result.data?.tasks) {
+      console.log('🔕 获取任务列表失败或无数据:', result)
+      return
+    }
+    
+    const tasks = result.data.tasks
+    let statusChanged = false
+    let notifiedCount = 0
+    
+    console.log(`🔍 检查 ${tasks.length} 个回测任务状态...`)
+    
+    tasks.forEach((task: any) => {
+      const taskId = task.task_id
+      const currentStatus = task.status
+      const lastStatus = notifiedTaskStatus.value[taskId]
+      
+      // 首次记录或状态发生变化
+      if (lastStatus === undefined) {
+        // 首次加载，只记录状态，不通知
+        notifiedTaskStatus.value[taskId] = currentStatus
+        statusChanged = true
+      } else if (lastStatus !== currentStatus) {
+        console.log(`📢 任务 ${taskId} 状态变化: ${lastStatus} → ${currentStatus}`)
+        
+        // 状态发生变化，只在完成或失败时通知
+        if (currentStatus === 'completed') {
+          addNotification(
+            'task',
+            '回测任务完成',
+            `因子回测任务"${task.task_name || taskId}"已完成`,
+            `/factor-library/backtest/result/${taskId}`
+          )
+          notifiedCount++
+        } else if (currentStatus === 'failed') {
+          addNotification(
+            'task',
+            '回测任务失败',
+            `因子回测任务"${task.task_name || taskId}"执行失败`,
+            `/factor-library/backtest/result/${taskId}`
+          )
+          notifiedCount++
+        }
+        
+        // 更新记录的状态
+        notifiedTaskStatus.value[taskId] = currentStatus
+        statusChanged = true
+      }
+    })
+    
+    if (notifiedCount > 0) {
+      console.log(`🔔 本次新增 ${notifiedCount} 条通知`)
+    }
+    
+    // 状态有变化时保存到 localStorage
+    if (statusChanged) {
+      saveNotifiedTaskStatus()
+    }
+  } catch (error: any) {
+    console.error('检查回测任务更新失败:', error)
+  }
+}
+
+// 🆕 启动消息中心定时检查（每10秒）
+const startNotificationRefresh = () => {
+  if (notificationRefreshTimer) {
+    clearInterval(notificationRefreshTimer)
+  }
+  
+  // 先立即检查一次
+  checkWorkorderUpdates()
+  checkBacktestTaskUpdates()
+  
+  // 每10秒检查一次
+  notificationRefreshTimer = setInterval(() => {
+    checkWorkorderUpdates()
+    checkBacktestTaskUpdates()
+  }, 10000)
+  
+  console.log('⏰ 消息中心定时检查已启动（每10秒）')
+}
+
+// 🆕 停止消息中心检查
+const stopNotificationRefresh = () => {
+  if (notificationRefreshTimer) {
+    clearInterval(notificationRefreshTimer)
+    notificationRefreshTimer = null
+    console.log('⏹️ 消息中心定时检查已停止')
+  }
+}
+
 // 🆕 路由守卫：没有API Key时只能访问设置页
 watch([() => route.path, hasApiKey], () => {
   if (!hasApiKey.value && route.path !== '/settings') {
@@ -745,6 +1184,9 @@ onMounted(async () => {
     // 🆕 数据源权限定期检查
     await refreshDatasourcePermissions(false)
     startDatasourceRefresh()
+    
+    // 🆕 启动消息中心检查
+    startNotificationRefresh()
   }, 100)
 })
 
@@ -756,6 +1198,7 @@ onUnmounted(() => {
   }
   stopPermissionRefresh()
   stopDatasourceRefresh()
+  stopNotificationRefresh()
 })
 </script>
 
@@ -932,6 +1375,7 @@ onUnmounted(() => {
   .app-main {
     background: #f5f7fa;
     padding: 20px;
+    overflow: auto;
   }
 }
 
@@ -1038,5 +1482,107 @@ onUnmounted(() => {
 .app-sidebar .el-sub-menu .el-menu .el-menu-item.is-active {
   background-color: rgba(255, 255, 255, 0.25) !important;
   color: white !important;
+}
+
+/* 消息中心样式 */
+.notification-badge {
+  margin-right: 12px;
+}
+
+.notification-panel {
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 12px;
+    
+    .panel-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #303133;
+    }
+    
+    .panel-actions {
+      display: flex;
+      gap: 8px;
+    }
+  }
+  
+  .notification-list {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  
+  .notification-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    position: relative;
+    
+    &:hover {
+      background: #f5f7fa;
+    }
+    
+    &.unread {
+      background: #ecf5ff;
+      
+      &:hover {
+        background: #d9ecff;
+      }
+    }
+    
+    .notification-icon {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+    }
+    
+    .notification-content {
+      flex: 1;
+      min-width: 0;
+      
+      .notification-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #303133;
+        margin-bottom: 4px;
+      }
+      
+      .notification-message {
+        font-size: 13px;
+        color: #606266;
+        margin-bottom: 4px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      .notification-time {
+        font-size: 12px;
+        color: #909399;
+      }
+    }
+    
+    .notification-dot {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f56c6c;
+    }
+  }
 }
 </style>

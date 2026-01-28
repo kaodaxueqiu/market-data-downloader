@@ -1,0 +1,2137 @@
+<template>
+  <div class="submit-content">
+    <el-form 
+      ref="formRef" 
+      :model="formData" 
+      :rules="formRules" 
+      label-width="100px"
+      label-position="right"
+      class="submit-form"
+    >
+      <!-- 两列布局 -->
+      <el-row :gutter="24">
+        <!-- 左侧列 -->
+        <el-col :span="12">
+          <!-- 基本信息 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><Document /></el-icon>
+              <span>基本信息</span>
+            </div>
+            <div class="section-body">
+              <el-form-item label="任务名称" prop="task_name">
+                <el-input 
+                  v-model="formData.task_name" 
+                  placeholder="请输入任务名称"
+                  maxlength="50"
+                  show-word-limit
+                />
+              </el-form-item>
+            </div>
+          </div>
+
+          <!-- 因子配置 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><DataAnalysis /></el-icon>
+              <span>因子配置</span>
+            </div>
+            <div class="section-body">
+              <el-form-item label="因子来源">
+                <el-segmented v-model="factorSource" :options="factorSourceOptions" @change="onFactorSourceChange" />
+              </el-form-item>
+              
+              <!-- 方式1: 因子表达式 -->
+              <el-form-item v-if="factorSource === 'expression'" label="因子表达式">
+                <el-input
+                  v-model="formData.factor_expression"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="例如: close/open - 1"
+                />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  支持字段由数据源配置决定
+                </div>
+              </el-form-item>
+              
+              <!-- 方式2: Python代码 -->
+              <template v-else-if="factorSource === 'code'">
+                <el-form-item label="Python代码">
+                  <el-input
+                    v-model="formData.factor_code"
+                    type="textarea"
+                    :rows="10"
+                    placeholder="def calculate_factor(data):
+    stock_daily = data['stock_daily']
+    return stock_daily['close'] / stock_daily['open'] - 1
+
+# 回测引擎会自动识别入口函数，函数名随意"
+                    class="code-textarea"
+                    @input="onCodeContentChange"
+                  />
+                </el-form-item>
+                <!-- 代码检查结果 -->
+                <div v-if="Object.keys(codeCheckResult).length > 0" class="code-check-panel">
+                  <div class="code-check-header">
+                    <el-icon><Warning v-if="hasCodeCheckError" /><CircleCheck v-else /></el-icon>
+                    <span>代码检查</span>
+                    <el-button 
+                      type="primary" 
+                      size="small" 
+                      :loading="codeChecking"
+                      @click="runCodeCheck"
+                    >
+                      重新检查
+                    </el-button>
+                    <el-button 
+                      v-if="canAutoConfig" 
+                      :type="hasCodeCheckError ? 'info' : 'success'" 
+                      size="small" 
+                      :disabled="hasCodeCheckError"
+                      @click="autoConfigDataSources"
+                    >
+                      {{ hasCodeCheckError ? '存在错误，无法自动配置' : '自动配置数据源' }}
+                    </el-button>
+                  </div>
+                  <div class="code-check-body">
+                    <div v-for="(info, tableName) in codeCheckResult" :key="tableName" class="check-item">
+                      <div class="check-table">
+                        <el-icon :class="info.tableExists ? 'success' : 'error'">
+                          <CircleCheck v-if="info.tableExists" /><CircleClose v-else />
+                        </el-icon>
+                        <span class="table-name">{{ tableName }}</span>
+                        <el-tag v-if="info.tableExists" size="small" type="info">{{ info.database }}</el-tag>
+                        <el-tag v-else size="small" type="danger">表不存在</el-tag>
+                      </div>
+                      <div v-if="info.fields && info.fields.length > 0" class="check-fields">
+                        <span class="fields-label">字段: </span>
+                        <el-tag 
+                          v-for="field in info.fields" 
+                          :key="field.name"
+                          size="small"
+                          :type="field.exists ? 'success' : 'danger'"
+                          style="margin: 2px;"
+                        >
+                          {{ field.name }}
+                          <el-icon style="margin-left: 2px;">
+                            <Check v-if="field.exists" /><Close v-else />
+                          </el-icon>
+                        </el-tag>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="code-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>粘贴代码后自动检查表和字段是否存在，key 是表名（如 <code>data['stock_daily']</code>）</span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- 回测时间 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><Calendar /></el-icon>
+              <span>回测时间</span>
+            </div>
+            <div class="section-body">
+              <el-form-item label="时间范围">
+                <el-date-picker
+                  v-model="dateRange"
+                  type="daterange"
+                  range-separator="~"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  value-format="YYYY-MM-DD"
+                  :shortcuts="dateShortcuts"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+            </div>
+          </div>
+
+          <!-- 数据源配置 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><Connection /></el-icon>
+              <span>数据源配置</span>
+              <el-button type="primary" size="small" text :icon="Plus" @click="addDataSource">
+                添加数据源
+              </el-button>
+            </div>
+            <div class="section-body">
+              <div v-for="(ds, index) in formData.data_sources" :key="index" class="datasource-item">
+                <div class="datasource-header">
+                  <span class="datasource-title">数据源 {{ index + 1 }}: {{ ds.table || '未选择' }}</span>
+                  <el-button 
+                    v-if="formData.data_sources.length > 1"
+                    type="danger" 
+                    size="small" 
+                    text 
+                    :icon="Delete"
+                    @click="removeDataSource(index)"
+                  />
+                </div>
+                <!-- 表名搜索 -->
+                <el-form-item label="选择表" label-width="70px">
+                  <el-button 
+                    type="primary" 
+                    plain 
+                    @click="openSearchDialog(index)"
+                  >
+                    <el-icon><Search /></el-icon>
+                    搜索数据表
+                  </el-button>
+                </el-form-item>
+                <!-- 已选表信息 -->
+                <div v-if="ds.table" class="selected-table-info">
+                  <el-tag type="success" effect="light" closable @close="clearSelectedTable(index)">
+                    {{ ds.table }}
+                  </el-tag>
+                  <el-tag type="info">{{ ds.database }}</el-tag>
+                </div>
+                <!-- 字段选择 -->
+                <el-form-item label="字段" label-width="70px">
+                  <el-select 
+                    v-model="ds.fields" 
+                    multiple 
+                    filterable
+                    placeholder="选择字段"
+                    style="width: 100%;"
+                    :loading="fieldListLoading[index]"
+                  >
+                    <el-option 
+                      v-for="f in getFieldList(index)" 
+                      :key="f.column_name" 
+                      :label="f.column_name" 
+                      :value="f.column_name"
+                    >
+                      <span>{{ f.column_name }}</span>
+                      <span v-if="f.column_comment" class="field-desc">{{ f.column_comment }}</span>
+                    </el-option>
+                  </el-select>
+                </el-form-item>
+                <div class="date-code-row">
+                  <div class="field-item">
+                    <span class="field-label"><span class="required">*</span>日期字段</span>
+                    <el-select v-model="ds.date_field" filterable placeholder="必选">
+                      <el-option 
+                        v-for="f in getFieldList(index)" 
+                        :key="f.column_name" 
+                        :label="f.column_name" 
+                        :value="f.column_name" 
+                      />
+                    </el-select>
+                  </div>
+                  <div class="field-item">
+                    <span class="field-label"><span class="required">*</span>代码字段</span>
+                    <el-select v-model="ds.code_field" filterable placeholder="必选">
+                      <el-option 
+                        v-for="f in getFieldList(index)" 
+                        :key="f.column_name" 
+                        :label="f.column_name" 
+                        :value="f.column_name" 
+                      />
+                    </el-select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </el-col>
+
+        <!-- 右侧列 -->
+        <el-col :span="12">
+          <!-- 股票池配置 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><Grid /></el-icon>
+              <span>股票池配置</span>
+            </div>
+            <div class="section-body">
+              <el-form-item label="股票池">
+                <el-segmented v-model="formData.universe.type" :options="universeTypeOptions" />
+              </el-form-item>
+              
+              <el-form-item v-if="formData.universe.type === 'preset'" label="预设池">
+                <el-select 
+                  v-model="formData.universe.preset_name" 
+                  style="width: 100%;"
+                  :loading="stockPoolsLoading"
+                >
+                  <el-option
+                    v-for="pool in stockPools"
+                    :key="pool.id"
+                    :label="`${pool.name} (${pool.start_date}起)`"
+                    :value="pool.id"
+                  />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item v-else label="上传文件">
+                <el-upload
+                  :auto-upload="false"
+                  :limit="1"
+                  accept=".csv,.xlsx"
+                  :on-change="handleStockFileChange"
+                >
+                  <el-button type="primary">选择文件</el-button>
+                  <template #tip>
+                    <div class="el-upload__tip">支持 CSV/Excel，第一列为 stock_code</div>
+                  </template>
+                </el-upload>
+                <div v-if="formData.universe.custom_file" class="uploaded-file">
+                  <el-tag closable @close="formData.universe.custom_file = null">
+                    {{ formData.universe.custom_file.filename }}
+                  </el-tag>
+                </div>
+              </el-form-item>
+            </div>
+          </div>
+
+          <!-- 回测参数 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><Setting /></el-icon>
+              <span>回测参数</span>
+            </div>
+            <div class="section-body">
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item label="分组数">
+                    <el-input-number v-model="formData.backtest_params.num_groups" :min="2" :max="20" style="width: 100%;" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="因子方向">
+                    <el-select v-model="formData.backtest_params.factor_direction" style="width: 100%;">
+                      <el-option label="自动判断" value="auto" />
+                      <el-option label="正向（值大=好）" value="positive" />
+                      <el-option label="负向（值小=好）" value="negative" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <el-form-item label="预测周期">
+                <el-select v-model="formData.backtest_params.forward_periods" multiple style="width: 100%;">
+                  <el-option label="1日" :value="1" />
+                  <el-option label="5日" :value="5" />
+                  <el-option label="10日" :value="10" />
+                  <el-option label="20日" :value="20" />
+                  <el-option label="60日" :value="60" />
+                </el-select>
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  计算因子与未来第N日收益的相关性
+                </div>
+              </el-form-item>
+              
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item label="买入价格">
+                    <el-select v-model="formData.backtest_params.buy_price_type" style="width: 100%;">
+                      <el-option label="日线开盘价" value="daily_open" />
+                      <el-option label="30分钟VWAP (9:30-10:00)" value="vwap_30min" />
+                      <el-option label="60分钟VWAP (9:30-10:30)" value="vwap_60min" />
+                    </el-select>
+                    <div class="form-hint">
+                      <el-icon><InfoFilled /></el-icon>
+                      T+1日买入价格，VWAP模拟大资金分批建仓
+                    </div>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="卖出价格">
+                    <el-select v-model="formData.backtest_params.sell_price_type" style="width: 100%;">
+                      <el-option label="日线收盘价" value="daily_close" />
+                      <el-option label="日线全天VWAP" value="daily_vwap" />
+                      <el-option label="30分钟VWAP (14:30-15:00)" value="vwap_30min" />
+                      <el-option label="60分钟VWAP (14:00-15:00)" value="vwap_60min" />
+                    </el-select>
+                    <div class="form-hint">
+                      <el-icon><InfoFilled /></el-icon>
+                      T+1+N日卖出价格，VWAP模拟大资金分批出货
+                    </div>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </div>
+          </div>
+
+          <!-- 计算选项 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><TrendCharts /></el-icon>
+              <span>分析指标</span>
+            </div>
+            <div class="section-body">
+              <div class="calc-options">
+                <el-checkbox-group v-model="calcOptions">
+                  <el-checkbox value="calc_ic">IC分析</el-checkbox>
+                  <el-checkbox value="calc_rank_ic">Rank IC</el-checkbox>
+                  <el-checkbox value="calc_layer_return">分层收益</el-checkbox>
+                  <el-checkbox value="calc_long_short">多空组合</el-checkbox>
+                  <el-checkbox value="calc_turnover">换手率</el-checkbox>
+                  <el-checkbox value="calc_drawdown">最大回撤</el-checkbox>
+                </el-checkbox-group>
+              </div>
+            </div>
+          </div>
+
+        </el-col>
+      </el-row>
+
+      <!-- 提交按钮 -->
+      <div class="form-footer">
+        <el-button 
+          type="primary" 
+          size="large" 
+          @click="handleSubmit" 
+          :loading="submitting"
+          :icon="Upload"
+        >
+          {{ submitting ? '提交中...' : '提交回测任务' }}
+        </el-button>
+      </div>
+    </el-form>
+    
+    <!-- 表搜索弹窗 -->
+    <el-dialog
+      v-model="searchDialogVisible"
+      title="选择数据表"
+      width="900px"
+      :close-on-click-modal="false"
+      class="table-search-dialog"
+    >
+      <div class="search-dialog-content">
+        <!-- 搜索框 -->
+        <div class="search-header">
+          <el-input
+            v-model="dialogSearchKeyword"
+            placeholder="输入表名、注释或字段名搜索..."
+            clearable
+            size="large"
+            @input="handleDialogSearch"
+            @clear="handleDialogSearchClear"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+            <template #suffix v-if="dialogSearchLoading">
+              <el-icon class="is-loading"><Loading /></el-icon>
+            </template>
+          </el-input>
+        </div>
+        
+        <!-- 搜索结果 -->
+        <div class="search-results">
+          <div v-if="dialogSearchLoading" class="results-loading">
+            <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+            <span>搜索中...</span>
+          </div>
+          
+          <div v-else-if="!dialogSearchKeyword" class="results-hint">
+            <el-icon :size="48"><Search /></el-icon>
+            <span>请输入关键词搜索数据表</span>
+          </div>
+          
+          <div v-else-if="!hasDialogSearchResults" class="results-empty">
+            <el-icon :size="48"><Document /></el-icon>
+            <span>未找到匹配的数据表</span>
+          </div>
+          
+          <div v-else class="results-content">
+            <!-- 静态元数据 -->
+            <div v-if="getDialogResultsByType('static').length" class="result-section">
+              <div class="section-header static">
+                <el-icon><Document /></el-icon>
+                <span>静态元数据</span>
+                <el-tag size="small" type="success">{{ getDialogResultsByType('static').length }} 个表</el-tag>
+              </div>
+              <div class="section-body">
+                <div 
+                  v-for="item in getDialogResultsByType('static')" 
+                  :key="item.table_name"
+                  class="table-card"
+                  @click="selectDialogResult(item, 'postgresql')"
+                >
+                  <div class="card-header">
+                    <span class="table-name">{{ item.table_name }}</span>
+                    <el-tag size="small" type="success">PostgreSQL</el-tag>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-comment">{{ item.table_comment || '暂无描述' }}</div>
+                    <div class="table-meta">
+                      <span v-if="item.category" class="meta-item">
+                        <el-icon><Folder /></el-icon>
+                        {{ item.category }}
+                      </span>
+                      <span v-if="item.match_score" class="meta-item score">
+                        匹配度: {{ Math.round(item.match_score) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 加工数据 -->
+            <div v-if="getDialogResultsByType('processed').length" class="result-section">
+              <div class="section-header processed">
+                <el-icon><Operation /></el-icon>
+                <span>加工数据</span>
+                <el-tag size="small" type="warning">{{ getDialogResultsByType('processed').length }} 个表</el-tag>
+              </div>
+              <div class="section-body">
+                <div 
+                  v-for="item in getDialogResultsByType('processed')" 
+                  :key="item.table_name"
+                  class="table-card"
+                  @click="selectDialogResult(item, 'clickhouse')"
+                >
+                  <div class="card-header">
+                    <span class="table-name">{{ item.table_name }}</span>
+                    <el-tag size="small" type="warning">ClickHouse</el-tag>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-comment">{{ item.table_comment || '暂无描述' }}</div>
+                    <div class="table-meta">
+                      <span v-if="item.category" class="meta-item">
+                        <el-icon><Folder /></el-icon>
+                        {{ item.category }}
+                      </span>
+                      <span v-if="item.match_score" class="meta-item score">
+                        匹配度: {{ Math.round(item.match_score) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 行情镜像库 -->
+            <div v-if="getDialogResultsByType('mirror').length" class="result-section">
+              <div class="section-header mirror">
+                <el-icon><CopyDocument /></el-icon>
+                <span>行情镜像库</span>
+                <el-tag size="small" type="info">{{ getDialogResultsByType('mirror').length }} 个表</el-tag>
+              </div>
+              <div class="section-body">
+                <div 
+                  v-for="item in getDialogResultsByType('mirror')" 
+                  :key="item.table_name"
+                  class="table-card"
+                  @click="selectDialogResult(item, 'clickhouse_data')"
+                >
+                  <div class="card-header">
+                    <span class="table-name">{{ item.table_name }}</span>
+                    <el-tag size="small" type="info">ClickHouse</el-tag>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-comment">{{ item.table_comment || '暂无描述' }}</div>
+                    <div class="table-meta">
+                      <span v-if="item.category" class="meta-item">
+                        <el-icon><Folder /></el-icon>
+                        {{ item.category }}
+                      </span>
+                      <span v-if="item.match_score" class="meta-item score">
+                        匹配度: {{ Math.round(item.match_score) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { 
+  Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts, Files,
+  Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, CopyDocument, Check,
+  Warning, CircleCheck, CircleClose, Close, Folder
+} from '@element-plus/icons-vue'
+
+const emit = defineEmits<{
+  (e: 'submitted'): void
+}>()
+
+const formRef = ref<FormInstance>()
+const submitting = ref(false)
+const factorSource = ref('expression')
+const dateRange = ref<[string, string] | null>(null)
+
+// 股票池列表
+interface StockPool {
+  id: string
+  name: string
+  description: string
+  start_date: string
+}
+const stockPools = ref<StockPool[]>([])
+const stockPoolsLoading = ref(false)
+
+// 表搜索和字段列表
+const tableSearchKeyword = ref<Record<number, string>>({})
+const tableSearchResults = ref<Record<number, any>>({}) // 存储原始搜索结果
+const tableSearchLoading = ref<Record<number, boolean>>({})
+const showSearchDropdown = ref<Record<number, boolean>>({})
+const tableMetaMap = ref<Record<string, any>>({}) // 表元数据，key: table_name
+
+// 搜索弹窗相关
+const searchDialogVisible = ref(false)
+const currentSearchIndex = ref(0) // 当前操作的数据源索引
+const dialogSearchKeyword = ref('')
+const dialogSearchResults = ref<any>(null)
+const dialogSearchLoading = ref(false)
+const fieldListMap = ref<Record<string, any[]>>({}) // 字段列表，key: "database:table"
+const fieldListLoading = ref<Record<number, boolean>>({})
+
+// 代码检查相关
+interface CodeCheckField {
+  name: string
+  exists: boolean
+}
+interface CodeCheckInfo {
+  tableExists: boolean
+  database?: string
+  fields: CodeCheckField[]
+}
+const codeCheckResult = ref<Record<string, CodeCheckInfo>>({})
+const codeChecking = ref(false)
+
+// 计算属性：是否有检查错误
+const hasCodeCheckError = computed(() => {
+  for (const info of Object.values(codeCheckResult.value)) {
+    if (!info.tableExists) return true
+    if (info.fields.some(f => !f.exists)) return true
+  }
+  return false
+})
+
+// 计算属性：是否可以自动配置（所有表和字段都存在）
+const canAutoConfig = computed(() => {
+  if (Object.keys(codeCheckResult.value).length === 0) return false
+  for (const info of Object.values(codeCheckResult.value)) {
+    if (!info.tableExists) return false
+  }
+  return true
+})
+
+// 选项配置
+
+const factorSourceOptions = [
+  { label: '因子表达式', value: 'expression' },
+  { label: 'Python代码', value: 'code' }
+]
+
+const universeTypeOptions = [
+  { label: '预设股票池', value: 'preset' },
+  { label: '自定义', value: 'custom' }
+]
+
+// 计算选项
+const calcOptions = ref([
+  'calc_ic', 'calc_rank_ic', 'calc_layer_return',
+  'calc_long_short', 'calc_turnover', 'calc_drawdown'
+])
+
+// 日期快捷选项
+const dateShortcuts = [
+  { text: '近1年', value: () => { const e = new Date(); const s = new Date(); s.setFullYear(s.getFullYear() - 1); return [s, e] } },
+  { text: '近2年', value: () => { const e = new Date(); const s = new Date(); s.setFullYear(s.getFullYear() - 2); return [s, e] } },
+  { text: '近3年', value: () => { const e = new Date(); const s = new Date(); s.setFullYear(s.getFullYear() - 3); return [s, e] } },
+  { text: '今年以来', value: () => { const e = new Date(); return [new Date(e.getFullYear(), 0, 1), e] } }
+]
+
+// 表单数据
+const formData = reactive({
+  task_name: '',
+  factor_expression: '',
+  factor_code: '',
+  // 数组形式的数据源
+  data_sources: [
+    {
+      name: '行情数据',
+      database: 'clickhouse',
+      table: '',
+      fields: [],
+      date_field: '',
+      code_field: ''
+    }
+  ] as any[],
+  universe: {
+    type: 'preset',
+    preset_name: 'all',
+    custom_file: null as { filename: string; content: string } | null
+  },
+  backtest_params: {
+    num_groups: 10,
+    forward_periods: [1, 5, 10, 20],
+    factor_direction: 'auto',
+    buy_price_type: 'daily_open',
+    sell_price_type: 'daily_close'
+  }
+})
+
+const formRules: FormRules = {
+  task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
+}
+
+const onFactorSourceChange = () => {
+  formData.factor_expression = ''
+  formData.factor_code = ''
+  codeCheckResult.value = {}
+}
+
+// 解析 Python 代码中的表名和字段（支持中文）
+const parseCodeDataSources = (code: string): Record<string, string[]> => {
+  const result: Record<string, string[]> = {}
+  
+  // 1. 找到所有 xxx = data['表名'] 或 xxx = data["表名"] 的模式
+  // 使用 [^'"\]]+ 来匹配表名（支持中文）
+  const dataAccessPattern = /(\w+)\s*=\s*data\[['"]([^'"\]]+)['"]\]/g
+  const varToTable: Record<string, string> = {}
+  
+  let match
+  while ((match = dataAccessPattern.exec(code)) !== null) {
+    const varName = match[1]
+    const tableName = match[2]
+    varToTable[varName] = tableName
+    if (!result[tableName]) {
+      result[tableName] = []
+    }
+  }
+  
+  // 2. 找到所有 变量名['字段'] 的读取模式（排除赋值）
+  // 先收集所有被赋值的字段（df['xxx'] = ... 模式）
+  const assignedFields: Set<string> = new Set()
+  for (const [varName] of Object.entries(varToTable)) {
+    const assignPattern = new RegExp(`${varName}\\[['"]([^'"\\]]+)['"]\\]\\s*=`, 'g')
+    while ((match = assignPattern.exec(code)) !== null) {
+      assignedFields.add(match[1])
+    }
+  }
+  
+  // 然后检测字段访问，排除被赋值的字段
+  for (const [varName, tableName] of Object.entries(varToTable)) {
+    // 模式1: 单括号 df['字段']
+    const fieldPattern = new RegExp(`${varName}\\[['"]([^'"\\]]+)['"]\\]`, 'g')
+    while ((match = fieldPattern.exec(code)) !== null) {
+      const fieldName = match[1]
+      // 排除被赋值创建的新字段
+      if (assignedFields.has(fieldName)) {
+        continue
+      }
+      if (!result[tableName].includes(fieldName)) {
+        result[tableName].push(fieldName)
+      }
+    }
+    
+    // 模式2: 双括号多列选择 df[['字段1', '字段2', '字段3']]
+    const multiColPattern = new RegExp(`${varName}\\[\\[([^\\]]+)\\]\\]`, 'g')
+    while ((match = multiColPattern.exec(code)) !== null) {
+      const colListStr = match[1]
+      // 提取所有引号内的字段名
+      const colPattern = /['"]([^'"]+)['"]/g
+      let colMatch
+      while ((colMatch = colPattern.exec(colListStr)) !== null) {
+        const fieldName = colMatch[1]
+        if (!assignedFields.has(fieldName) && !result[tableName].includes(fieldName)) {
+          result[tableName].push(fieldName)
+        }
+      }
+    }
+  }
+  
+  // 3. 也检查直接访问 data['表名']['字段'] 的模式（支持中文）
+  // 排除赋值模式
+  const directAssignPattern = /data\[['"]([^'"\]]+)['"]\]\[['"]([^'"\]]+)['"]\]\s*=/g
+  const directAssignedFields: Set<string> = new Set()
+  while ((match = directAssignPattern.exec(code)) !== null) {
+    directAssignedFields.add(`${match[1]}.${match[2]}`)
+  }
+  
+  // 模式1: data['表名']['字段'] 单字段
+  const directAccessPattern = /data\[['"]([^'"\]]+)['"]\]\[['"]([^'"\]]+)['"]\]/g
+  while ((match = directAccessPattern.exec(code)) !== null) {
+    const tableName = match[1]
+    const fieldName = match[2]
+    // 排除赋值创建的新字段
+    if (directAssignedFields.has(`${tableName}.${fieldName}`)) {
+      continue
+    }
+    if (!result[tableName]) {
+      result[tableName] = []
+    }
+    if (!result[tableName].includes(fieldName)) {
+      result[tableName].push(fieldName)
+    }
+  }
+  
+  // 模式2: data['表名'][['字段1', '字段2']] 多列选择
+  const directMultiColPattern = /data\[['"]([^'"\]]+)['"]\]\[\[([^\]]+)\]\]/g
+  while ((match = directMultiColPattern.exec(code)) !== null) {
+    const tableName = match[1]
+    const colListStr = match[2]
+    if (!result[tableName]) {
+      result[tableName] = []
+    }
+    // 提取所有引号内的字段名
+    const colPattern = /['"]([^'"]+)['"]/g
+    let colMatch
+    while ((colMatch = colPattern.exec(colListStr)) !== null) {
+      const fieldName = colMatch[1]
+      if (!result[tableName].includes(fieldName)) {
+        result[tableName].push(fieldName)
+      }
+    }
+  }
+  
+  // 4. 检测 df.groupby(['字段1', '字段2']) 等方法调用中的字段
+  for (const [varName, tableName] of Object.entries(varToTable)) {
+    // 匹配 varName.groupby([...]) 或 varName.sort_values([...]) 等
+    const methodPattern = new RegExp(`${varName}\\.(?:groupby|sort_values|drop_duplicates|merge|join)\\(\\[([^\\]]+)\\]`, 'g')
+    while ((match = methodPattern.exec(code)) !== null) {
+      const colListStr = match[1]
+      const colPattern = /['"]([^'"]+)['"]/g
+      let colMatch
+      while ((colMatch = colPattern.exec(colListStr)) !== null) {
+        const fieldName = colMatch[1]
+        if (!assignedFields.has(fieldName) && !result[tableName].includes(fieldName)) {
+          result[tableName].push(fieldName)
+        }
+      }
+    }
+    
+    // 匹配 varName.groupby('字段') 单字段形式
+    const singleMethodPattern = new RegExp(`${varName}\\.(?:groupby|sort_values)\\(['"]([^'"]+)['"]\\)`, 'g')
+    while ((match = singleMethodPattern.exec(code)) !== null) {
+      const fieldName = match[1]
+      if (!assignedFields.has(fieldName) && !result[tableName].includes(fieldName)) {
+        result[tableName].push(fieldName)
+      }
+    }
+  }
+  
+  return result
+}
+
+// 代码内容变化时触发检查（防抖）
+let codeCheckTimer: NodeJS.Timeout | null = null
+const onCodeContentChange = () => {
+  if (codeCheckTimer) clearTimeout(codeCheckTimer)
+  codeCheckTimer = setTimeout(() => {
+    runCodeCheck()
+  }, 800)
+}
+
+// 执行代码检查
+const runCodeCheck = async () => {
+  const code = formData.factor_code
+  if (!code.trim()) {
+    codeCheckResult.value = {}
+    return
+  }
+  
+  // 解析代码
+  const parsed = parseCodeDataSources(code)
+  if (Object.keys(parsed).length === 0) {
+    codeCheckResult.value = {}
+    return
+  }
+  
+  codeChecking.value = true
+  const result: Record<string, CodeCheckInfo> = {}
+  
+  try {
+    // 对每个表进行检查
+    for (const [tableName, fields] of Object.entries(parsed)) {
+      result[tableName] = {
+        tableExists: false,
+        fields: fields.map(f => ({ name: f, exists: false }))
+      }
+      
+      // 搜索表是否存在 - 分别搜索两个数据源
+      try {
+        let foundTable: any = null
+        let foundDatabase: string | undefined
+        
+        // 搜索两个数据源：clickhouse 和 postgresql
+        for (const datasource of ['clickhouse', 'postgresql'] as const) {
+          try {
+            const searchResult = await window.electronAPI.dbdict.search(tableName, datasource)
+            
+            // 在搜索结果中查找精确匹配的表（type='table' 且表名精确匹配）
+            const results = searchResult.data || []
+            for (const item of results) {
+              if (item.table_name === tableName && item.type === 'table') {
+                foundTable = item
+                foundDatabase = datasource
+                break
+              }
+            }
+            if (foundTable) break
+          } catch (e) {
+            console.error(`搜索 ${datasource} 失败:`, e)
+          }
+        }
+        
+        if (foundTable) {
+          result[tableName].tableExists = true
+          result[tableName].database = foundDatabase
+          
+          // 获取表的字段列表进行比对
+          try {
+            const tableDetail = await window.electronAPI.dbdict.getTableDetail(tableName, foundDatabase!)
+            if (tableDetail.code === 200 && tableDetail.data?.columns) {
+              const dbFields = tableDetail.data.columns.map((c: any) => c.column_name)
+              // 检查每个字段是否存在
+              result[tableName].fields = fields.map(f => ({
+                name: f,
+                exists: dbFields.includes(f)
+              }))
+            }
+          } catch (e) {
+            console.error('获取表字段失败:', e)
+          }
+        }
+      } catch (e) {
+        console.error('搜索表失败:', e)
+      }
+    }
+    
+    codeCheckResult.value = result
+  } finally {
+    codeChecking.value = false
+  }
+}
+
+// 自动配置数据源
+const autoConfigDataSources = () => {
+  const existingTables = new Set(formData.data_sources.map(ds => ds.table))
+  
+  for (const [tableName, info] of Object.entries(codeCheckResult.value)) {
+    if (!info.tableExists) continue
+    
+    // 如果表已经配置过，更新字段
+    const existingIndex = formData.data_sources.findIndex(ds => ds.table === tableName)
+    if (existingIndex >= 0) {
+      // 合并字段
+      const existingFields = new Set(formData.data_sources[existingIndex].fields)
+      info.fields.filter(f => f.exists).forEach(f => existingFields.add(f.name))
+      formData.data_sources[existingIndex].fields = Array.from(existingFields)
+    } else {
+      // 添加新数据源
+      const validFields = info.fields.filter(f => f.exists).map(f => f.name)
+      formData.data_sources.push({
+        name: tableName,
+        database: info.database || 'clickhouse',
+        table: tableName,
+        fields: validFields,
+        date_field: '',
+        code_field: ''
+      })
+      
+      // 尝试加载字段并自动填充日期/代码字段
+      const newIndex = formData.data_sources.length - 1
+      loadFieldList(newIndex)
+    }
+  }
+  
+  // 如果第一个数据源是空的默认项，移除它
+  if (formData.data_sources.length > 1 && !formData.data_sources[0].table) {
+    formData.data_sources.splice(0, 1)
+  }
+  
+  ElMessage.success('已自动配置数据源，请检查日期字段和代码字段')
+}
+
+// 搜索表（防抖）
+let searchTimer: NodeJS.Timeout | null = null
+const handleTableSearch = (index: number) => {
+  const keyword = tableSearchKeyword.value[index]?.trim()
+  
+  if (!keyword || keyword.length < 2) {
+    showSearchDropdown.value[index] = false
+    tableSearchResults.value[index] = null
+    return
+  }
+  
+  // 防抖
+  if (searchTimer) clearTimeout(searchTimer)
+  
+  searchTimer = setTimeout(async () => {
+    tableSearchLoading.value[index] = true
+    showSearchDropdown.value[index] = true
+    
+    try {
+      // 调用全局搜索 API
+      const result = await window.electronAPI.search.global(keyword, 20)
+      console.log('搜索结果:', result)
+      
+      // 保存原始搜索结果
+      tableSearchResults.value[index] = result.data
+      
+      // 缓存表元数据
+      const cacheResults = (results: any[], datasource: string) => {
+        results?.forEach((t: any) => {
+          if (t.table_name) {
+            tableMetaMap.value[t.table_name] = {
+              ...t,
+              datasource
+            }
+          }
+        })
+      }
+      
+      cacheResults(result.data?.static?.results, 'postgresql')
+      cacheResults(result.data?.processed?.results, 'clickhouse')
+      cacheResults(result.data?.mirror?.results, 'clickhouse_data')
+      
+    } catch (error) {
+      console.error('搜索表失败:', error)
+    } finally {
+      tableSearchLoading.value[index] = false
+    }
+  }, 300)
+}
+
+// 清空搜索
+const handleSearchClear = (index: number) => {
+  showSearchDropdown.value[index] = false
+  tableSearchResults.value[index] = null
+}
+
+// 打开搜索弹窗
+const openSearchDialog = (index: number) => {
+  currentSearchIndex.value = index
+  dialogSearchKeyword.value = ''
+  dialogSearchResults.value = null
+  searchDialogVisible.value = true
+}
+
+// 弹窗搜索
+let dialogSearchTimer: any = null
+const handleDialogSearch = () => {
+  const keyword = dialogSearchKeyword.value?.trim()
+  if (!keyword || keyword.length < 2) {
+    dialogSearchResults.value = null
+    return
+  }
+  
+  if (dialogSearchTimer) clearTimeout(dialogSearchTimer)
+  
+  dialogSearchTimer = setTimeout(async () => {
+    dialogSearchLoading.value = true
+    try {
+      const result = await window.electronAPI.search.global(keyword, 30)
+      dialogSearchResults.value = result.data
+      
+      // 缓存表元数据
+      const cacheResults = (results: any[], datasource: string) => {
+        results?.forEach((t: any) => {
+          if (t.table_name) {
+            tableMetaMap.value[t.table_name] = { ...t, datasource }
+          }
+        })
+      }
+      cacheResults(result.data?.static?.results, 'postgresql')
+      cacheResults(result.data?.processed?.results, 'clickhouse')
+      cacheResults(result.data?.mirror?.results, 'clickhouse_data')
+    } catch (error) {
+      console.error('搜索失败:', error)
+    } finally {
+      dialogSearchLoading.value = false
+    }
+  }, 300)
+}
+
+// 清空弹窗搜索
+const handleDialogSearchClear = () => {
+  dialogSearchResults.value = null
+}
+
+// 判断弹窗是否有搜索结果
+const hasDialogSearchResults = computed(() => {
+  const r = dialogSearchResults.value
+  if (!r) return false
+  return (r.static?.total > 0) || (r.processed?.total > 0) || (r.mirror?.total > 0)
+})
+
+// 获取弹窗搜索结果（按类型）
+const getDialogResultsByType = (type: 'static' | 'processed' | 'mirror') => {
+  const results = dialogSearchResults.value
+  if (!results?.[type]?.results) return []
+  
+  const seen = new Set<string>()
+  return results[type].results.filter((item: any) => {
+    if (item.match_type === 'field') return false
+    if (seen.has(item.table_name)) return false
+    seen.add(item.table_name)
+    return true
+  })
+}
+
+// 选择弹窗搜索结果
+const selectDialogResult = async (item: any, database: string) => {
+  const index = currentSearchIndex.value
+  const ds = formData.data_sources[index]
+  
+  ds.table = item.table_name
+  ds.database = database
+  ds.name = item.table_comment || item.table_name
+  ds.fields = []
+  ds.date_field = ''
+  ds.code_field = ''
+  
+  searchDialogVisible.value = false
+  
+  // 加载字段列表
+  await loadFieldList(index)
+}
+
+// 获取指定类型的搜索结果（只保留表名匹配，过滤字段匹配，并去重）
+const getSearchResultsByType = (index: number, type: 'static' | 'processed' | 'mirror') => {
+  const results = tableSearchResults.value[index]
+  if (!results?.[type]?.results) return []
+  
+  // 过滤：只保留表名匹配（match_type !== 'field'），并按 table_name 去重
+  const seen = new Set<string>()
+  return results[type].results.filter((item: any) => {
+    if (item.match_type === 'field') return false
+    if (seen.has(item.table_name)) return false
+    seen.add(item.table_name)
+    return true
+  })
+}
+
+// 判断是否有搜索结果
+const hasSearchResults = (index: number) => {
+  return getSearchResultsByType(index, 'static').length > 0 ||
+         getSearchResultsByType(index, 'processed').length > 0 ||
+         getSearchResultsByType(index, 'mirror').length > 0
+}
+
+// 选择搜索结果
+const selectSearchResult = async (index: number, item: any, datasource: string) => {
+  const ds = formData.data_sources[index]
+  
+  ds.table = item.table_name
+  ds.database = datasource
+  ds.name = item.table_comment || item.table_name
+  
+  // 清空字段
+  ds.fields = []
+  ds.date_field = ''
+  ds.code_field = ''
+  
+  // 关闭下拉框，清空搜索词
+  showSearchDropdown.value[index] = false
+  tableSearchKeyword.value[index] = ''
+  
+  // 加载字段列表
+  await loadFieldList(index)
+}
+
+// 清除已选表
+const clearSelectedTable = (index: number) => {
+  const ds = formData.data_sources[index]
+  ds.table = ''
+  ds.database = ''
+  ds.name = ''
+  ds.fields = []
+  ds.date_field = ''
+  ds.code_field = ''
+}
+
+// 获取字段列表
+const getFieldList = (index: number) => {
+  const ds = formData.data_sources[index]
+  if (!ds?.database || !ds?.table) return []
+  const key = `${ds.database}:${ds.table}`
+  return fieldListMap.value[key] || []
+}
+
+// 加载字段列表（使用 getTableDetail 获取完整信息）
+const loadFieldList = async (index: number) => {
+  const ds = formData.data_sources[index]
+  console.log('loadFieldList called, ds:', ds)
+  if (!ds.table || !ds.database) {
+    console.log('loadFieldList: table or database is empty')
+    return
+  }
+  
+  const key = `${ds.database}:${ds.table}`
+  
+  // 如果已经加载过，直接自动填充
+  if (fieldListMap.value[key]) {
+    console.log('loadFieldList: already cached', key)
+    autoFillDateCodeField(index)
+    return
+  }
+  
+  fieldListLoading.value[index] = true
+  try {
+    console.log('🔍 加载字段列表:', ds.table, 'datasource:', ds.database)
+    const result = await window.electronAPI.dbdict.getTableDetail(ds.table, ds.database)
+    console.log('✅ 字段列表返回:', result)
+    if (result.code === 200 && result.data?.columns) {
+      // 使用展开运算符确保 Vue 响应式更新
+      fieldListMap.value = { ...fieldListMap.value, [key]: result.data.columns }
+      console.log('✅ 字段已缓存:', key, result.data.columns.length, '个字段')
+      autoFillDateCodeField(index)
+    } else {
+      console.error('❌ 加载字段失败:', result)
+      ElMessage.error(result.msg || '加载字段失败')
+    }
+  } catch (error: any) {
+    console.error('❌ 加载字段列表失败:', error)
+    ElMessage.error(error.message || '加载字段列表失败')
+  } finally {
+    fieldListLoading.value[index] = false
+  }
+}
+
+// 自动填充日期和代码字段
+const autoFillDateCodeField = (index: number) => {
+  const ds = formData.data_sources[index]
+  const fields = getFieldList(index)
+  
+  // 自动匹配日期字段
+  const dateFields = ['trade_date', 'date', 'report_date', 'datetime', 'dt']
+  for (const df of dateFields) {
+    if (fields.some(f => f.column_name === df)) {
+      ds.date_field = df
+      break
+    }
+  }
+  
+  // 自动匹配代码字段
+  const codeFields = ['stock_code', 'code', 'symbol', 'ts_code', 'sec_code']
+  for (const cf of codeFields) {
+    if (fields.some(f => f.column_name === cf)) {
+      ds.code_field = cf
+      break
+    }
+  }
+}
+
+// 添加数据源
+const addDataSource = () => {
+  formData.data_sources.push({
+    name: '',
+    database: 'clickhouse',
+    table: '',
+    fields: [],
+    date_field: '',
+    code_field: ''
+  })
+}
+
+// 删除数据源
+const removeDataSource = (index: number) => {
+  formData.data_sources.splice(index, 1)
+}
+
+// 处理股票池文件上传
+const handleStockFileChange = (file: any) => {
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    formData.universe.custom_file = {
+      filename: file.name,
+      content: e.target?.result as string
+    }
+  }
+  reader.readAsText(file.raw)
+}
+
+
+const handleSubmit = async () => {
+  if (!formRef.value) return
+  
+  await formRef.value.validate(async (valid) => {
+    if (!valid) return
+    
+    if (!dateRange.value || dateRange.value.length !== 2) {
+      ElMessage.error('请选择回测时间范围')
+      return
+    }
+    
+    // 校验因子配置（二选一）
+    if (factorSource.value === 'expression' && !formData.factor_expression.trim()) {
+      ElMessage.error('请输入因子表达式')
+      return
+    }
+    if (factorSource.value === 'code') {
+      if (!formData.factor_code.trim()) {
+        ElMessage.error('请输入Python代码')
+        return
+      }
+    }
+    
+    // 校验数据源
+    if (formData.data_sources.length === 0) {
+      ElMessage.error('请至少配置一个数据源')
+      return
+    }
+    const tableSet = new Set<string>()
+    for (let i = 0; i < formData.data_sources.length; i++) {
+      const ds = formData.data_sources[i]
+      if (!ds.table) {
+        ElMessage.error(`数据源 ${i + 1}: 请选择表`)
+        return
+      }
+      if (tableSet.has(ds.table)) {
+        ElMessage.error(`表 "${ds.table}" 重复，同一个表只能配置一次`)
+        return
+      }
+      tableSet.add(ds.table)
+      if (!ds.fields || ds.fields.length === 0) {
+        ElMessage.error(`数据源 ${i + 1}: 请选择字段`)
+        return
+      }
+      if (!ds.date_field) {
+        ElMessage.error(`数据源 ${i + 1}: 请选择日期字段`)
+        return
+      }
+      if (!ds.code_field) {
+        ElMessage.error(`数据源 ${i + 1}: 请选择代码字段`)
+        return
+      }
+    }
+    
+    submitting.value = true
+    
+    try {
+      // 使用 JSON 深拷贝，避免 IPC 传输 reactive 对象时的序列化错误
+      const requestData: any = JSON.parse(JSON.stringify({
+        task_name: formData.task_name,
+        start_date: dateRange.value[0],
+        end_date: dateRange.value[1],
+        data_sources: formData.data_sources,
+        universe: formData.universe,
+        backtest_params: formData.backtest_params,
+        calc_options: {
+          calc_ic: calcOptions.value.includes('calc_ic'),
+          calc_rank_ic: calcOptions.value.includes('calc_rank_ic'),
+          calc_layer_return: calcOptions.value.includes('calc_layer_return'),
+          calc_long_short: calcOptions.value.includes('calc_long_short'),
+          calc_turnover: calcOptions.value.includes('calc_turnover'),
+          calc_drawdown: calcOptions.value.includes('calc_drawdown')
+        }
+      }))
+      
+      // 因子配置（二选一）
+      if (factorSource.value === 'expression') {
+        requestData.factor_expression = formData.factor_expression
+      } else if (factorSource.value === 'code') {
+        requestData.factor_code = formData.factor_code
+      }
+      
+      const result = await window.electronAPI.backtest.submit(requestData)
+      
+      if (result.success && result.data) {
+        ElMessage.success('任务提交成功！')
+        emit('submitted')
+      } else {
+        ElMessage.error(result.error || '提交失败')
+      }
+    } catch (error: any) {
+      ElMessage.error('提交失败: ' + error.message)
+    } finally {
+      submitting.value = false
+    }
+  })
+}
+
+// 加载股票池列表
+const loadStockPools = async () => {
+  stockPoolsLoading.value = true
+  try {
+    const result = await window.electronAPI.backtest.getStockPools()
+    if (result.success && result.data) {
+      stockPools.value = result.data
+      // 如果当前选中的股票池不在列表中，设置为第一个
+      if (result.data.length > 0) {
+        const currentPool = result.data.find((p: StockPool) => p.id === formData.universe.preset_name)
+        if (!currentPool) {
+          formData.universe.preset_name = result.data[0].id
+        }
+      }
+    } else {
+      // 接口失败时使用默认选项
+      stockPools.value = [
+        { id: 'all', name: '全市场', description: '所有A股', start_date: '2001-01-02' }
+      ]
+    }
+  } catch (error) {
+    console.error('加载股票池失败:', error)
+    // 失败时使用默认选项
+    stockPools.value = [
+      { id: 'all', name: '全市场', description: '所有A股', start_date: '2001-01-02' }
+    ]
+  } finally {
+    stockPoolsLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  // 初始化 API Key
+  await initApiKey()
+  loadStockPools()
+})
+
+// 初始化 API Key
+const initApiKey = async () => {
+  try {
+    const keys = await window.electronAPI.config.getApiKeys()
+    const defaultKey = keys.find((k: any) => k.isDefault)
+    if (defaultKey) {
+      const fullKey = await window.electronAPI.config.getFullApiKey(defaultKey.id)
+      if (fullKey) {
+        // 设置数据字典 API Key（用于表搜索）
+        await window.electronAPI.dictionary.setApiKey(fullKey)
+        await window.electronAPI.dbdict.setApiKey(fullKey)
+        console.log('✅ 因子回测页面 API Key 已设置')
+      }
+    }
+  } catch (error) {
+    console.error('初始化 API Key 失败:', error)
+  }
+}
+
+</script>
+
+<style scoped lang="scss">
+.submit-content {
+  .submit-form {
+    .form-section {
+      background: #fff;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      transition: all 0.3s ease;
+      
+      &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      }
+      
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        background: #fff;
+        border-bottom: 1px solid #f0f0f0;
+        font-weight: 600;
+        font-size: 15px;
+        color: #1f2937;
+        
+        .section-icon {
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+          border-radius: 8px;
+          color: #0284c7;
+          font-size: 15px;
+        }
+        
+        .el-button {
+          margin-left: auto;
+        }
+      }
+      
+      .section-body {
+        padding: 20px;
+        
+        :deep(.el-form-item) {
+          margin-bottom: 18px;
+          
+          &:last-child {
+            margin-bottom: 0;
+          }
+        }
+        
+        :deep(.el-form-item__label) {
+          font-weight: 500;
+          color: #4b5563;
+        }
+        
+        // 美化 segmented 分段器
+        :deep(.el-segmented) {
+          --el-border-radius-base: 8px;
+          background: #f1f5f9;
+          padding: 3px;
+          
+          .el-segmented__group {
+            gap: 4px;
+          }
+          
+          .el-segmented__item {
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #64748b;
+            border-radius: 6px;
+            transition: all 0.25s ease;
+            
+            &:hover:not(.is-selected) {
+              color: #475569;
+              background: rgba(255, 255, 255, 0.5);
+            }
+            
+            &.is-selected {
+              color: #0284c7;
+              font-weight: 600;
+            }
+          }
+          
+          .el-segmented__item-selected {
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+            border-radius: 6px;
+          }
+        }
+      }
+    }
+    
+    // 代码检查面板
+    .code-check-panel {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+      
+      .code-check-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #e2e8f0;
+        font-weight: 600;
+        color: #1e293b;
+        
+        .el-icon {
+          font-size: 18px;
+          &.success { color: #22c55e; }
+          &.error { color: #ef4444; }
+        }
+        
+        .el-button {
+          margin-left: auto;
+        }
+      }
+      
+      .code-check-body {
+        .check-item {
+          padding: 10px 0;
+          border-bottom: 1px dashed #e2e8f0;
+          
+          &:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+          }
+          
+          .check-table {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            
+            .el-icon {
+              font-size: 15px;
+              &.success { color: #22c55e; }
+              &.error { color: #ef4444; }
+            }
+            
+            .table-name {
+              font-family: 'SF Mono', Monaco, monospace;
+              font-weight: 600;
+              color: #334155;
+            }
+          }
+          
+          .check-fields {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            padding-left: 24px;
+            
+            .fields-label {
+              font-size: 12px;
+              color: #64748b;
+              margin-right: 6px;
+            }
+          }
+        }
+      }
+    }
+    
+    .form-hint, .code-hint {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #909399;
+      margin-top: 4px;
+      
+      .el-icon {
+        font-size: 14px;
+      }
+      
+      code {
+        background: #f5f7fa;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-family: Monaco, Menlo, monospace;
+        font-size: 11px;
+      }
+    }
+    
+    .code-textarea {
+      :deep(textarea) {
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+    }
+    
+    .datasource-item {
+      background: linear-gradient(135deg, #fafbfc 0%, #f5f7f9 100%);
+      border: 1px solid #e8eaed;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+      transition: all 0.2s ease;
+      font-size: 14px;
+      
+      &:hover {
+        border-color: #d0d5dd;
+        background: linear-gradient(135deg, #fff 0%, #fafbfc 100%);
+      }
+      
+      &:last-child {
+        margin-bottom: 0;
+      }
+      
+      .datasource-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px dashed #e8eaed;
+        
+        .datasource-title {
+          font-weight: 600;
+          font-size: 14px;
+          color: #374151;
+        }
+      }
+      
+      :deep(.el-form-item) {
+        margin-bottom: 12px !important;
+        
+        .el-form-item__label {
+          font-size: 14px !important;
+        }
+      }
+      
+      .selected-table-info {
+        .el-tag {
+          font-size: 13px;
+          height: 28px;
+          line-height: 26px;
+        }
+      }
+      
+      .date-code-row {
+        display: flex;
+        gap: 24px;
+        margin-bottom: 8px;
+        margin-top: 4px;
+        
+        .field-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          
+          .field-label {
+            font-size: 14px;
+            color: #606266;
+            white-space: nowrap;
+            
+            .required {
+              color: #f56c6c;
+              margin-right: 2px;
+            }
+          }
+          
+          .el-select {
+            width: 150px;
+          }
+        }
+      }
+      
+      .table-info {
+        margin-bottom: 8px;
+      }
+      
+      .table-option {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        .table-name {
+          font-weight: 500;
+        }
+        
+        .table-db {
+          font-size: 11px;
+          color: #909399;
+          background: #f0f2f5;
+          padding: 1px 6px;
+          border-radius: 3px;
+        }
+      }
+      
+      .table-comment {
+        font-size: 11px;
+        color: #909399;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      .field-desc {
+        font-size: 11px;
+        color: #909399;
+        margin-left: 8px;
+      }
+      
+      .table-search-wrapper {
+        position: relative;
+        width: 100%;
+      }
+      
+      .selected-table-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      
+      .search-dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 6px 30px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        max-height: 450px;
+        overflow-y: auto;
+        border: 1px solid #e4e7ed;
+        
+        // 滚动条美化
+        &::-webkit-scrollbar {
+          width: 6px;
+        }
+        &::-webkit-scrollbar-thumb {
+          background: #c0c4cc;
+          border-radius: 3px;
+        }
+        &::-webkit-scrollbar-track {
+          background: #f5f7fa;
+        }
+        
+        .dropdown-loading,
+        .dropdown-empty {
+          padding: 40px 20px;
+          text-align: center;
+          color: #909399;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+          
+          .el-icon {
+            font-size: 36px;
+            color: #c0c4cc;
+          }
+          
+          span {
+            font-size: 14px;
+          }
+        }
+        
+        .dropdown-results {
+          padding: 8px 0;
+          
+          .result-group {
+            &:not(:last-child) {
+              margin-bottom: 8px;
+            }
+            
+            .group-header {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 10px 16px;
+              background: linear-gradient(135deg, #f8f9fb 0%, #f0f2f5 100%);
+              font-size: 13px;
+              font-weight: 600;
+              color: #303133;
+              position: sticky;
+              top: 0;
+              z-index: 1;
+              border-bottom: 1px solid #ebeef5;
+              
+              .el-icon {
+                font-size: 16px;
+              }
+              
+              // 不同类型的图标颜色
+              &:has(.el-icon:first-child) .el-icon {
+                color: #409eff;
+              }
+            }
+            
+            // 静态元数据
+            &:nth-child(1) .group-header .el-icon {
+              color: #67c23a;
+            }
+            // 加工数据
+            &:nth-child(2) .group-header .el-icon {
+              color: #e6a23c;
+            }
+            // 行情镜像库
+            &:nth-child(3) .group-header .el-icon {
+              color: #909399;
+            }
+            
+            .result-item {
+              padding: 12px 16px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              border-left: 3px solid transparent;
+              margin: 0 8px;
+              border-radius: 6px;
+              
+              &:hover {
+                background: linear-gradient(135deg, #ecf5ff 0%, #f0f9ff 100%);
+                border-left-color: #409eff;
+                
+                .item-title {
+                  color: #409eff;
+                }
+              }
+              
+              .item-header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 12px;
+                
+                .item-title {
+                  font-size: 14px;
+                  font-weight: 500;
+                  color: #303133;
+                  line-height: 1.4;
+                  flex: 1;
+                  transition: color 0.2s;
+                }
+                
+                .item-code {
+                  font-size: 12px;
+                  color: #909399;
+                  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+                  background: #f5f7fa;
+                  padding: 2px 8px;
+                  border-radius: 4px;
+                  white-space: nowrap;
+                }
+              }
+              
+              .item-meta {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 8px;
+                flex-wrap: wrap;
+                
+                :deep(.el-tag) {
+                  border-radius: 4px;
+                  font-size: 11px;
+                }
+                
+                .item-score {
+                  font-size: 11px;
+                  color: #a8abb2;
+                  margin-left: auto;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                  
+                  &::before {
+                    content: '';
+                    width: 4px;
+                    height: 4px;
+                    background: #c0c4cc;
+                    border-radius: 50%;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    .filter-options, .output-options {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    
+    .calc-options {
+      :deep(.el-checkbox-group) {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      
+      :deep(.el-checkbox) {
+        margin-right: 0;
+      }
+    }
+    
+    .form-footer {
+      display: flex;
+      justify-content: center;
+      padding: 32px 0 12px;
+      
+      .el-button {
+        min-width: 200px;
+        height: 44px;
+        font-size: 15px;
+        font-weight: 600;
+        border-radius: 10px;
+        box-shadow: 0 4px 14px rgba(64, 158, 255, 0.3);
+        transition: all 0.3s ease;
+        
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
+        }
+        
+        &:active {
+          transform: translateY(0);
+        }
+      }
+    }
+  }
+}
+
+// 搜索弹窗样式
+.table-search-dialog {
+  :deep(.el-dialog__header) {
+    padding: 16px 20px;
+    border-bottom: 1px solid #ebeef5;
+    margin-right: 0;
+  }
+  
+  :deep(.el-dialog__body) {
+    padding: 0;
+  }
+  
+  .search-dialog-content {
+    .search-header {
+      padding: 20px;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+      border-bottom: 1px solid #ebeef5;
+      
+      .el-input {
+        :deep(.el-input__wrapper) {
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+      }
+    }
+    
+    .search-results {
+      height: 500px;
+      overflow-y: auto;
+      
+      // 滚动条美化
+      &::-webkit-scrollbar {
+        width: 8px;
+      }
+      &::-webkit-scrollbar-thumb {
+        background: #c0c4cc;
+        border-radius: 4px;
+      }
+      &::-webkit-scrollbar-track {
+        background: #f5f7fa;
+      }
+      
+      .results-loading,
+      .results-hint,
+      .results-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #909399;
+        gap: 16px;
+        
+        .el-icon {
+          color: #c0c4cc;
+        }
+        
+        span {
+          font-size: 15px;
+        }
+      }
+      
+      .results-content {
+        padding: 16px;
+        
+        .result-section {
+          margin-bottom: 20px;
+          
+          &:last-child {
+            margin-bottom: 0;
+          }
+          
+          .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 8px 8px 0 0;
+            font-size: 14px;
+            font-weight: 600;
+            
+            &.static {
+              background: linear-gradient(135deg, #f0f9eb 0%, #e1f3d8 100%);
+              color: #67c23a;
+            }
+            
+            &.processed {
+              background: linear-gradient(135deg, #fdf6ec 0%, #faecd8 100%);
+              color: #e6a23c;
+            }
+            
+            &.mirror {
+              background: linear-gradient(135deg, #f4f4f5 0%, #e9e9eb 100%);
+              color: #909399;
+            }
+            
+            .el-icon {
+              font-size: 18px;
+            }
+          }
+          
+          .section-body {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 16px;
+            background: #fafafa;
+            border-radius: 0 0 8px 8px;
+            border: 1px solid #ebeef5;
+            border-top: none;
+            
+            .table-card {
+              background: white;
+              border: 1px solid #e4e7ed;
+              border-radius: 8px;
+              padding: 14px;
+              cursor: pointer;
+              transition: all 0.25s ease;
+              
+              &:hover {
+                border-color: #409eff;
+                box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+                transform: translateY(-2px);
+              }
+              
+              .card-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 10px;
+                
+                .table-name {
+                  font-size: 14px;
+                  font-weight: 600;
+                  color: #303133;
+                  font-family: 'SF Mono', 'Consolas', monospace;
+                }
+              }
+              
+              .card-body {
+                .table-comment {
+                  font-size: 13px;
+                  color: #606266;
+                  line-height: 1.5;
+                  margin-bottom: 10px;
+                  display: -webkit-box;
+                  -webkit-line-clamp: 2;
+                  -webkit-box-orient: vertical;
+                  overflow: hidden;
+                }
+                
+                .table-meta {
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                  flex-wrap: wrap;
+                  
+                  .meta-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 12px;
+                    color: #909399;
+                    
+                    .el-icon {
+                      font-size: 14px;
+                    }
+                    
+                    &.score {
+                      margin-left: auto;
+                      color: #c0c4cc;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</style>

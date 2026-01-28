@@ -39,10 +39,59 @@ const routes: RouteRecordRaw[] = [
         meta: { menuId: 'factor_submit' }
       },
       {
-        path: 'manage',
-        name: 'FactorManage',
-        component: () => import('../views/FactorLibrary/Manage.vue'),
-        meta: { menuId: 'factor_manage' }
+        path: 'backtest/submit',
+        name: 'FactorBacktestSubmit',
+        component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
+        meta: { menuId: 'backtest_submit' }
+      },
+      {
+        path: 'backtest/tasks',
+        name: 'FactorBacktestTasks',
+        component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
+        meta: { menuId: 'backtest_tasks' }
+      },
+      {
+        path: 'backtest/result',
+        name: 'FactorBacktestResults',
+        component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
+        meta: { menuId: 'backtest_result' }
+      },
+      {
+        path: 'backtest/result/:taskId',
+        name: 'FactorBacktestResultDetail',
+        component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
+        meta: { menuId: 'backtest_result' }
+      },
+      {
+        path: 'backtest/expression-dict',
+        name: 'ExpressionDict',
+        component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
+        meta: { menuId: 'expression_dict' }
+      },
+      // 数据工单
+      {
+        path: 'workorder/submit',
+        name: 'WorkOrderSubmit',
+        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
+        meta: { menuId: 'workorder_submit' }
+      },
+      {
+        path: 'workorder/my',
+        name: 'WorkOrderMy',
+        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
+        meta: { menuId: 'workorder_my' }
+      },
+      {
+        path: 'workorder/admin',
+        name: 'WorkOrderAdmin',
+        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
+        meta: { menuId: 'workorder_manage' }
+      },
+      {
+        path: 'workorder/detail/:id',
+        name: 'WorkOrderDetail',
+        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
+        meta: { menuId: 'workorder_my' }
       }
     ]
   },
@@ -331,8 +380,7 @@ router.beforeEach((to, _from, next) => {
     const subRoutes = [
       { path: '/factor-library/plaza', menuId: 'factor_plaza' },
       { path: '/factor-library/my-factors', menuId: 'my_factors' },
-      { path: '/factor-library/submit', menuId: 'factor_submit' },
-      { path: '/factor-library/manage', menuId: 'factor_manage' }
+      { path: '/factor-library/submit', menuId: 'factor_submit' }
     ]
     
     // 找到第一个有权限的子路由
@@ -346,6 +394,53 @@ router.beforeEach((to, _from, next) => {
       // 有父菜单权限但没有子菜单权限，显示提示
       console.warn('⚠️ 有因子库权限，但没有子菜单权限')
       next('/')  // 跳转到首页
+      return
+    }
+  }
+  
+  // 特殊处理：访问 /factor-library/backtest 时，自动跳转到第一个有权限的三级菜单
+  if (to.path === '/factor-library/backtest') {
+    const subRoutes = [
+      { path: '/factor-library/backtest/submit', menuId: 'backtest_submit' },
+      { path: '/factor-library/backtest/tasks', menuId: 'backtest_tasks' },
+      { path: '/factor-library/backtest/result', menuId: 'backtest_result' },
+      { path: '/factor-library/backtest/expression-dict', menuId: 'expression_dict' }
+    ]
+    
+    // 找到第一个有权限的子路由
+    const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
+    
+    if (allowedRoute) {
+      console.log('🔀 自动跳转到:', allowedRoute.path)
+      next(allowedRoute.path)
+      return
+    } else if (userMenuPermissions.includes('factor_backtest')) {
+      // 有二级菜单权限但没有三级菜单权限
+      console.warn('⚠️ 有因子回测权限，但没有三级菜单权限')
+      next('/')
+      return
+    }
+  }
+  
+  // 特殊处理：访问 /factor-library/workorder 时，自动跳转到第一个有权限的三级菜单
+  if (to.path === '/factor-library/workorder') {
+    const subRoutes = [
+      { path: '/factor-library/workorder/submit', menuId: 'workorder_submit' },
+      { path: '/factor-library/workorder/my', menuId: 'workorder_my' },
+      { path: '/factor-library/workorder/admin', menuId: 'workorder_manage' }
+    ]
+    
+    // 找到第一个有权限的子路由
+    const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
+    
+    if (allowedRoute) {
+      console.log('🔀 自动跳转到:', allowedRoute.path)
+      next(allowedRoute.path)
+      return
+    } else if (userMenuPermissions.includes('data_workorder')) {
+      // 有二级菜单权限但没有三级菜单权限
+      console.warn('⚠️ 有数据工单权限，但没有三级菜单权限')
+      next('/')
       return
     }
   }

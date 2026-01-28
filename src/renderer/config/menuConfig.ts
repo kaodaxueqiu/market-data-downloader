@@ -63,7 +63,28 @@ export const allMenus: MenuItem[] = [
       { id: 'my_factors', name: '我的因子', path: '/factor-library/my-factors', icon: null },
       { id: 'factor_plaza', name: '因子广场', path: '/factor-library/plaza', icon: null },
       { id: 'factor_submit', name: '因子提交', path: '/factor-library/submit', icon: null },
-      { id: 'factor_manage', name: '因子管理', path: '/factor-library/manage', icon: null }
+      { 
+        id: 'factor_backtest', 
+        name: '因子回测', 
+        path: '/factor-library/backtest/submit', 
+        icon: null,
+        children: [
+          { id: 'backtest_submit', name: '单因子回测', path: '/factor-library/backtest/submit', icon: null },
+          { id: 'backtest_tasks', name: '回测任务', path: '/factor-library/backtest/tasks', icon: null },
+          { id: 'backtest_result', name: '回测结果', path: '/factor-library/backtest/result', icon: null }
+        ]
+      },
+      { 
+        id: 'data_workorder', 
+        name: '数据工单', 
+        path: '/factor-library/workorder/submit', 
+        icon: null,
+        children: [
+          { id: 'workorder_submit', name: '提交申请', path: '/factor-library/workorder/submit', icon: null },
+          { id: 'workorder_my', name: '我的申请', path: '/factor-library/workorder/my', icon: null },
+          { id: 'workorder_manage', name: '工单管理', path: '/factor-library/workorder/admin', icon: null }
+        ]
+      }
     ]
   },
   { 

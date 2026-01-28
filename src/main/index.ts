@@ -2322,6 +2322,7 @@ const dbDictAPI = getDbDictAPI()
 // 设置API Key
 ipcMain.handle('dbdict:setApiKey', async (_event, apiKey: string) => {
   dbDictAPI.setApiKey(apiKey)
+  dictGlobalApiKey = apiKey  // 同时设置全局搜索用的 API Key
   return true
 })
 
@@ -2784,6 +2785,520 @@ ipcMain.handle('factor:getFileContent', async (_event, owner: string, repo: stri
     return result
   } catch (error: any) {
     throw new Error(error.message || '获取文件内容失败')
+  }
+})
+
+// ========== 我的因子专属库API ==========
+
+const MY_FACTOR_API_BASE = 'http://61.151.241.233:8080/api/v1/factor/my'
+
+// 获取默认 API Key（用于我的因子API）
+function getDefaultApiKeyForMyFactor(): string | null {
+  const keys = configManager.getApiKeys()
+  const defaultKey = keys.find((k: any) => k.isDefault)
+  if (defaultKey) {
+    return configManager.getFullApiKey(defaultKey.id)
+  }
+  return null
+}
+
+// 检查专属库状态
+ipcMain.handle('factor:myStatus', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    console.log('调用我的因子API - 检查状态:', `${MY_FACTOR_API_BASE}/status`)
+    
+    const axios = require('axios')
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/status`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    
+    console.log('我的因子状态响应:', response.data)
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('检查专属库状态失败:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 初始化专属库
+ipcMain.handle('factor:myInit', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/init`,
+      {},
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 30000
+      }
+    )
+    return { success: true, data: response.data.data, message: response.data.message }
+  } catch (error: any) {
+    console.error('初始化专属库失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 获取因子分类
+ipcMain.handle('factor:myCategories', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/categories`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('获取因子分类失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 获取我的因子列表
+ipcMain.handle('factor:myList', async (_event, params: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/list`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        params,
+        timeout: 15000
+      }
+    )
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('获取因子列表失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 创建因子
+ipcMain.handle('factor:myCreate', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/create`,
+      data,
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 15000
+      }
+    )
+    return { success: true, data: response.data.data, message: response.data.message }
+  } catch (error: any) {
+    console.error('创建因子失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 获取因子详情
+ipcMain.handle('factor:myDetail', async (_event, factorId: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/${factorId}`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('获取因子详情失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 更新因子
+ipcMain.handle('factor:myUpdate', async (_event, factorId: number, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.put(
+      `${MY_FACTOR_API_BASE}/${factorId}`,
+      data,
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    console.error('更新因子失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 删除因子
+ipcMain.handle('factor:myDelete', async (_event, factorId: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.delete(
+      `${MY_FACTOR_API_BASE}/${factorId}`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    console.error('删除因子失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// ========== 分类管理API ==========
+
+// 创建分类
+ipcMain.handle('factor:myCategoryCreate', async (_event, level: 1 | 2 | 3, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/category/l${level}`,
+      data,
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message, data: response.data.data }
+  } catch (error: any) {
+    console.error('创建分类失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 更新分类
+ipcMain.handle('factor:myCategoryUpdate', async (_event, level: 1 | 2 | 3, id: number, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.put(
+      `${MY_FACTOR_API_BASE}/category/l${level}/${id}`,
+      data,
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    console.error('更新分类失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 删除分类
+ipcMain.handle('factor:myCategoryDelete', async (_event, level: 1 | 2 | 3, id: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.delete(
+      `${MY_FACTOR_API_BASE}/category/l${level}/${id}`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    console.error('删除分类失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// ========== 标签管理API ==========
+
+// 获取标签列表
+ipcMain.handle('factor:myTags', async (_event, type?: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    let url = `${MY_FACTOR_API_BASE}/tags`
+    if (type) {
+      url += `?type=${type}`
+    }
+    
+    const response = await axios.get(url, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('获取标签失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 创建标签
+ipcMain.handle('factor:myTagCreate', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/tag`,
+      data,
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message, data: response.data.data }
+  } catch (error: any) {
+    console.error('创建标签失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 更新标签
+ipcMain.handle('factor:myTagUpdate', async (_event, id: number, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.put(
+      `${MY_FACTOR_API_BASE}/tag/${id}`,
+      data,
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    console.error('更新标签失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 删除标签
+ipcMain.handle('factor:myTagDelete', async (_event, id: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.delete(
+      `${MY_FACTOR_API_BASE}/tag/${id}`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    console.error('删除标签失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 从我的因子发起回测
+ipcMain.handle('factor:myBacktest', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    console.log('发起因子回测请求:', JSON.stringify(data, null, 2))
+    
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/backtest`,
+      data,
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 30000
+      }
+    )
+    
+    console.log('因子回测响应:', JSON.stringify(response.data, null, 2))
+    
+    // 检查响应中是否有错误
+    if (response.data.success === false) {
+      return { success: false, error: response.data.error || '回测任务创建失败' }
+    }
+    
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('发起因子回测失败:', error.response?.data || error.message)
+    const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message
+    return { success: false, error: errorMsg }
+  }
+})
+
+// 获取因子回测历史
+ipcMain.handle('factor:myBacktestHistory', async (_event, factorId: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    console.log('获取因子回测历史, factorId:', factorId)
+    
+    const axios = require('axios')
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/${factorId}/backtest-history`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    
+    console.log('因子回测历史响应:', JSON.stringify(response.data, null, 2))
+    
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('获取因子回测历史失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// ========== 因子表达式字典API ==========
+const EXPRESSION_API_BASE = 'http://61.151.241.233:8080/api/v1/factor/expression'
+
+// 获取函数字典（按分类分组）
+ipcMain.handle('factor:getExpressionFunctions', async (_event, category?: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    let url = `${EXPRESSION_API_BASE}/functions`
+    if (category) {
+      url += `?category=${encodeURIComponent(category)}`
+    }
+    
+    const response = await axios.get(url, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('获取函数字典失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 获取函数列表（扁平结构）
+ipcMain.handle('factor:getExpressionFunctionList', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.get(
+      `${EXPRESSION_API_BASE}/function-list`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('获取函数列表失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
   }
 })
 
@@ -4057,4 +4572,578 @@ ipcMain.handle('ssh:listDirectory', async (_event, config: { host: string; port:
       readyTimeout: 10000
     })
   })
+})
+
+// ========== 因子回测API ==========
+
+const BACKTEST_API_BASE = 'http://61.151.241.233:8080/api/v1/backtest'
+
+// 获取默认 API Key（用于回测API认证）
+function getDefaultApiKeyForBacktest(): string | null {
+  const keys = configManager.getApiKeys()
+  const defaultKey = keys.find((k: any) => k.isDefault)
+  if (defaultKey) {
+    return configManager.getFullApiKey(defaultKey.id)
+  }
+  return null
+}
+
+// 回测: 提交任务
+ipcMain.handle('backtest:submit', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    console.log('📊 提交回测任务:', data.task_name)
+    const axios = require('axios')
+    const response = await axios.post(
+      `${BACKTEST_API_BASE}/submit`,
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey
+        },
+        timeout: 30000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '提交失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 提交回测任务失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 获取任务列表
+ipcMain.handle('backtest:getTasks', async (_event, params: { page?: number; page_size?: number; status?: string }) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/tasks`,
+      {
+        params: {
+          page: params.page || 1,
+          page_size: params.page_size || 20,
+          status: params.status || undefined
+        },
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取回测任务列表失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 获取任务详情
+ipcMain.handle('backtest:getTaskDetail', async (_event, taskId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取回测任务详情失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 获取回测结果
+ipcMain.handle('backtest:getResult', async (_event, taskId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/result`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 30000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取回测结果失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 获取每日明细数据
+ipcMain.handle('backtest:getDailyMetrics', async (_event, taskId: string, params?: {
+  page?: number
+  page_size?: number
+  start_date?: string
+  end_date?: string
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/daily-metrics`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        params: {
+          page: params?.page || 1,
+          page_size: params?.page_size || 100,
+          start_date: params?.start_date,
+          end_date: params?.end_date
+        },
+        timeout: 60000  // 数据量可能较大，设置较长超时
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取每日明细失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 下载结果文件
+ipcMain.handle('backtest:download', async (_event, taskId: string, options?: {
+  format?: 'csv' | 'xlsx'
+  type?: 'summary' | 'daily' | 'all'
+  period?: number  // 预测周期：1/5/10/20
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const format = options?.format || 'csv'
+    const type = options?.type || 'all'
+    const period = options?.period
+    
+    // 构建文件名
+    const ext = format === 'xlsx' ? 'xlsx' : 'csv'
+    const typeLabel = type === 'summary' ? '汇总' : type === 'daily' ? '每日明细' : '全部'
+    const periodLabel = period ? `_${period}日周期` : ''
+    const defaultFileName = `回测结果_${taskId}_${typeLabel}${periodLabel}.${ext}`
+    
+    // 弹出保存对话框
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+      title: '保存回测结果',
+      defaultPath: defaultFileName,
+      filters: format === 'xlsx' 
+        ? [{ name: 'Excel 文件', extensions: ['xlsx'] }]
+        : [{ name: 'CSV 文件', extensions: ['csv'] }]
+    })
+    
+    if (canceled || !filePath) {
+      return { success: false, error: '用户取消' }
+    }
+
+    const axios = require('axios')
+    const fs = require('fs')
+    
+    // 请求下载文件
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/download`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        params: {
+          format,
+          type,
+          period: period?.toString()  // 传递周期参数
+        },
+        responseType: 'arraybuffer',  // 重要：以二进制接收
+        timeout: 120000  // 下载可能需要较长时间
+      }
+    )
+    
+    // 保存到用户选择的位置
+    fs.writeFileSync(filePath, Buffer.from(response.data))
+    
+    console.log('✅ 回测结果下载成功:', filePath)
+    return { success: true, filePath }
+  } catch (error: any) {
+    console.error('❌ 下载回测结果失败:', error)
+    if (error.response?.status === 404) {
+      return { success: false, error: '回测结果不存在' }
+    }
+    return { success: false, error: error.message || '下载失败' }
+  }
+})
+
+// 回测: 生成因子报告 PDF（全量多周期报告）
+ipcMain.handle('backtest:report', async (_event, taskId: string, _options?: Record<string, unknown>) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    // 构建文件名（报告自动包含所有周期，无需指定）
+    const defaultFileName = `因子报告_${taskId}.pdf`
+    
+    // 弹出保存对话框
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+      title: '保存因子报告',
+      defaultPath: defaultFileName,
+      filters: [{ name: 'PDF 文件', extensions: ['pdf'] }]
+    })
+    
+    if (canceled || !filePath) {
+      return { success: false, error: '用户取消' }
+    }
+
+    const axios = require('axios')
+    const fs = require('fs')
+    
+    // 请求生成报告（无需 period 参数，自动包含所有周期）
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/report`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        responseType: 'arraybuffer',  // 重要：以二进制接收
+        timeout: 180000  // 报告生成可能需要较长时间
+      }
+    )
+    
+    // 保存到用户选择的位置
+    fs.writeFileSync(filePath, Buffer.from(response.data))
+    
+    console.log('✅ 因子报告生成成功:', filePath)
+    return { success: true, filePath }
+  } catch (error: any) {
+    console.error('❌ 生成因子报告失败:', error)
+    if (error.response?.status === 404) {
+      return { success: false, error: '回测结果不存在' }
+    }
+    return { success: false, error: error.message || '生成报告失败' }
+  }
+})
+
+// 回测: 取消任务
+ipcMain.handle('backtest:cancelTask', async (_event, taskId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.delete(
+      `${BACKTEST_API_BASE}/task/${taskId}`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, message: response.data.message }
+    } else {
+      return { success: false, error: response.data.error || '取消失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 取消回测任务失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 获取预设股票池列表
+ipcMain.handle('backtest:getStockPools', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/stock-pools`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取股票池失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取股票池列表失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// ============================================
+// 数据工单系统 IPC Handlers
+// ============================================
+
+const WORKORDER_API_BASE = 'http://61.151.241.233:8080/api/v1/workorder'
+
+// 工单: 提交字段申请
+ipcMain.handle('workorder:submit', async (_event, data: {
+  field_name: string
+  field_desc?: string
+  calc_logic?: string
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.post(
+      `${WORKORDER_API_BASE}/field-request`,
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    console.log('✅ 工单提交成功:', response.data)
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 提交工单失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '提交失败' }
+  }
+})
+
+// 工单: 获取我的申请列表
+ipcMain.handle('workorder:getMyList', async (_event, params: {
+  page?: number
+  page_size?: number
+  status?: string
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${WORKORDER_API_BASE}/field-request/my`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        params: {
+          page: params.page || 1,
+          page_size: params.page_size || 20,
+          status: params.status
+        },
+        timeout: 15000
+      }
+    )
+
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取我的申请列表失败:', error)
+    return { success: false, error: error.message || '获取失败' }
+  }
+})
+
+// 工单: 获取所有申请列表（IT管理）
+ipcMain.handle('workorder:getAllList', async (_event, params: {
+  page?: number
+  page_size?: number
+  status?: string
+  user_id?: string
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${WORKORDER_API_BASE}/field-request`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        params: {
+          page: params.page || 1,
+          page_size: params.page_size || 20,
+          status: params.status,
+          user_id: params.user_id
+        },
+        timeout: 15000
+      }
+    )
+
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取所有申请列表失败:', error)
+    return { success: false, error: error.message || '获取失败' }
+  }
+})
+
+// 工单: 获取申请详情
+ipcMain.handle('workorder:getDetail', async (_event, id: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${WORKORDER_API_BASE}/field-request/${id}`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取工单详情失败:', error)
+    if (error.response?.status === 404) {
+      return { success: false, error: '工单不存在' }
+    }
+    return { success: false, error: error.message || '获取失败' }
+  }
+})
+
+// 工单: 更新申请状态（IT管理）
+ipcMain.handle('workorder:updateStatus', async (_event, id: number, data: {
+  status: string
+  reject_reason?: string
+  admin_note?: string
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.put(
+      `${WORKORDER_API_BASE}/field-request/${id}/status`,
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    console.log('✅ 工单状态更新成功:', response.data)
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 更新工单状态失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '更新失败' }
+  }
+})
+
+// 工单: 获取统计信息
+ipcMain.handle('workorder:getStats', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${WORKORDER_API_BASE}/field-request/stats`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取工单统计失败:', error)
+    return { success: false, error: error.message || '获取失败' }
+  }
 })

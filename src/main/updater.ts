@@ -120,14 +120,7 @@ export async function downloadUpdate(
   const saveDialogOptions = {
     title: '选择保存位置',
     defaultPath: defaultPath,
-    buttonLabel: '开始下载',
-    filters: [
-      { 
-        name: platform === 'win32' ? 'Windows压缩包' : 'macOS安装包', 
-        extensions: platform === 'win32' ? ['zip'] : ['dmg'] 
-      },
-      { name: '所有文件', extensions: ['*'] }
-    ]
+    buttonLabel: '开始下载'
   }
   
   console.log('显示保存对话框...')

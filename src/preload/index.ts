@@ -165,7 +165,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFactorDetail: (factorId: number) => ipcRenderer.invoke('factor:getFactorDetail', factorId),
     downloadFactorData: (params: any) => ipcRenderer.invoke('factor:downloadFactorData', params),
     getFactorPerformance: (factorId: number, days?: number) => ipcRenderer.invoke('factor:getFactorPerformance', factorId, days),
-    // 仓库相关
+    // 仓库相关（旧版）
     getMyRepos: () => ipcRenderer.invoke('factor:getMyRepos'),
     getRepoFactors: (owner: string, repo: string) => ipcRenderer.invoke('factor:getRepoFactors', owner, repo),
     getAllRepos: () => ipcRenderer.invoke('factor:getAllRepos'),
@@ -178,7 +178,67 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAllJobs: (params?: any) => ipcRenderer.invoke('factor:getAllJobs', params),
     // 获取文件内容
     getFileContent: (owner: string, repo: string, filePath: string, ref?: string) => 
-      ipcRenderer.invoke('factor:getFileContent', owner, repo, filePath, ref)
+      ipcRenderer.invoke('factor:getFileContent', owner, repo, filePath, ref),
+    // 我的因子专属库
+    myStatus: () => ipcRenderer.invoke('factor:myStatus'),
+    myInit: () => ipcRenderer.invoke('factor:myInit'),
+    myCategories: () => ipcRenderer.invoke('factor:myCategories'),
+    myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) =>
+      ipcRenderer.invoke('factor:myList', params || {}),
+    myCreate: (data: { factor_code: string; factor_name: string; category_l3_id: number; expression: string; factor_name_en?: string; description?: string; data_sources?: Record<string, string[]>; lookback_period?: number }) =>
+      ipcRenderer.invoke('factor:myCreate', data),
+    myDetail: (factorId: number) => ipcRenderer.invoke('factor:myDetail', factorId),
+    myUpdate: (factorId: number, data: any) => ipcRenderer.invoke('factor:myUpdate', factorId, data),
+    myDelete: (factorId: number) => ipcRenderer.invoke('factor:myDelete', factorId),
+    // 分类管理
+    myCategoryCreate: (level: 1 | 2 | 3, data: any) => ipcRenderer.invoke('factor:myCategoryCreate', level, data),
+    myCategoryUpdate: (level: 1 | 2 | 3, id: number, data: any) => ipcRenderer.invoke('factor:myCategoryUpdate', level, id, data),
+    myCategoryDelete: (level: 1 | 2 | 3, id: number) => ipcRenderer.invoke('factor:myCategoryDelete', level, id),
+    // 标签管理
+    myTags: (type?: string) => ipcRenderer.invoke('factor:myTags', type),
+    myTagCreate: (data: any) => ipcRenderer.invoke('factor:myTagCreate', data),
+    myTagUpdate: (id: number, data: any) => ipcRenderer.invoke('factor:myTagUpdate', id, data),
+    myTagDelete: (id: number) => ipcRenderer.invoke('factor:myTagDelete', id),
+    // 因子回测
+    myBacktest: (data: any) => ipcRenderer.invoke('factor:myBacktest', data),
+    // 因子回测历史
+    myBacktestHistory: (factorId: number) => ipcRenderer.invoke('factor:myBacktestHistory', factorId),
+    // 表达式字典
+    getExpressionFunctions: (category?: string) => ipcRenderer.invoke('factor:getExpressionFunctions', category),
+    getExpressionFunctionList: () => ipcRenderer.invoke('factor:getExpressionFunctionList')
+  },
+
+  // 因子回测API
+  backtest: {
+    submit: (data: any) => ipcRenderer.invoke('backtest:submit', data),
+    getTasks: (params?: { page?: number; page_size?: number; status?: string }) => 
+      ipcRenderer.invoke('backtest:getTasks', params || {}),
+    getTaskDetail: (taskId: string) => ipcRenderer.invoke('backtest:getTaskDetail', taskId),
+    getResult: (taskId: string) => ipcRenderer.invoke('backtest:getResult', taskId),
+    getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => 
+      ipcRenderer.invoke('backtest:getDailyMetrics', taskId, params),
+    cancelTask: (taskId: string) => ipcRenderer.invoke('backtest:cancelTask', taskId),
+    getStockPools: () => ipcRenderer.invoke('backtest:getStockPools'),
+    download: (taskId: string, options?: { format?: 'csv' | 'xlsx'; type?: 'summary' | 'daily' | 'all'; period?: number }) =>
+      ipcRenderer.invoke('backtest:download', taskId, options),
+    report: (taskId: string, options?: { period?: number }) =>
+      ipcRenderer.invoke('backtest:report', taskId, options)
+  },
+
+  // 数据工单API
+  workorder: {
+    submit: (data: { field_name: string; field_desc?: string; calc_logic?: string }) =>
+      ipcRenderer.invoke('workorder:submit', data),
+    getMyList: (params?: { page?: number; page_size?: number; status?: string }) =>
+      ipcRenderer.invoke('workorder:getMyList', params || {}),
+    getAllList: (params?: { page?: number; page_size?: number; status?: string; user_id?: string }) =>
+      ipcRenderer.invoke('workorder:getAllList', params || {}),
+    getDetail: (id: number) =>
+      ipcRenderer.invoke('workorder:getDetail', id),
+    updateStatus: (id: number, data: { status: string; reject_reason?: string; admin_note?: string }) =>
+      ipcRenderer.invoke('workorder:updateStatus', id, data),
+    getStats: () =>
+      ipcRenderer.invoke('workorder:getStats')
   },
 
   // 基金管理API
@@ -555,7 +615,7 @@ declare global {
         getFactorDetail: (factorId: number) => Promise<any>
         downloadFactorData: (params: any) => Promise<any>
         getFactorPerformance: (factorId: number, days?: number) => Promise<any>
-        // 仓库相关
+        // 仓库相关（旧版）
         getMyRepos: () => Promise<any>
         getRepoFactors: (owner: string, repo: string) => Promise<any>
         getAllRepos: () => Promise<any>
@@ -568,6 +628,39 @@ declare global {
         getAllJobs: (params?: any) => Promise<any>
         // 文件内容
         getFileContent: (owner: string, repo: string, filePath: string, ref?: string) => Promise<any>
+        // 我的因子专属库
+        myStatus: () => Promise<{ success: boolean; data?: { initialized: boolean; database_name: string; user_name: string }; error?: string }>
+        myInit: () => Promise<{ success: boolean; data?: { database_name: string }; message?: string; error?: string }>
+        myCategories: () => Promise<{ success: boolean; data?: any[]; error?: string }>
+        myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
+        myCreate: (data: any) => Promise<{ success: boolean; data?: { factor_id: number; factor_code: string }; message?: string; error?: string }>
+        myDetail: (factorId: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        myUpdate: (factorId: number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
+        myDelete: (factorId: number) => Promise<{ success: boolean; message?: string; error?: string }>
+        // 分类管理
+        myCategoryCreate: (level: 1 | 2 | 3, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
+        myCategoryUpdate: (level: 1 | 2 | 3, id: number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
+        myCategoryDelete: (level: 1 | 2 | 3, id: number) => Promise<{ success: boolean; message?: string; error?: string }>
+        // 标签管理
+        myTags: (type?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+        myTagCreate: (data: any) => Promise<{ success: boolean; message?: string; error?: string }>
+        myTagUpdate: (id: number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
+        myTagDelete: (id: number) => Promise<{ success: boolean; message?: string; error?: string }>
+        // 因子回测
+        myBacktest: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        // 因子回测历史
+        myBacktestHistory: (factorId: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        // 表达式字典
+        getExpressionFunctions: (category?: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getExpressionFunctionList: () => Promise<{ success: boolean; data?: any[]; error?: string }>
+      }
+      backtest: {
+        submit: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        getTasks: (params?: { page?: number; page_size?: number; status?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getTaskDetail: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getResult: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        cancelTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
       }
       fund: {
         setApiKey: (apiKey: string) => Promise<boolean>

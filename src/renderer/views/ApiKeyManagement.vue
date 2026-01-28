@@ -174,42 +174,33 @@
             
             <!-- 分类标签 -->
             <div class="permission-categories" style="margin-bottom: 20px;">
+              <!-- 菜单权限（固定） -->
               <el-button
                 :type="activePermissionCategory === 'menu' ? 'primary' : ''"
                 @click="activePermissionCategory = 'menu'"
               >
                 菜单权限 ({{ selectedMenuPermissions.length }})
               </el-button>
+              
+              <!-- API权限分类（动态渲染） -->
               <el-button
-                :type="activePermissionCategory === 'factor' ? 'primary' : ''"
-                @click="activePermissionCategory = 'factor'"
+                v-for="cat in apiCategories"
+                :key="cat.code"
+                :type="activePermissionCategory === cat.code ? 'primary' : ''"
+                @click="activePermissionCategory = cat.code"
               >
-                因子库权限 ({{ getSelectedInCategory('factor_api') }}/{{ getCategoryPermissions('factor_api').length }})
+                {{ cat.name }} ({{ getSelectedInCategory(cat.code) }}/{{ getCategoryPermissions(cat.code).length }})
               </el-button>
-              <el-button
-                :type="activePermissionCategory === 'admin' ? 'primary' : ''"
-                @click="activePermissionCategory = 'admin'"
-              >
-                管理权限 ({{ getSelectedInCategory('admin_api') }}/{{ getCategoryPermissions('admin_api').length }})
-              </el-button>
-              <el-button
-                :type="activePermissionCategory === 'rest' ? 'primary' : ''"
-                @click="activePermissionCategory = 'rest'"
-              >
-                REST API权限 ({{ getSelectedInCategory('rest_api') }}/{{ getCategoryPermissions('rest_api').length }})
-              </el-button>
-              <el-button
-                :type="activePermissionCategory === 'ws' ? 'primary' : ''"
-                @click="activePermissionCategory = 'ws'"
-              >
-                WebSocket权限 ({{ getSelectedInCategory('websocket_api') }}/{{ getCategoryPermissions('websocket_api').length }})
-              </el-button>
+              
+              <!-- 数据源权限（固定） -->
               <el-button
                 :type="activePermissionCategory === 'datasource' ? 'primary' : ''"
                 @click="activePermissionCategory = 'datasource'"
               >
-                数据源权限 ({{ selectedDatasources.length }}/4)
+                数据源权限 ({{ selectedDatasources.length }}/{{ allDatasources.length }})
               </el-button>
+              
+              <!-- 基础配置（固定） -->
               <el-button
                 :type="activePermissionCategory === 'basic' ? 'primary' : ''"
                 @click="activePermissionCategory = 'basic'"
@@ -262,14 +253,17 @@
                 </div>
               </div>
               
-              <!-- 因子库权限 -->
-              <div v-else-if="activePermissionCategory === 'factor'" style="padding: 20px;">
+              <!-- API权限分类（动态渲染） -->
+              <div 
+                v-else-if="apiCategories.some(c => c.code === activePermissionCategory)" 
+                style="padding: 20px;"
+              >
                 <div style="margin-bottom: 15px;">
-                  <el-button size="small" @click="selectAllCategoryPermissions('factor_api')">全选</el-button>
-                  <el-button size="small" @click="unselectAllCategoryPermissions('factor_api')">全不选</el-button>
+                  <el-button size="small" @click="selectAllCategoryPermissions(activePermissionCategory)">全选</el-button>
+                  <el-button size="small" @click="unselectAllCategoryPermissions(activePermissionCategory)">全不选</el-button>
                 </div>
                 
-                <el-table :data="getCategoryPermissions('factor_api')" style="width: 100%">
+                <el-table :data="getCategoryPermissions(activePermissionCategory)" style="width: 100%">
                   <el-table-column width="60">
                     <template #default="{ row }">
                       <el-checkbox 
@@ -307,154 +301,7 @@
                 
                 <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
                   <el-button @click="resetApiPermissions">重置</el-button>
-                  <el-button type="primary" @click="saveApiPermissions">保存因子库权限</el-button>
-                </div>
-              </div>
-              
-              <!-- 管理权限 -->
-              <div v-else-if="activePermissionCategory === 'admin'" style="padding: 20px;">
-                <div style="margin-bottom: 15px;">
-                  <el-button size="small" @click="selectAllCategoryPermissions('admin_api')">全选</el-button>
-                  <el-button size="small" @click="unselectAllCategoryPermissions('admin_api')">全不选</el-button>
-                </div>
-                
-                <el-table :data="getCategoryPermissions('admin_api')" style="width: 100%">
-                  <el-table-column width="60">
-                    <template #default="{ row }">
-                      <el-checkbox 
-                        :model-value="selectedApiPermissions.includes(row.resource)"
-                        @change="togglePermission(row.resource)"
-                      />
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="权限名称" min-width="150">
-                    <template #default="{ row }">
-                      <div style="font-weight: 500;">{{ row.name }}</div>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="接口" min-width="200">
-                    <template #default="{ row }">
-                      <el-text type="info" style="font-family: monospace; font-size: 12px;">{{ row.resource }}</el-text>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="风险等级" width="100">
-                    <template #default="{ row }">
-                      <el-tag 
-                        :type="row.risk_level === 'high' ? 'danger' : row.risk_level === 'medium' ? 'warning' : 'info'" 
-                        size="small"
-                      >
-                        {{ row.risk_level }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="说明" min-width="200">
-                    <template #default="{ row }">
-                      <el-text size="small">{{ row.description }}</el-text>
-                    </template>
-                  </el-table-column>
-                </el-table>
-                
-                <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
-                  <el-button @click="resetApiPermissions">重置</el-button>
-                  <el-button type="primary" @click="saveApiPermissions">保存管理权限</el-button>
-                </div>
-              </div>
-              
-              <!-- REST API权限 -->
-              <div v-else-if="activePermissionCategory === 'rest'" style="padding: 20px;">
-                <div style="margin-bottom: 15px;">
-                  <el-button size="small" @click="selectAllCategoryPermissions('rest_api')">全选</el-button>
-                  <el-button size="small" @click="unselectAllCategoryPermissions('rest_api')">全不选</el-button>
-                </div>
-                
-                <el-table :data="getCategoryPermissions('rest_api')" style="width: 100%">
-                  <el-table-column width="60">
-                    <template #default="{ row }">
-                      <el-checkbox 
-                        :model-value="selectedApiPermissions.includes(row.resource)"
-                        @change="togglePermission(row.resource)"
-                      />
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="权限名称" min-width="150">
-                    <template #default="{ row }">
-                      <div style="font-weight: 500;">{{ row.name }}</div>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="接口" min-width="200">
-                    <template #default="{ row }">
-                      <el-text type="info" style="font-family: monospace; font-size: 12px;">{{ row.resource }}</el-text>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="风险等级" width="100">
-                    <template #default="{ row }">
-                      <el-tag 
-                        :type="row.risk_level === 'high' ? 'danger' : row.risk_level === 'medium' ? 'warning' : 'info'" 
-                        size="small"
-                      >
-                        {{ row.risk_level }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="说明" min-width="200">
-                    <template #default="{ row }">
-                      <el-text size="small">{{ row.description }}</el-text>
-                    </template>
-                  </el-table-column>
-                </el-table>
-                
-                <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
-                  <el-button @click="resetApiPermissions">重置</el-button>
-                  <el-button type="primary" @click="saveApiPermissions">保存REST API权限</el-button>
-                </div>
-              </div>
-              
-              <!-- WebSocket权限 -->
-              <div v-else-if="activePermissionCategory === 'ws'" style="padding: 20px;">
-                <div style="margin-bottom: 15px;">
-                  <el-button size="small" @click="selectAllCategoryPermissions('websocket_api')">全选</el-button>
-                  <el-button size="small" @click="unselectAllCategoryPermissions('websocket_api')">全不选</el-button>
-                </div>
-                
-                <el-table :data="getCategoryPermissions('websocket_api')" style="width: 100%">
-                  <el-table-column width="60">
-                    <template #default="{ row }">
-                      <el-checkbox 
-                        :model-value="selectedApiPermissions.includes(row.resource)"
-                        @change="togglePermission(row.resource)"
-                      />
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="权限名称" min-width="150">
-                    <template #default="{ row }">
-                      <div style="font-weight: 500;">{{ row.name }}</div>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="接口" min-width="200">
-                    <template #default="{ row }">
-                      <el-text type="info" style="font-family: monospace; font-size: 12px;">{{ row.resource }}</el-text>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="风险等级" width="100">
-                    <template #default="{ row }">
-                      <el-tag 
-                        :type="row.risk_level === 'high' ? 'danger' : row.risk_level === 'medium' ? 'warning' : 'info'" 
-                        size="small"
-                      >
-                        {{ row.risk_level }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="说明" min-width="200">
-                    <template #default="{ row }">
-                      <el-text size="small">{{ row.description }}</el-text>
-                    </template>
-                  </el-table-column>
-                </el-table>
-                
-                <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
-                  <el-button @click="resetApiPermissions">重置</el-button>
-                  <el-button type="primary" @click="saveApiPermissions">保存WebSocket权限</el-button>
+                  <el-button type="primary" @click="saveApiPermissions">保存{{ getCategoryDisplayName(activePermissionCategory) }}</el-button>
                 </div>
               </div>
 
@@ -966,7 +813,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { 
   Plus,
@@ -1591,6 +1438,37 @@ const handleSubmit = async () => {
       submitting.value = false
     }
   })
+}
+
+// 🆕 动态获取所有 API 权限分类（从后端数据中提取）
+const apiCategories = computed(() => {
+  if (!permissionRegistry.value?.permissions) return []
+  
+  // 从权限列表中提取所有唯一的 category
+  const categorySet = new Set<string>()
+  permissionRegistry.value.permissions.forEach((p: any) => {
+    if (p.category) {
+      categorySet.add(p.category)
+    }
+  })
+  
+  // 转换为数组并返回，包含分类代码和显示名称
+  return Array.from(categorySet).map(code => ({
+    code,
+    name: getCategoryDisplayName(code)
+  }))
+})
+
+// 🆕 获取分类的显示名称（从后端 categories 数组获取）
+const getCategoryDisplayName = (category: string): string => {
+  // 从后端返回的 categories 数组中查找（id 字段匹配 category）
+  if (permissionRegistry.value?.categories) {
+    const meta = permissionRegistry.value.categories.find((c: any) => c.id === category)
+    if (meta?.name) return meta.name
+  }
+  
+  // 兜底：直接返回 category 代码
+  return category
 }
 
 // 从权限注册表中获取指定分类的权限
