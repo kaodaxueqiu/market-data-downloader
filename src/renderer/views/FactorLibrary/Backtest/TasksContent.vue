@@ -3,37 +3,23 @@
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <el-select 
-          v-model="filterStatus" 
-          placeholder="全部状态" 
+        <el-date-picker
+          v-model="filterDateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          format="MM-DD"
+          value-format="YYYY-MM-DD"
+          style="width: 240px;"
+          @change="handleFilterChange"
           clearable
-          style="width: 140px;"
-          @change="loadTasks"
-        >
-          <el-option label="全部状态" value="" />
-          <el-option label="等待执行" value="pending">
-            <el-icon class="status-icon warning"><Clock /></el-icon>
-            等待执行
-          </el-option>
-          <el-option label="正在执行" value="running">
-            <el-icon class="status-icon primary"><Loading /></el-icon>
-            正在执行
-          </el-option>
-          <el-option label="执行完成" value="completed">
-            <el-icon class="status-icon success"><CircleCheck /></el-icon>
-            执行完成
-          </el-option>
-          <el-option label="执行失败" value="failed">
-            <el-icon class="status-icon danger"><CircleClose /></el-icon>
-            执行失败
-          </el-option>
-          <el-option label="已取消" value="cancelled">
-            <el-icon class="status-icon info"><Remove /></el-icon>
-            已取消
-          </el-option>
-        </el-select>
+        />
       </div>
       <div class="toolbar-right">
+        <el-button @click="clearAllFilters" :disabled="!hasActiveFilters">
+          清除筛选
+        </el-button>
         <el-button :icon="Refresh" @click="loadTasks" :loading="loading">
           刷新
         </el-button>
@@ -60,165 +46,156 @@
       </div>
     </div>
 
-    <!-- 任务列表 -->
+    <!-- 任务列表 - 现代风格 -->
     <el-table 
       :data="tasks" 
       v-loading="loading"
-      class="task-table"
-      :header-cell-style="{ background: '#f5f7fa', color: '#606266', fontWeight: 600 }"
+      class="modern-table"
+      stripe
+      size="small"
+      :header-cell-style="{ 
+        background: '#f8fafc', 
+        color: '#64748b', 
+        fontWeight: 500,
+        fontSize: '12px',
+        padding: '10px 0',
+        borderBottom: '1px solid #e2e8f0'
+      }"
+      :cell-style="{ padding: '8px 10px', color: '#475569', fontSize: '12px' }"
+      @sort-change="handleTableSortChange"
+      @filter-change="handleTableFilterChange"
     >
-      <el-table-column label="任务信息" min-width="200">
+      <el-table-column type="index" label="#" width="55" align="center" />
+      
+      <el-table-column 
+        label="任务名称" 
+        prop="task_name"
+        column-key="task_type"
+        :filters="taskTypeFilters"
+        :filter-multiple="false"
+        show-overflow-tooltip
+      >
         <template #default="{ row }">
-          <div class="task-info">
-            <div class="task-name">
-              <el-link 
-                :type="row.status === 'completed' ? 'primary' : 'default'"
-                :underline="false"
-                @click="handleViewResult(row)"
-                :disabled="row.status !== 'completed'"
-              >
-                {{ row.task_name }}
-              </el-link>
-            </div>
-            <div class="task-meta">
-              <el-tag size="small" effect="plain">
-                {{ getTaskTypeName(row.task_type) }}
-              </el-tag>
-              <span class="task-id">ID: {{ row.task_id?.slice(0, 8) }}...</span>
-            </div>
-          </div>
+          <el-link 
+            :type="row.status === 'completed' ? 'primary' : 'default'"
+            :underline="false"
+            @click="handleViewResult(row)"
+            :disabled="row.status !== 'completed'"
+            class="task-link"
+          >
+            {{ row.task_name }}
+          </el-link>
         </template>
       </el-table-column>
       
-      <el-table-column label="执行人" min-width="100">
+      <el-table-column label="执行人" align="center">
         <template #default="{ row }">
-          <div class="user-info">
-            <el-icon><User /></el-icon>
-            <span>{{ row.user_id || '-' }}</span>
-          </div>
+          {{ row.user_id || '-' }}
         </template>
       </el-table-column>
       
-      <el-table-column label="状态" min-width="200">
+      <el-table-column 
+        label="状态" 
+        align="center"
+        column-key="status"
+        :filters="statusFilters"
+        :filter-multiple="false"
+        min-width="140"
+      >
         <template #default="{ row }">
           <div class="status-wrapper">
-            <div class="status-badge" :class="row.status">
-              <el-icon v-if="row.status === 'pending'"><Clock /></el-icon>
-              <el-icon v-else-if="row.status === 'running'" class="is-loading"><Loading /></el-icon>
-              <el-icon v-else-if="row.status === 'completed'"><CircleCheck /></el-icon>
-              <el-icon v-else-if="row.status === 'failed'"><CircleClose /></el-icon>
-              <el-icon v-else><Remove /></el-icon>
-              <span>{{ getStatusName(row.status) }}</span>
-              <span v-if="row.status === 'running' && row.progress" class="progress-percent">({{ row.progress }}%)</span>
-            </div>
-            <el-progress 
-              v-if="row.status === 'running'" 
-              :percentage="row.progress || 0" 
-              :stroke-width="4"
-              :show-text="false"
-              class="task-progress"
-            />
-            <!-- 详细进度信息 -->
-            <div v-if="row.status === 'running' && row.progress_detail" class="progress-detail">
-              <div class="detail-row">
-                <span class="detail-label">{{ getStageName(row.progress_detail.stage) }}:</span>
-                <span class="detail-value">{{ row.progress_detail.step }}</span>
+            <span :class="['status-text', row.status]">
+              {{ getStatusName(row.status) }}
+            </span>
+            <!-- 运行中显示详细进度 -->
+            <template v-if="row.status === 'running'">
+              <div class="progress-info">
+                <el-progress 
+                  :percentage="row.progress || 0" 
+                  :stroke-width="4"
+                  :show-text="false"
+                  style="width: 80px;"
+                />
+                <span class="progress-percent">{{ row.progress || 0 }}%</span>
               </div>
-              <div class="detail-row" v-if="row.progress_detail.rows_loaded">
-                <span class="detail-label">已加载:</span>
-                <span class="detail-value">{{ formatRows(row.progress_detail.rows_loaded) }}</span>
+              <div class="stage-info" v-if="row.current_stage">
+                {{ getStageName(row.current_stage) }}
               </div>
-              <div class="detail-row" v-if="row.progress_detail.memory_mb">
-                <span class="detail-label">内存:</span>
-                <span class="detail-value">{{ formatMemory(row.progress_detail.memory_mb) }}</span>
-              </div>
-              <div class="detail-row" v-if="row.progress_detail.elapsed_secs || row.progress_detail.estimated_remaining_secs">
-                <span class="detail-label">时间:</span>
-                <span class="detail-value">
-                  {{ formatSeconds(row.progress_detail.elapsed_secs) }}
-                  <span v-if="row.progress_detail.estimated_remaining_secs" class="remaining-time">
-                    / 剩余 {{ formatSeconds(row.progress_detail.estimated_remaining_secs) }}
-                  </span>
-                </span>
-              </div>
-            </div>
+            </template>
           </div>
         </template>
       </el-table-column>
       
-      <el-table-column label="5日 Rank IC" min-width="100" align="center">
+      <el-table-column 
+        label="5日RankIC" 
+        align="center"
+        prop="rank_ic_5"
+        sortable="custom"
+      >
         <template #default="{ row }">
           <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 5))">
             {{ formatRankIc(getPeriodRankIc(row, 5)) }}
           </span>
-          <span v-else class="na-value">-</span>
+          <span v-else>-</span>
         </template>
       </el-table-column>
       
-      <el-table-column label="10日 Rank IC" min-width="100" align="center">
+      <el-table-column 
+        label="10日RankIC" 
+        align="center"
+        prop="rank_ic_10"
+        sortable="custom"
+      >
         <template #default="{ row }">
           <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 10))">
             {{ formatRankIc(getPeriodRankIc(row, 10)) }}
           </span>
-          <span v-else class="na-value">-</span>
+          <span v-else>-</span>
         </template>
       </el-table-column>
       
-      <el-table-column label="时间" min-width="150">
+      <el-table-column 
+        label="创建时间" 
+        align="center"
+        prop="created_at"
+        sortable="custom"
+      >
         <template #default="{ row }">
-          <div class="time-info">
-            <div class="time-row">
-              <span class="time-label">创建:</span>
-              <span>{{ formatDate(row.created_at) }}</span>
-            </div>
-            <div v-if="row.completed_at" class="time-row">
-              <span class="time-label">耗时:</span>
-              <span class="duration">{{ calcDuration(row.started_at, row.completed_at) }}</span>
-            </div>
-            <div v-else-if="row.status === 'running'" class="time-row">
-              <span class="running-indicator">运行中...</span>
-            </div>
-          </div>
+          {{ formatDate(row.created_at) }}
         </template>
       </el-table-column>
       
-      <el-table-column label="操作" min-width="180">
+      <el-table-column label="耗时" align="center">
         <template #default="{ row }">
-          <div class="action-buttons">
-            <el-button 
-              size="small"
-              @click="viewTaskDetail(row)"
-            >
-              详情
-            </el-button>
-            <el-button 
-              v-if="row.status === 'completed'"
-              type="primary"
-              size="small"
+          <span v-if="row.completed_at">{{ calcDuration(row.started_at, row.completed_at) }}</span>
+          <span v-else-if="row.status === 'running'" class="running-text">运行中</span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      
+      <el-table-column label="操作" min-width="90" align="center">
+        <template #default="{ row }">
+          <span style="display: inline-flex; gap: 12px; white-space: nowrap; font-size: 12px;">
+            <el-link type="primary" @click="viewTaskDetail(row)" :underline="false">详情</el-link>
+            <el-link 
+              v-if="row.status === 'completed'" 
+              type="success" 
               @click="handleViewResult(row)"
-            >
-              <el-icon><View /></el-icon>
-              结果
-            </el-button>
-            <el-button 
-              v-if="row.status === 'pending'"
-              type="danger"
-              size="small"
-              plain
+              :underline="false"
+            >结果</el-link>
+            <el-link 
+              v-if="row.status === 'pending'" 
+              type="danger" 
               @click="cancelTask(row)"
-            >
-              取消
-            </el-button>
-            <el-button 
-              v-if="row.status === 'failed'"
-              type="info"
-              size="small"
-              plain
+              :underline="false"
+            >取消</el-link>
+            <el-link 
+              v-if="row.status === 'failed'" 
+              type="warning" 
               @click="viewError(row)"
-            >
-              错误
-            </el-button>
-          </div>
+              :underline="false"
+            >错误</el-link>
+          </span>
         </template>
       </el-table-column>
     </el-table>
@@ -242,8 +219,8 @@
         :total="total"
         :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next"
-        @size-change="loadTasks"
-        @current-change="loadTasks"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
         background
       />
     </div>
@@ -295,6 +272,9 @@
                 <el-descriptions-item label="结束日期">{{ taskDetail.task_config.end_date }}</el-descriptions-item>
                 <el-descriptions-item label="股票池" :span="2">
                   {{ getUniverseDisplay(taskDetail.task_config.universe) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="比较基准" :span="2" v-if="taskDetail.task_config.backtest_params?.benchmarks?.length">
+                  {{ getBenchmarkDisplay(taskDetail.task_config.backtest_params.benchmarks) }}
                 </el-descriptions-item>
               </el-descriptions>
             </div>
@@ -401,8 +381,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Refresh, Clock, Loading, CircleCheck, CircleClose, 
-  Remove, View, Document, Setting, DataAnalysis, Connection, Warning, User
+  Refresh, Document, Setting, DataAnalysis, Connection, Warning
 } from '@element-plus/icons-vue'
 
 const emit = defineEmits<{
@@ -415,6 +394,30 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const filterStatus = ref('')
+const filterTaskType = ref('')
+const filterDateRange = ref<[string, string] | null>(null)
+const sortField = ref('created_at')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+// 表头筛选配置
+const statusFilters = [
+  { text: '等待执行', value: 'pending' },
+  { text: '正在执行', value: 'running' },
+  { text: '执行完成', value: 'completed' },
+  { text: '执行失败', value: 'failed' },
+  { text: '已取消', value: 'cancelled' }
+]
+
+const taskTypeFilters = [
+  { text: '单因子', value: 'single_factor' },
+  { text: '多因子', value: 'multi_factor' },
+  { text: '因子对比', value: 'factor_compare' }
+]
+
+// 是否有激活的筛选
+const hasActiveFilters = computed(() => {
+  return filterStatus.value || filterTaskType.value || filterDateRange.value
+})
 
 // 详情弹窗
 const detailDialogVisible = ref(false)
@@ -533,52 +536,76 @@ const getStageName = (stage: string) => {
   return map[stage] || stage
 }
 
-// 格式化数据行数
-const formatRows = (rows: number) => {
-  if (!rows) return '-'
-  if (rows >= 100000000) return `${(rows / 100000000).toFixed(1)}亿行`
-  if (rows >= 10000) return `${(rows / 10000).toFixed(1)}万行`
-  return `${rows}行`
+// 筛选变更处理
+const handleFilterChange = () => {
+  currentPage.value = 1
+  loadTasks()
 }
 
-// 格式化内存使用
-const formatMemory = (mb: number) => {
-  if (!mb) return '-'
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
-  return `${mb} MB`
+// 清除所有筛选
+const clearAllFilters = () => {
+  filterStatus.value = ''
+  filterTaskType.value = ''
+  filterDateRange.value = null
+  sortField.value = 'created_at'
+  sortOrder.value = 'desc'
+  currentPage.value = 1
+  loadTasks()
 }
 
-// 格式化秒数
-const formatSeconds = (secs: number) => {
-  if (!secs && secs !== 0) return '-'
-  if (secs < 60) return `${Math.round(secs)}秒`
-  if (secs < 3600) return `${Math.floor(secs / 60)}分${Math.round(secs % 60)}秒`
-  return `${Math.floor(secs / 3600)}时${Math.floor((secs % 3600) / 60)}分`
+// 表格排序事件处理
+const handleTableSortChange = ({ prop, order }: { prop: string, order: string | null }) => {
+  if (!order) {
+    // 取消排序，恢复默认
+    sortField.value = 'created_at'
+    sortOrder.value = 'desc'
+  } else {
+    sortField.value = prop
+    sortOrder.value = order === 'ascending' ? 'asc' : 'desc'
+  }
+  loadTasks()
+}
+
+// 表格筛选事件处理
+const handleTableFilterChange = (filters: Record<string, string[]>) => {
+  if (filters.status) {
+    filterStatus.value = filters.status[0] || ''
+  }
+  if (filters.task_type) {
+    filterTaskType.value = filters.task_type[0] || ''
+  }
+  currentPage.value = 1
+  loadTasks()
 }
 
 const loadTasks = async () => {
   loading.value = true
   try {
+    // 构建请求参数
+    const params: any = {
+      page: currentPage.value,
+      page_size: pageSize.value,
+      status: filterStatus.value || undefined,
+      task_type: filterTaskType.value || undefined,
+      sort_field: sortField.value || undefined,
+      sort_order: sortOrder.value || undefined
+    }
+    
+    // 日期范围筛选
+    if (filterDateRange.value && filterDateRange.value.length === 2) {
+      params.start_date = filterDateRange.value[0]
+      params.end_date = filterDateRange.value[1]
+    }
+    
     // 并行加载任务列表和统计数据
     const [result] = await Promise.all([
-      window.electronAPI.backtest.getTasks({
-        page: currentPage.value,
-        page_size: pageSize.value,
-        status: filterStatus.value || undefined
-      }),
-      loadStats()  // 同时加载统计数据
+      window.electronAPI.backtest.getTasks(params),
+      loadStats()
     ])
     
     if (result.success && result.data) {
       tasks.value = result.data.tasks || []
       total.value = result.data.total || 0
-      
-      // 调试：查看第一个已完成任务的数据结构
-      const completedTask = tasks.value.find(t => t.status === 'completed')
-      if (completedTask) {
-        console.log('已完成任务数据:', completedTask)
-        console.log('factor_result:', completedTask.factor_result)
-      }
       
       const hasRunning = tasks.value.some(t => t.status === 'running' || t.status === 'pending')
       hasRunning ? startPolling() : stopPolling()
@@ -602,6 +629,17 @@ const stopPolling = () => {
     clearInterval(pollTimer)
     pollTimer = null
   }
+}
+
+// 分页变化处理
+const handlePageChange = () => {
+  loadTasks()
+}
+
+// 每页数量变化处理
+const handlePageSizeChange = () => {
+  currentPage.value = 1
+  loadTasks()
 }
 
 const handleViewResult = (task: any) => {
@@ -695,10 +733,60 @@ const getStatusType = (status: string) => {
   return map[status] || 'info'
 }
 
+// 股票池和基准缓存
+const stockPoolCache = ref<Map<string, string>>(new Map())
+const benchmarkCache = ref<Map<string, string>>(new Map())
+
+// 加载股票池映射
+const loadStockPoolMapping = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getStockPools()
+    if (result.success && result.data) {
+      const cache = new Map<string, string>()
+      const data = result.data as any
+      if (data.index?.pools) {
+        data.index.pools.forEach((p: any) => cache.set(p.id, p.name))
+      }
+      if (data.industry?.pools) {
+        data.industry.pools.forEach((p: any) => cache.set(p.id, `申万-${p.name}`))
+      }
+      if (data.citic?.pools) {
+        data.citic.pools.forEach((p: any) => cache.set(p.id, `中信-${p.name}`))
+      }
+      if (Array.isArray(data)) {
+        data.forEach((p: any) => cache.set(p.id, p.name))
+      }
+      stockPoolCache.value = cache
+    }
+  } catch (error) {
+    console.error('加载股票池映射失败:', error)
+  }
+}
+
+// 加载基准映射
+const loadBenchmarkMapping = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getPriceTypeOptions()
+    if (result.success && result.data?.benchmarks) {
+      const cache = new Map<string, string>()
+      result.data.benchmarks.forEach((b: any) => cache.set(b.value, b.label))
+      benchmarkCache.value = cache
+    }
+  } catch (error) {
+    console.error('加载基准映射失败:', error)
+  }
+}
+
 // 获取股票池显示
 const getUniverseDisplay = (universe: any) => {
   if (!universe) return '-'
   if (universe.type === 'preset') {
+    const presetName = universe.preset_name
+    // 先从缓存查找
+    if (stockPoolCache.value.has(presetName)) {
+      return stockPoolCache.value.get(presetName)
+    }
+    // 兜底映射
     const names: Record<string, string> = {
       'all': '全市场',
       'hs300': '沪深300',
@@ -707,9 +795,26 @@ const getUniverseDisplay = (universe: any) => {
       'sz50': '上证50',
       'zz2000': '中证2000'
     }
-    return names[universe.preset_name] || universe.preset_name
+    return names[presetName] || presetName
   }
   return '自定义股票池'
+}
+
+// 获取比较基准显示
+const getBenchmarkDisplay = (benchmarks: string[]) => {
+  if (!benchmarks?.length) return '-'
+  return benchmarks.map(code => {
+    if (benchmarkCache.value.has(code)) {
+      return benchmarkCache.value.get(code)
+    }
+    const map: Record<string, string> = {
+      'SH.000300': '沪深300',
+      'SH.000905': '中证500',
+      'SH.000852': '中证1000',
+      'SH.000688': '科创50'
+    }
+    return map[code] || code
+  }).join('、')
 }
 
 // 获取因子方向名称
@@ -743,7 +848,11 @@ const getSellPriceTypeName = (type: string) => {
   return map[type] || type
 }
 
-onMounted(() => loadTasks())
+onMounted(() => {
+  loadTasks()
+  loadStockPoolMapping()
+  loadBenchmarkMapping()
+})
 onUnmounted(() => stopPolling())
 </script>
 
@@ -754,56 +863,244 @@ onUnmounted(() => stopPolling())
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+    
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
   }
   
   .stats-row {
     display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 16px;
+    margin-bottom: 20px;
     
     .stat-card {
       background: #fff;
-      border: 1px solid #ebeef5;
-      border-radius: 6px;
-      padding: 10px 20px;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 24px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       transition: all 0.3s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       
       &:hover {
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
       }
       
       .stat-value {
-        font-size: 22px;
+        font-size: 26px;
         font-weight: 700;
-        color: #303133;
+        color: #1e293b;
         line-height: 1;
       }
       
       .stat-label {
         font-size: 13px;
-        color: #909399;
+        color: #64748b;
+        font-weight: 500;
       }
       
       &.running {
-        border-left: 3px solid #409eff;
-        .stat-value { color: #409eff; }
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        .stat-value { color: #2563eb; }
       }
       
       &.completed {
-        border-left: 3px solid #67c23a;
-        .stat-value { color: #67c23a; }
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        .stat-value { color: #16a34a; }
       }
       
       &.failed {
-        border-left: 3px solid #f56c6c;
-        .stat-value { color: #f56c6c; }
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        .stat-value { color: #dc2626; }
       }
     }
   }
   
+  // 现代风格表格
+  .modern-table {
+    font-size: 12px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    
+    // 去除默认边框
+    :deep(.el-table__inner-wrapper::before) {
+      display: none;
+    }
+    
+    // 表头样式
+    :deep(.el-table__header-wrapper) {
+      th {
+        border: none !important;
+        
+        .cell {
+          white-space: nowrap;
+        }
+        
+        // 筛选图标样式
+        .el-table__column-filter-trigger {
+          color: #94a3b8;
+          
+          &:hover {
+            color: #475569;
+          }
+        }
+        
+        // 排序图标样式
+        .caret-wrapper {
+          .sort-caret {
+            border-bottom-color: #cbd5e1;
+            border-top-color: #cbd5e1;
+            
+            &.ascending {
+              border-bottom-color: #3b82f6;
+            }
+            
+            &.descending {
+              border-top-color: #3b82f6;
+            }
+          }
+        }
+      }
+    }
+    
+    // 表格主体
+    :deep(.el-table__body-wrapper) {
+      .el-table__body {
+        border-spacing: 0;
+      }
+    }
+    
+    // 斑马纹颜色 - 更柔和
+    :deep(.el-table__row--striped) {
+      td {
+        background: #f8fafc !important;
+      }
+    }
+    
+    // 普通行
+    :deep(.el-table__row) {
+      td {
+        border: none !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+      }
+    }
+    
+    // 鼠标悬停 - 柔和的蓝色
+    :deep(.el-table__body tr:hover > td) {
+      background: #eff6ff !important;
+    }
+    
+    // 任务名称链接
+    .task-link {
+      font-weight: 400;
+      color: #3b82f6;
+      font-size: 12px;
+      transition: all 0.2s;
+      
+      &:hover {
+        color: #2563eb;
+      }
+    }
+    
+    // 状态包装器
+    .status-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      
+      .progress-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        
+        .progress-percent {
+          font-size: 11px;
+          color: #2563eb;
+          font-weight: 500;
+        }
+      }
+      
+      .stage-info {
+        font-size: 11px;
+        color: #64748b;
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 3px;
+      }
+    }
+    
+    // 状态文字 - 使用圆角标签样式
+    .status-text {
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      
+      &.pending { 
+        color: #d97706; 
+        background: #fef3c7;
+      }
+      &.running { 
+        color: #2563eb; 
+        background: #dbeafe;
+      }
+      &.completed { 
+        color: #16a34a; 
+        background: #dcfce7;
+      }
+      &.failed { 
+        color: #dc2626; 
+        background: #fee2e2;
+      }
+      &.cancelled { 
+        color: #64748b; 
+        background: #f1f5f9;
+      }
+    }
+    
+    // 运行中文字动画
+    .running-text {
+      color: #3b82f6;
+      animation: pulse 1.5s infinite;
+    }
+    
+    // Rank IC 数值样式
+    .rank-ic-good {
+      color: #16a34a;
+      font-weight: 600;
+    }
+    
+    .rank-ic-bad {
+      color: #dc2626;
+      font-weight: 600;
+    }
+    
+    .rank-ic-neutral {
+      color: #64748b;
+    }
+    
+  }
+  
+  // 兼容旧样式（保留部分）
   .task-table {
     border-radius: 8px;
     overflow: hidden;

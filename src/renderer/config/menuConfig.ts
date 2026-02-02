@@ -63,6 +63,7 @@ export const allMenus: MenuItem[] = [
       { id: 'my_factors', name: '我的因子', path: '/factor-library/my-factors', icon: null },
       { id: 'factor_plaza', name: '因子广场', path: '/factor-library/plaza', icon: null },
       { id: 'factor_submit', name: '因子提交', path: '/factor-library/submit', icon: null },
+      { id: 'research_results', name: '研究成果', path: '/factor-library/research-results', icon: null },
       { 
         id: 'factor_backtest', 
         name: '因子回测', 

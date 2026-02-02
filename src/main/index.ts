@@ -2927,8 +2927,35 @@ ipcMain.handle('factor:myCreate', async (_event, data: any) => {
   }
 })
 
+// 批量创建因子
+ipcMain.handle('factor:myBatchCreate', async (_event, factors: any[]) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/batch-create`,
+      { factors },
+      {
+        headers: { 
+          'X-API-Key': apiKey, 
+          'Content-Type': 'application/json' 
+        },
+        timeout: 60000  // 批量操作超时时间延长到60秒
+      }
+    )
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('批量创建因子失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
 // 获取因子详情
-ipcMain.handle('factor:myDetail', async (_event, factorId: number) => {
+ipcMain.handle('factor:myDetail', async (_event, factorId: string | number) => {
   try {
     const apiKey = getDefaultApiKeyForMyFactor()
     if (!apiKey) {
@@ -2951,7 +2978,7 @@ ipcMain.handle('factor:myDetail', async (_event, factorId: number) => {
 })
 
 // 更新因子
-ipcMain.handle('factor:myUpdate', async (_event, factorId: number, data: any) => {
+ipcMain.handle('factor:myUpdate', async (_event, factorId: string | number, data: any) => {
   try {
     const apiKey = getDefaultApiKeyForMyFactor()
     if (!apiKey) {
@@ -2978,7 +3005,7 @@ ipcMain.handle('factor:myUpdate', async (_event, factorId: number, data: any) =>
 })
 
 // 删除因子
-ipcMain.handle('factor:myDelete', async (_event, factorId: number) => {
+ipcMain.handle('factor:myDelete', async (_event, factorId: string | number) => {
   try {
     const apiKey = getDefaultApiKeyForMyFactor()
     if (!apiKey) {
@@ -3192,6 +3219,7 @@ ipcMain.handle('factor:myBacktest', async (_event, data: any) => {
     }
     
     console.log('发起因子回测请求:', JSON.stringify(data, null, 2))
+    console.log('📊 benchmarks:', data.backtest_params?.benchmarks)
     
     const axios = require('axios')
     const response = await axios.post(
@@ -3222,7 +3250,7 @@ ipcMain.handle('factor:myBacktest', async (_event, data: any) => {
 })
 
 // 获取因子回测历史
-ipcMain.handle('factor:myBacktestHistory', async (_event, factorId: number) => {
+ipcMain.handle('factor:myBacktestHistory', async (_event, factorId: string | number) => {
   try {
     const apiKey = getDefaultApiKeyForMyFactor()
     if (!apiKey) {
@@ -4625,7 +4653,16 @@ ipcMain.handle('backtest:submit', async (_event, data: any) => {
 })
 
 // 回测: 获取任务列表
-ipcMain.handle('backtest:getTasks', async (_event, params: { page?: number; page_size?: number; status?: string }) => {
+ipcMain.handle('backtest:getTasks', async (_event, params: { 
+  page?: number
+  page_size?: number
+  status?: string
+  task_type?: string
+  start_date?: string
+  end_date?: string
+  sort_field?: string
+  sort_order?: string
+}) => {
   try {
     const apiKey = getDefaultApiKeyForBacktest()
     if (!apiKey) {
@@ -4639,7 +4676,12 @@ ipcMain.handle('backtest:getTasks', async (_event, params: { page?: number; page
         params: {
           page: params.page || 1,
           page_size: params.page_size || 20,
-          status: params.status || undefined
+          status: params.status || undefined,
+          task_type: params.task_type || undefined,
+          start_date: params.start_date || undefined,
+          end_date: params.end_date || undefined,
+          sort_field: params.sort_field || undefined,
+          sort_order: params.sort_order || undefined
         },
         headers: {
           'X-API-Key': apiKey
@@ -4862,7 +4904,7 @@ ipcMain.handle('backtest:report', async (_event, taskId: string, _options?: Reco
           'X-API-Key': apiKey
         },
         responseType: 'arraybuffer',  // 重要：以二进制接收
-        timeout: 180000  // 报告生成可能需要较长时间
+        timeout: 600000  // 报告生成可能需要较长时间（10分钟）
       }
     )
     
@@ -4939,6 +4981,231 @@ ipcMain.handle('backtest:getStockPools', async () => {
     }
   } catch (error: any) {
     console.error('❌ 获取股票池列表失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 获取价格类型选项
+ipcMain.handle('backtest:getPriceTypeOptions', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/price-type-options`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取价格类型选项失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取价格类型选项失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// ============================================
+// 研究成果模块 IPC Handlers
+// ============================================
+
+const RESEARCH_API_BASE = 'http://61.151.241.233:8080/api/v1/research'
+
+// 研究成果: 获取列表
+ipcMain.handle('research:getList', async (_event, params: {
+  page?: number
+  page_size?: number
+  created_by?: string
+  status?: string
+  keyword?: string
+  sort_by?: string
+  sort_order?: string
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    console.log('📊 研究成果API请求:')
+    console.log('  URL:', `${RESEARCH_API_BASE}/list`)
+    console.log('  API Key:', apiKey?.substring(0, 10) + '...')
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${RESEARCH_API_BASE}/list`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        params: {
+          page: params.page || 1,
+          page_size: params.page_size || 20,
+          created_by: params.created_by,
+          status: params.status,
+          keyword: params.keyword,
+          sort_by: params.sort_by || 'updated_at',
+          sort_order: params.sort_order || 'desc'
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取研究成果列表失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取研究成果列表失败:', error.response?.status, error.response?.data || error.message)
+    if (error.response?.status === 401) {
+      return { success: false, error: 'API Key 无效或无权限 (401)' }
+    }
+    if (error.response?.status === 403) {
+      return { success: false, error: '无权访问研究成果 (403)' }
+    }
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+  }
+})
+
+// 研究成果: 获取详情
+ipcMain.handle('research:getDetail', async (_event, factorId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${RESEARCH_API_BASE}/${factorId}`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取研究成果详情失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取研究成果详情失败:', error)
+    if (error.response?.status === 403) {
+      return { success: false, error: '无权访问该研究成果' }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 研究成果: 获取统计信息
+ipcMain.handle('research:getStats', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${RESEARCH_API_BASE}/stats`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取统计信息失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取研究成果统计失败:', error)
+    if (error.response?.status === 403) {
+      return { success: false, error: '无权访问研究成果' }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 研究成果: 获取研究员列表
+ipcMain.handle('research:getResearchers', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${RESEARCH_API_BASE}/researchers`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, researchers: response.data.researchers }
+    } else {
+      return { success: false, error: response.data.error || '获取研究员列表失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取研究员列表失败:', error)
+    if (error.response?.status === 403) {
+      return { success: false, error: '无权访问研究成果' }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 研究成果: 获取回测结果
+ipcMain.handle('research:getResult', async (_event, factorId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${RESEARCH_API_BASE}/${factorId}/result`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取回测结果失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取回测结果失败:', error)
+    if (error.response?.status === 403) {
+      return { success: false, error: '无权访问该研究成果' }
+    }
     return { success: false, error: error.message || '网络错误' }
   }
 })

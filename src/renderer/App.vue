@@ -493,6 +493,7 @@ const pageTitle = computed(() => {
     '/factor-library/backtest/tasks': '因子回测',
     '/factor-library/backtest/result': '因子回测',
     '/factor-library/backtest/expression-dict': '因子回测',
+    '/factor-library/research-results': '研究成果',
     '/fund-management': '基金管理',
     '/fund-management/list': '基金列表',
     '/fund-management/performance': '业绩分析',

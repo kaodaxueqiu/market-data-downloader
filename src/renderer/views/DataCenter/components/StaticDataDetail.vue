@@ -276,23 +276,7 @@ const rightFields = computed(() => {
   return filteredFields.value.slice(half)
 })
 
-// 监听数据源变化，加载字段
-watch(() => props.source, async (newSource) => {
-  if (newSource) {
-    await loadFields()
-  } else {
-    fields.value = []
-    selectedFieldsLocal.value = []
-    tableDetailData.value = null
-  }
-}, { immediate: true })
-
-// 监听外部字段变化
-watch(() => props.selectedFields, (newFields) => {
-  selectedFieldsLocal.value = [...newFields]
-})
-
-// 加载字段（使用getTableDetail获取完整信息）
+// 加载字段（使用getTableDetail获取完整信息）- 必须在 watch 之前定义
 const loadFields = async () => {
   fieldsLoading.value = true
   try {
@@ -319,6 +303,22 @@ const loadFields = async () => {
     fieldsLoading.value = false
   }
 }
+
+// 监听数据源变化，加载字段
+watch(() => props.source, async (newSource) => {
+  if (newSource) {
+    await loadFields()
+  } else {
+    fields.value = []
+    selectedFieldsLocal.value = []
+    tableDetailData.value = null
+  }
+}, { immediate: true })
+
+// 监听外部字段变化
+watch(() => props.selectedFields, (newFields) => {
+  selectedFieldsLocal.value = [...newFields]
+})
 
 // 显示详情对话框
 const showDetailDialog = async () => {

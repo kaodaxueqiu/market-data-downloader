@@ -187,9 +187,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('factor:myList', params || {}),
     myCreate: (data: { factor_code: string; factor_name: string; category_l3_id: number; expression: string; factor_name_en?: string; description?: string; data_sources?: Record<string, string[]>; lookback_period?: number }) =>
       ipcRenderer.invoke('factor:myCreate', data),
-    myDetail: (factorId: number) => ipcRenderer.invoke('factor:myDetail', factorId),
-    myUpdate: (factorId: number, data: any) => ipcRenderer.invoke('factor:myUpdate', factorId, data),
-    myDelete: (factorId: number) => ipcRenderer.invoke('factor:myDelete', factorId),
+    myBatchCreate: (factors: any[]) => ipcRenderer.invoke('factor:myBatchCreate', factors),
+    myDetail: (factorId: string | number) => ipcRenderer.invoke('factor:myDetail', factorId),
+    myUpdate: (factorId: string | number, data: any) => ipcRenderer.invoke('factor:myUpdate', factorId, data),
+    myDelete: (factorId: string | number) => ipcRenderer.invoke('factor:myDelete', factorId),
     // 分类管理
     myCategoryCreate: (level: 1 | 2 | 3, data: any) => ipcRenderer.invoke('factor:myCategoryCreate', level, data),
     myCategoryUpdate: (level: 1 | 2 | 3, id: number, data: any) => ipcRenderer.invoke('factor:myCategoryUpdate', level, id, data),
@@ -202,7 +203,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 因子回测
     myBacktest: (data: any) => ipcRenderer.invoke('factor:myBacktest', data),
     // 因子回测历史
-    myBacktestHistory: (factorId: number) => ipcRenderer.invoke('factor:myBacktestHistory', factorId),
+    myBacktestHistory: (factorId: string | number) => ipcRenderer.invoke('factor:myBacktestHistory', factorId),
     // 表达式字典
     getExpressionFunctions: (category?: string) => ipcRenderer.invoke('factor:getExpressionFunctions', category),
     getExpressionFunctionList: () => ipcRenderer.invoke('factor:getExpressionFunctionList')
@@ -219,10 +220,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:getDailyMetrics', taskId, params),
     cancelTask: (taskId: string) => ipcRenderer.invoke('backtest:cancelTask', taskId),
     getStockPools: () => ipcRenderer.invoke('backtest:getStockPools'),
+    getPriceTypeOptions: () => ipcRenderer.invoke('backtest:getPriceTypeOptions'),
     download: (taskId: string, options?: { format?: 'csv' | 'xlsx'; type?: 'summary' | 'daily' | 'all'; period?: number }) =>
       ipcRenderer.invoke('backtest:download', taskId, options),
     report: (taskId: string, options?: { period?: number }) =>
       ipcRenderer.invoke('backtest:report', taskId, options)
+  },
+
+  // 研究成果API
+  research: {
+    getList: (params?: { page?: number; page_size?: number; created_by?: string; status?: string; keyword?: string; sort_by?: string; sort_order?: string }) =>
+      ipcRenderer.invoke('research:getList', params || {}),
+    getDetail: (factorId: string) => ipcRenderer.invoke('research:getDetail', factorId),
+    getStats: () => ipcRenderer.invoke('research:getStats'),
+    getResearchers: () => ipcRenderer.invoke('research:getResearchers'),
+    getResult: (factorId: string) => ipcRenderer.invoke('research:getResult', factorId)
   },
 
   // 数据工单API
@@ -633,10 +645,11 @@ declare global {
         myInit: () => Promise<{ success: boolean; data?: { database_name: string }; message?: string; error?: string }>
         myCategories: () => Promise<{ success: boolean; data?: any[]; error?: string }>
         myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
-        myCreate: (data: any) => Promise<{ success: boolean; data?: { factor_id: number; factor_code: string }; message?: string; error?: string }>
-        myDetail: (factorId: number) => Promise<{ success: boolean; data?: any; error?: string }>
-        myUpdate: (factorId: number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
-        myDelete: (factorId: number) => Promise<{ success: boolean; message?: string; error?: string }>
+        myCreate: (data: any) => Promise<{ success: boolean; data?: { factor_id: string | number; factor_code: string }; message?: string; error?: string }>
+        myBatchCreate: (factors: any[]) => Promise<{ success: boolean; data?: { total: number; success_count: number; fail_count: number; results: Array<{ factor_code: string; factor_id?: string | number; success: boolean; error?: string }> }; error?: string }>
+        myDetail: (factorId: string | number) => Promise<{ success: boolean; data?: any; error?: string }>
+        myUpdate: (factorId: string | number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
+        myDelete: (factorId: string | number) => Promise<{ success: boolean; message?: string; error?: string }>
         // 分类管理
         myCategoryCreate: (level: 1 | 2 | 3, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
         myCategoryUpdate: (level: 1 | 2 | 3, id: number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
@@ -649,7 +662,7 @@ declare global {
         // 因子回测
         myBacktest: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         // 因子回测历史
-        myBacktestHistory: (factorId: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        myBacktestHistory: (factorId: string | number) => Promise<{ success: boolean; data?: any; error?: string }>
         // 表达式字典
         getExpressionFunctions: (category?: string) => Promise<{ success: boolean; data?: any; error?: string }>
         getExpressionFunctionList: () => Promise<{ success: boolean; data?: any[]; error?: string }>
@@ -661,9 +674,17 @@ declare global {
         getResult: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         cancelTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
+        getPriceTypeOptions: () => Promise<{ success: boolean; data?: { buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }> }; error?: string }>
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         download: (taskId: string, options: { format: 'csv' | 'xlsx'; type: 'summary' | 'daily' | 'all'; period?: number }) => Promise<{ success: boolean; filePath?: string; error?: string }>
         report: (taskId: string, options: any) => Promise<{ success: boolean; filePath?: string; error?: string }>
+      }
+      research: {
+        getList: (params?: { page?: number; page_size?: number; created_by?: string; status?: string; keyword?: string; sort_by?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getDetail: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getStats: () => Promise<{ success: boolean; data?: any; error?: string }>
+        getResearchers: () => Promise<{ success: boolean; researchers?: string[]; error?: string }>
+        getResult: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }
       workorder: {
         getStats: () => Promise<{ success: boolean; data?: any; error?: string }>

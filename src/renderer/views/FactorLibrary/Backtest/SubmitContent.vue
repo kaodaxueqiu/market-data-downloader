@@ -250,44 +250,61 @@
               <el-icon class="section-icon"><Grid /></el-icon>
               <span>股票池配置</span>
             </div>
-            <div class="section-body">
-              <el-form-item label="股票池">
-                <el-segmented v-model="formData.universe.type" :options="universeTypeOptions" />
-              </el-form-item>
-              
-              <el-form-item v-if="formData.universe.type === 'preset'" label="预设池">
-                <el-select 
-                  v-model="formData.universe.preset_name" 
-                  style="width: 100%;"
-                  :loading="stockPoolsLoading"
-                >
-                  <el-option
-                    v-for="pool in stockPools"
-                    :key="pool.id"
-                    :label="`${pool.name} (${pool.start_date}起)`"
-                    :value="pool.id"
-                  />
-                </el-select>
-              </el-form-item>
-              
-              <el-form-item v-else label="上传文件">
-                <el-upload
-                  :auto-upload="false"
-                  :limit="1"
-                  accept=".csv,.xlsx"
-                  :on-change="handleStockFileChange"
-                >
-                  <el-button type="primary">选择文件</el-button>
-                  <template #tip>
-                    <div class="el-upload__tip">支持 CSV/Excel，第一列为 stock_code</div>
-                  </template>
-                </el-upload>
-                <div v-if="formData.universe.custom_file" class="uploaded-file">
-                  <el-tag closable @close="formData.universe.custom_file = null">
-                    {{ formData.universe.custom_file.filename }}
-                  </el-tag>
-                </div>
-              </el-form-item>
+            <div class="section-body stock-pool-section">
+              <!-- Tab 切换 -->
+              <el-tabs v-model="stockPoolTab" @tab-change="handleStockPoolTabChange" class="stock-pool-tabs">
+                <el-tab-pane label="标准指数维度" name="index">
+                  <div class="pool-radio-group" v-loading="stockPoolsLoading">
+                    <el-radio-group v-model="formData.universe.preset_name" class="pool-radio-list">
+                      <el-radio 
+                        v-for="pool in stockPoolData?.index?.pools || []" 
+                        :key="pool.id" 
+                        :value="pool.id"
+                        class="pool-radio-item"
+                      >
+                        {{ pool.name }} <span class="pool-date">({{ pool.start_date }}起)</span>
+                      </el-radio>
+                    </el-radio-group>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="申万行业维度" name="industry">
+                  <div class="pool-radio-group" v-loading="stockPoolsLoading">
+                    <el-radio-group v-model="formData.universe.preset_name" class="pool-radio-grid">
+                      <el-radio 
+                        v-for="pool in stockPoolData?.industry?.pools || []" 
+                        :key="pool.id" 
+                        :value="pool.id"
+                        class="pool-radio-item"
+                      >
+                        {{ pool.name }}
+                      </el-radio>
+                    </el-radio-group>
+                    <el-empty v-if="!stockPoolData?.industry?.pools?.length && !stockPoolsLoading" description="暂无行业数据" :image-size="60" />
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="自定义" name="custom">
+                  <div class="custom-upload-area">
+                    <el-upload
+                      :auto-upload="false"
+                      :show-file-list="false"
+                      accept=".csv,.xlsx,.xls"
+                      :on-change="handleStockFileChange"
+                      drag
+                    >
+                      <el-icon class="el-icon--upload"><Upload /></el-icon>
+                      <div class="el-upload__text">拖拽文件到此处，或 <em>点击上传</em></div>
+                      <template #tip>
+                        <div class="el-upload__tip">支持 CSV/Excel，第一列为 stock_code</div>
+                      </template>
+                    </el-upload>
+                    <div v-if="formData.universe.custom_file" class="uploaded-file">
+                      <el-tag closable @close="formData.universe.custom_file = null" size="large">
+                        {{ formData.universe.custom_file.filename }}
+                      </el-tag>
+                    </div>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
             </div>
           </div>
 
@@ -333,9 +350,12 @@
                 <el-col :span="12">
                   <el-form-item label="买入价格">
                     <el-select v-model="formData.backtest_params.buy_price_type" style="width: 100%;">
-                      <el-option label="日线开盘价" value="daily_open" />
-                      <el-option label="30分钟VWAP (9:30-10:00)" value="vwap_30min" />
-                      <el-option label="60分钟VWAP (9:30-10:30)" value="vwap_60min" />
+                      <el-option 
+                        v-for="opt in buyPriceTypes" 
+                        :key="opt.value" 
+                        :label="opt.label" 
+                        :value="opt.value" 
+                      />
                     </el-select>
                     <div class="form-hint">
                       <el-icon><InfoFilled /></el-icon>
@@ -346,10 +366,12 @@
                 <el-col :span="12">
                   <el-form-item label="卖出价格">
                     <el-select v-model="formData.backtest_params.sell_price_type" style="width: 100%;">
-                      <el-option label="日线收盘价" value="daily_close" />
-                      <el-option label="日线全天VWAP" value="daily_vwap" />
-                      <el-option label="30分钟VWAP (14:30-15:00)" value="vwap_30min" />
-                      <el-option label="60分钟VWAP (14:00-15:00)" value="vwap_60min" />
+                      <el-option 
+                        v-for="opt in sellPriceTypes" 
+                        :key="opt.value" 
+                        :label="opt.label" 
+                        :value="opt.value" 
+                      />
                     </el-select>
                     <div class="form-hint">
                       <el-icon><InfoFilled /></el-icon>
@@ -358,6 +380,26 @@
                   </el-form-item>
                 </el-col>
               </el-row>
+              
+              <el-form-item label="基准指数">
+                <el-checkbox-group v-model="selectedBenchmarks">
+                  <el-checkbox 
+                    v-for="opt in benchmarkOptions" 
+                    :key="opt.value" 
+                    :label="opt.value"
+                  >
+                    {{ opt.label }}
+                  </el-checkbox>
+                </el-checkbox-group>
+                <div class="form-hint" v-if="benchmarkOptions.length === 0">
+                  <el-icon><InfoFilled /></el-icon>
+                  正在加载基准指数选项...
+                </div>
+                <div class="form-hint" v-else>
+                  <el-icon><InfoFilled /></el-icon>
+                  选择基准指数计算超额收益，可多选，不选则不计算超额
+                </div>
+              </el-form-item>
             </div>
           </div>
 
@@ -577,8 +619,41 @@ interface StockPool {
   description: string
   start_date: string
 }
-const stockPools = ref<StockPool[]>([])
+interface StockPoolGroup {
+  name: string
+  pools: StockPool[]
+}
+interface StockPoolData {
+  index: StockPoolGroup
+  industry: StockPoolGroup
+  custom: StockPoolGroup
+}
+const stockPoolData = ref<StockPoolData | null>(null)
 const stockPoolsLoading = ref(false)
+const stockPoolTab = ref('index') // 当前选中的 Tab: index / industry / custom
+
+// 价格类型选项
+interface PriceTypeOption {
+  value: string
+  label: string
+  description?: string
+  category?: string
+}
+const buyPriceTypes = ref<PriceTypeOption[]>([
+  { value: 'daily_open', label: '日线开盘价' }
+])
+const sellPriceTypes = ref<PriceTypeOption[]>([
+  { value: 'daily_close', label: '日线收盘价' }
+])
+
+// 基准指数选项
+interface BenchmarkOption {
+  value: string
+  label: string
+  description?: string
+}
+const benchmarkOptions = ref<BenchmarkOption[]>([])
+const selectedBenchmarks = ref<string[]>([])
 
 // 表搜索和字段列表
 const tableMetaMap = ref<Record<string, any>>({}) // 表元数据，key: table_name
@@ -630,11 +705,6 @@ const factorSourceOptions = [
   { label: 'Python代码', value: 'code' }
 ]
 
-const universeTypeOptions = [
-  { label: '预设股票池', value: 'preset' },
-  { label: '自定义', value: 'custom' }
-]
-
 // 计算选项
 const calcOptions = ref([
   'calc_ic', 'calc_rank_ic', 'calc_layer_return',
@@ -675,7 +745,8 @@ const formData = reactive({
     forward_periods: [1, 5, 10, 20],
     factor_direction: 'auto',
     buy_price_type: 'daily_open',
-    sell_price_type: 'daily_close'
+    sell_price_type: 'daily_close',
+    benchmarks: [] as string[]
   }
 })
 
@@ -1215,7 +1286,10 @@ const handleSubmit = async () => {
         end_date: dateRange.value[1],
         data_sources: formData.data_sources,
         universe: formData.universe,
-        backtest_params: formData.backtest_params,
+        backtest_params: {
+          ...formData.backtest_params,
+          benchmarks: selectedBenchmarks.value
+        },
         calc_options: {
           calc_ic: calcOptions.value.includes('calc_ic'),
           calc_rank_ic: calcOptions.value.includes('calc_rank_ic'),
@@ -1255,28 +1329,75 @@ const loadStockPools = async () => {
   try {
     const result = await window.electronAPI.backtest.getStockPools()
     if (result.success && result.data) {
-      stockPools.value = result.data
-      // 如果当前选中的股票池不在列表中，设置为第一个
-      if (result.data.length > 0) {
-        const currentPool = result.data.find((p: StockPool) => p.id === formData.universe.preset_name)
-        if (!currentPool) {
-          formData.universe.preset_name = result.data[0].id
+      const data = result.data as any
+      // 新格式：按维度分组
+      if (data.index || data.industry) {
+        stockPoolData.value = data as StockPoolData
+        // 如果当前选中的股票池不在当前维度中，设置为第一个
+        const pools = stockPoolData.value[stockPoolTab.value as keyof StockPoolData]?.pools || []
+        if (pools.length > 0) {
+          const currentPool = pools.find((p: StockPool) => p.id === formData.universe.preset_name)
+          if (!currentPool) {
+            formData.universe.preset_name = pools[0].id
+          }
+        }
+      } else if (Array.isArray(result.data)) {
+        // 兼容旧格式：数组
+        stockPoolData.value = {
+          index: { name: '标准指数维度', pools: result.data },
+          industry: { name: '申万行业维度', pools: [] },
+          custom: { name: '自定义', pools: [] }
         }
       }
     } else {
       // 接口失败时使用默认选项
-      stockPools.value = [
-        { id: 'all', name: '全市场', description: '所有A股', start_date: '2001-01-02' }
-      ]
+      stockPoolData.value = {
+        index: { name: '标准指数维度', pools: [{ id: 'all', name: '全市场', description: '所有A股', start_date: '2001-01-02' }] },
+        industry: { name: '申万行业维度', pools: [] },
+        custom: { name: '自定义', pools: [] }
+      }
     }
   } catch (error) {
     console.error('加载股票池失败:', error)
     // 失败时使用默认选项
-    stockPools.value = [
-      { id: 'all', name: '全市场', description: '所有A股', start_date: '2001-01-02' }
-    ]
+    stockPoolData.value = {
+      index: { name: '标准指数维度', pools: [{ id: 'all', name: '全市场', description: '所有A股', start_date: '2001-01-02' }] },
+      industry: { name: '申万行业维度', pools: [] },
+      custom: { name: '自定义', pools: [] }
+    }
   } finally {
     stockPoolsLoading.value = false
+  }
+}
+
+// 切换股票池维度
+const handleStockPoolTabChange = (tab: string) => {
+  stockPoolTab.value = tab
+  if (tab === 'custom') {
+    formData.universe.type = 'custom'
+  } else {
+    formData.universe.type = 'preset'
+    // 设置为当前维度的第一个股票池
+    const pools = stockPoolData.value?.[tab as keyof StockPoolData]?.pools || []
+    if (pools.length > 0) {
+      formData.universe.preset_name = pools[0].id
+    }
+  }
+}
+
+// 加载价格类型选项和基准指数
+const loadPriceTypeOptions = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getPriceTypeOptions()
+    console.log('📊 价格类型选项接口返回:', result)
+    if (result.success && result.data) {
+      buyPriceTypes.value = result.data.buy_price_types || []
+      sellPriceTypes.value = result.data.sell_price_types || []
+      benchmarkOptions.value = result.data.benchmarks || []
+      console.log('📊 基准指数选项:', benchmarkOptions.value)
+    }
+  } catch (error) {
+    console.error('加载价格类型选项失败:', error)
   }
 }
 
@@ -1284,6 +1405,7 @@ onMounted(async () => {
   // 初始化 API Key
   await initApiKey()
   loadStockPools()
+  loadPriceTypeOptions()
 })
 
 // 初始化 API Key
@@ -2026,6 +2148,142 @@ const initApiKey = async () => {
           }
         }
       }
+    }
+  }
+}
+
+// 股票池 Tab 样式
+.stock-pool-section {
+  padding: 0 !important;
+  
+  .stock-pool-tabs {
+    :deep(.el-tabs__header) {
+      margin: 0;
+      padding: 0 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      
+      .el-tabs__nav-wrap::after {
+        display: none;
+      }
+      
+      .el-tabs__item {
+        padding: 12px 20px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #64748b;
+        
+        &.is-active {
+          color: #0284c7;
+        }
+        
+        &:hover {
+          color: #0284c7;
+        }
+      }
+      
+      .el-tabs__active-bar {
+        background-color: #0284c7;
+      }
+    }
+    
+    :deep(.el-tabs__content) {
+      padding: 16px;
+    }
+  }
+  
+  .pool-radio-group {
+    min-height: 120px;
+  }
+  
+  .pool-radio-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    
+    .pool-radio-item {
+      margin: 0;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      
+      &:hover {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+      }
+      
+      :deep(.el-radio__label) {
+        font-size: 13px;
+        color: #334155;
+      }
+      
+      .pool-date {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+    }
+  }
+  
+  .pool-radio-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    
+    .pool-radio-item {
+      margin: 0;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      
+      &:hover {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+      }
+      
+      :deep(.el-radio__label) {
+        font-size: 13px;
+        color: #334155;
+      }
+    }
+  }
+  
+  .custom-upload-area {
+    min-height: 150px;
+    
+    :deep(.el-upload-dragger) {
+      padding: 30px 20px;
+      border-radius: 8px;
+      border: 2px dashed #e2e8f0;
+      background: #fafbfc;
+      
+      &:hover {
+        border-color: #0284c7;
+        background: #f0f9ff;
+      }
+      
+      .el-icon--upload {
+        font-size: 40px;
+        color: #94a3b8;
+        margin-bottom: 8px;
+      }
+      
+      .el-upload__text {
+        color: #64748b;
+        font-size: 14px;
+        
+        em {
+          color: #0284c7;
+        }
+      }
+    }
+    
+    .uploaded-file {
+      margin-top: 16px;
+      text-align: center;
     }
   }
 }

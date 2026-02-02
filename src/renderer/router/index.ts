@@ -68,6 +68,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
         meta: { menuId: 'expression_dict' }
       },
+      // 研究成果
+      {
+        path: 'research-results',
+        name: 'ResearchResults',
+        component: () => import('../views/FactorLibrary/ResearchResults.vue'),
+        meta: { menuId: 'research_results' }
+      },
       // 数据工单
       {
         path: 'workorder/submit',

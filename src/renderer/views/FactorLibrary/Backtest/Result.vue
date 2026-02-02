@@ -119,30 +119,18 @@
             </template>
             
             <div class="metrics-row">
-              <!-- IC 指标 -->
+              <!-- Rank IC 指标 -->
               <div class="metric-group">
-                <h4>IC 分析</h4>
-                <div class="metric-item">
-                  <span class="label">IC均值</span>
-                  <span class="value" :class="getValueClass(factor.ic_mean)">
-                    {{ formatNumber(factor.ic_mean, 4) }}
-                  </span>
-                </div>
-                <div class="metric-item">
-                  <span class="label">IC标准差</span>
-                  <span class="value">{{ formatNumber(factor.ic_std, 4) }}</span>
-                </div>
-                <div class="metric-item">
-                  <span class="label">IC_IR</span>
-                  <span class="value" :class="getValueClass(factor.ic_ir)">
-                    {{ formatNumber(factor.ic_ir, 4) }}
-                  </span>
-                </div>
+                <h4>Rank IC 分析</h4>
                 <div class="metric-item">
                   <span class="label">Rank IC均值</span>
                   <span class="value" :class="getValueClass(factor.rank_ic_mean)">
                     {{ formatNumber(factor.rank_ic_mean, 4) }}
                   </span>
+                </div>
+                <div class="metric-item">
+                  <span class="label">Rank IC标准差</span>
+                  <span class="value">{{ formatNumber(factor.rank_ic_std, 4) }}</span>
                 </div>
                 <div class="metric-item">
                   <span class="label">Rank IC_IR</span>

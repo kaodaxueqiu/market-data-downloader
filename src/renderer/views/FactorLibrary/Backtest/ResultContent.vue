@@ -142,6 +142,10 @@
                 <span>{{ formatDate(task.created_at) }}</span>
                 <span v-if="task.completed_at" class="meta-divider">|</span>
                 <span v-if="task.completed_at">耗时 {{ calcDuration(task.started_at, task.completed_at) }}</span>
+                <span v-if="task.user_id" class="meta-divider">|</span>
+                <span v-if="task.user_id">执行人: {{ task.user_id }}</span>
+                <span class="meta-divider">|</span>
+                <span class="task-id-text">ID: {{ task.task_id }}</span>
               </div>
             </div>
             <!-- 回测配置信息 -->
@@ -173,6 +177,10 @@
               <div class="config-item" v-if="task.task_config.backtest_params?.sell_price_type">
                 <span class="config-label">卖出价格</span>
                 <span class="config-value">{{ getSellPriceTypeName(task.task_config.backtest_params.sell_price_type) }}</span>
+              </div>
+              <div class="config-item" v-if="task.task_config.backtest_params?.benchmarks?.length">
+                <span class="config-label">比对基准</span>
+                <span class="config-value">{{ getBenchmarkNames(task.task_config.backtest_params.benchmarks) }}</span>
               </div>
             </div>
           </div>
@@ -243,28 +251,16 @@
             <!-- 核心指标卡片 -->
             <div class="metrics-cards">
               <div class="metric-card ic-metric">
-                <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.ic_mean)">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.ic_mean, 4) }}
-                </div>
-                <div class="metric-label">IC均值</div>
-              </div>
-              <div class="metric-card ic-metric">
-                <div class="metric-value">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.ic_std, 4) }}
-                </div>
-                <div class="metric-label">IC标准差</div>
-              </div>
-              <div class="metric-card ic-metric">
-                <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.ic_ir)">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.ic_ir, 3) }}
-                </div>
-                <div class="metric-label">IC_IR</div>
-              </div>
-              <div class="metric-card ic-metric">
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_mean)">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_mean, 4) }}
                 </div>
                 <div class="metric-label">Rank IC</div>
+              </div>
+              <div class="metric-card ic-metric">
+                <div class="metric-value">
+                  {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_std, 4) }}
+                </div>
+                <div class="metric-label">Rank IC标准差</div>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_ir)">
@@ -326,16 +322,6 @@
                         <span :class="{ 'period-active': row.period === selectedPeriods[index] }">
                           {{ row.period }}日
                         </span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column prop="ic_mean" label="IC均值" width="90">
-                      <template #default="{ row }">
-                        <span :class="getValueClass(row.ic_mean)">{{ formatNumber(row.ic_mean, 4) }}</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column prop="ic_ir" label="IC_IR" width="80">
-                      <template #default="{ row }">
-                        <span :class="getValueClass(row.ic_ir)">{{ formatNumber(row.ic_ir, 3) }}</span>
                       </template>
                     </el-table-column>
                     <el-table-column prop="rank_ic_mean" label="Rank IC" width="90">
@@ -410,10 +396,6 @@
                 <div class="panel-body">
                   <div class="other-metrics">
                     <div class="other-metric-item ic-related">
-                      <span class="label">IC标准差</span>
-                      <span class="value">{{ formatNumber(getCurrentPeriodData(factor, index)?.ic_std, 4) }}</span>
-                    </div>
-                    <div class="other-metric-item ic-related">
                       <span class="label">Rank IC标准差</span>
                       <span class="value">{{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_std, 4) }}</span>
                     </div>
@@ -438,6 +420,75 @@
               </div>
             </div>
 
+            <!-- 分组选择器分隔条 -->
+            <div class="group-selector-bar" v-if="result?.benchmark_metrics?.length">
+              <div class="bar-line"></div>
+              <span class="bar-title">分层绩效分析</span>
+              <div class="bar-line"></div>
+              <div class="bar-selector">
+                <span class="selector-label">分组:</span>
+                <el-select v-model="selectedGroup" size="small" style="width: 100px;" @change="handleGroupChange">
+                  <el-option 
+                    v-for="opt in groupOptions" 
+                    :key="opt.value" 
+                    :label="opt.label" 
+                    :value="opt.value" 
+                  />
+                </el-select>
+              </div>
+              <div class="bar-line"></div>
+              <span class="bar-hint">第1组为因子值最大</span>
+              <div class="bar-line"></div>
+            </div>
+
+            <!-- 基准对比面板 -->
+            <div class="detail-panels benchmark-panels" v-if="result?.benchmark_metrics?.length">
+              <!-- 基准指数对比 -->
+              <div class="detail-panel">
+                <div class="panel-title">
+                  <el-icon><TrendCharts /></el-icon>
+                  基准指数对比
+                  <span class="panel-tag">第{{ selectedGroup }}组</span>
+                </div>
+                <div class="panel-body">
+                  <el-table :data="benchmarkCompareData(factor, index)" size="small" class="benchmark-table" v-loading="chartDataLoading">
+                    <el-table-column prop="metric_name" label="指标" width="100" fixed />
+                    <el-table-column :label="`因子(第${selectedGroup}组)`" width="120" align="center">
+                      <template #default="{ row }">
+                        <span :class="getValueClass(row.strategy_raw)">{{ row.strategy }}</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column 
+                      v-for="bm in result?.benchmark_metrics" 
+                      :key="bm.benchmark_code"
+                      :label="bm.benchmark_name"
+                      align="center"
+                      width="100"
+                    >
+                      <template #default="{ row }">
+                        <span :class="getValueClass(row[bm.benchmark_code + '_raw'])">{{ row[bm.benchmark_code] }}</span>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+              </div>
+
+              <!-- 累计收益曲线 - 点击查看 -->
+              <div class="detail-panel" v-if="hasExcessReturnData">
+                <div class="panel-title">
+                  <el-icon><TrendCharts /></el-icon>
+                  收益曲线
+                </div>
+                <div class="panel-body chart-preview">
+                  <el-button type="primary" @click="openExcessReturnChart">
+                    <el-icon><TrendCharts /></el-icon>
+                    查看累计收益曲线
+                  </el-button>
+                  <span class="chart-hint">展示因子、基准、超额收益的累计走势对比</span>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <!-- 每日明细（独立区域，只显示一次） -->
@@ -458,17 +509,7 @@
                 v-loading="dailyMetricsLoading && dailyMetrics.length === 0"
               >
                 <el-table-column prop="date" label="日期" width="110" fixed />
-                <el-table-column label="IC" width="90">
-                  <template #header>
-                    IC ({{ selectedPeriods[0] || '-' }}日)
-                  </template>
-                  <template #default="{ row }">
-                    <span :class="getValueClass(getDailyPeriodIC(row, 0, 'ic'))">
-                      {{ formatNumber(getDailyPeriodIC(row, 0, 'ic'), 4) }}
-                    </span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="Rank IC" width="100">
+                <el-table-column label="Rank IC" width="110">
                   <template #header>
                     Rank IC ({{ selectedPeriods[0] || '-' }}日)
                   </template>
@@ -478,14 +519,17 @@
                     </span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="long_return" label="多头收益" width="100">
+                <!-- 10组分层收益 -->
+                <el-table-column 
+                  v-for="groupIdx in 10" 
+                  :key="'group_' + groupIdx"
+                  :label="'第' + groupIdx + '组'"
+                  width="85"
+                >
                   <template #default="{ row }">
-                    <span :class="getValueClass(row.long_return)">{{ formatPercent(row.long_return) }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="short_return" label="空头收益" width="100">
-                  <template #default="{ row }">
-                    <span :class="getValueClass(row.short_return)">{{ formatPercent(row.short_return) }}</span>
+                    <span :class="getValueClass(row.layer_returns?.[groupIdx - 1])">
+                      {{ formatPercent(row.layer_returns?.[groupIdx - 1]) }}
+                    </span>
                   </template>
                 </el-table-column>
                 <el-table-column prop="long_short_return" label="多空收益" width="100">
@@ -497,6 +541,33 @@
                   <template #default="{ row }">{{ formatPercent(row.turnover) }}</template>
                 </el-table-column>
                 <el-table-column prop="num_stocks" label="股票数" width="80" />
+                <!-- 动态基准列 -->
+                <template v-if="dailyMetrics[0]?.benchmark_returns?.length">
+                  <el-table-column 
+                    v-for="bm in dailyMetrics[0].benchmark_returns" 
+                    :key="bm.benchmark_code + '_return'"
+                    :label="bm.benchmark_name"
+                    width="100"
+                  >
+                    <template #default="{ row }">
+                      <span :class="getValueClass(getBenchmarkReturn(row, bm.benchmark_code))">
+                        {{ formatPercent(getBenchmarkReturn(row, bm.benchmark_code)) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column 
+                    v-for="bm in dailyMetrics[0].benchmark_returns" 
+                    :key="bm.benchmark_code + '_excess'"
+                    :label="'超额(' + bm.benchmark_name + ')'"
+                    width="120"
+                  >
+                    <template #default="{ row }">
+                      <span :class="getValueClass(getExcessReturn(row, bm.benchmark_code))">
+                        {{ formatPercent(getExcessReturn(row, bm.benchmark_code)) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                </template>
               </el-table>
               <div class="daily-metrics-footer">
                 <span class="loaded-info">已加载 {{ dailyMetrics.length }} / {{ dailyMetricsTotal }} 条</span>
@@ -518,17 +589,36 @@
         </template>
       </template>
     </template>
+
+    <!-- 累计收益曲线图对话框 -->
+    <el-dialog 
+      v-model="excessReturnDialogVisible" 
+      title="累计收益曲线（因子 vs 基准）" 
+      width="90%" 
+      top="5vh"
+      destroy-on-close
+    >
+      <div v-loading="chartDataLoading" element-loading-text="正在加载全量数据...">
+        <div ref="excessReturnChartRef" class="excess-return-chart-dialog"></div>
+        <div class="chart-legend-hint">
+          <span><b>实线</b>：因子/超额收益</span>
+          <span><b>虚线</b>：基准指数收益</span>
+          <span class="data-count" v-if="chartDailyData.length">共 {{ chartDailyData.length }} 个交易日</span>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
   ArrowLeft, ArrowRight, Refresh, Loading, Calendar, Timer, 
   CircleCheck, TrendCharts, Histogram, DataLine, Document, Download, Tickets
 } from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
 
 // electronAPI 类型已在 preload/index.ts 中全局定义
 
@@ -565,8 +655,279 @@ const dailyMetricsTotal = ref(0)
 const dailyMetricsPage = ref(1)
 const dailyMetricsPageSize = ref(100)
 
+// 超额收益曲线图
+const excessReturnChartRef = ref<HTMLElement | null>(null)
+let excessReturnChart: echarts.ECharts | null = null
+const excessReturnDialogVisible = ref(false)
+
+// 图表全量数据
+const chartDailyData = ref<any[]>([])
+const chartDataLoading = ref(false)
+
+// 加载图表全量数据（循环分页加载）
+const loadChartData = async () => {
+  if (!props.taskId) return
+  chartDataLoading.value = true
+  try {
+    const allData: any[] = []
+    let page = 1
+    const pageSize = 500  // 每页500条
+    let total = 0
+    
+    // 循环加载所有页
+    do {
+      const res = await window.electronAPI.backtest.getDailyMetrics(props.taskId, {
+        page,
+        page_size: pageSize
+      })
+      if (res.success && res.data) {
+        allData.push(...(res.data.metrics || []))
+        total = res.data.total || 0
+        page++
+      } else {
+        break
+      }
+    } while (allData.length < total)
+    
+    chartDailyData.value = allData
+    console.log(`📊 图表数据加载完成，共 ${allData.length} 条`)
+    if (allData.length > 0) {
+      console.log('📊 第一条数据结构:', JSON.stringify(allData[0], null, 2))
+      console.log('📊 layer_returns:', allData[0]?.layer_returns)
+    }
+  } catch (error) {
+    console.error('加载图表数据失败:', error)
+  } finally {
+    chartDataLoading.value = false
+  }
+}
+
+// 打开超额收益曲线图对话框
+const openExcessReturnChart = async () => {
+  excessReturnDialogVisible.value = true
+  // 加载全量数据
+  if (chartDailyData.value.length === 0) {
+    await loadChartData()
+  }
+  nextTick(() => {
+    setTimeout(() => {
+      initExcessReturnChart()
+    }, 100)
+  })
+}
+
+// 检测每日明细中是否有超额收益字段
+const hasExcessReturnData = computed(() => {
+  if (!dailyMetrics.value?.length || !result.value?.benchmark_metrics?.length) {
+    return false
+  }
+  const firstRow = dailyMetrics.value[0]
+  // 检查是否有 benchmark_returns 数组且包含 excess_return
+  return firstRow.benchmark_returns?.length > 0 && 
+         firstRow.benchmark_returns[0]?.excess_return != null
+})
+
+// 初始化超额收益曲线图
+const initExcessReturnChart = () => {
+  if (!excessReturnChartRef.value) {
+    console.log('📊 图表容器未就绪')
+    return
+  }
+  if (!dailyMetrics.value?.length) return
+  
+  // 销毁旧图表
+  if (excessReturnChart) {
+    excessReturnChart.dispose()
+  }
+  
+  excessReturnChart = echarts.init(excessReturnChartRef.value)
+  renderExcessReturnChart()
+}
+
+// 渲染超额收益图表（累计收益曲线）
+const renderExcessReturnChart = () => {
+  if (!excessReturnChart) return
+  
+  // 使用图表专用的全量数据
+  const data = chartDailyData.value.length > 0 ? chartDailyData.value : dailyMetrics.value
+  if (!data.length) return
+  
+  // 获取日期
+  const dates = data.map((d: any) => d.date)
+  
+  // 从第一条数据获取基准列表
+  const firstRow = data[0]
+  if (!firstRow?.benchmark_returns?.length) return
+  
+  const series: any[] = []
+  const groupIndex = selectedGroup.value - 1
+  
+  // 1. 选中分组的累计收益（使用 layer_returns）
+  let groupCum = 1
+  const groupData = data.map((d: any) => {
+    const dailyReturn = d.layer_returns?.[groupIndex] || 0
+    groupCum *= (1 + dailyReturn)
+    return ((groupCum - 1) * 100).toFixed(2)
+  })
+  series.push({
+    name: `因子(第${selectedGroup.value}组)`,
+    type: 'line',
+    data: groupData,
+    smooth: true,
+    symbol: 'none',
+    lineStyle: { width: 3 }
+  })
+  
+  // 2. 按基准分组，每个基准画 2 条线：基准收益 + 超额收益
+  firstRow.benchmark_returns.forEach((bm: any) => {
+    // 基准累计收益
+    let bmCum = 1
+    const bmData = data.map((d: any) => {
+      const bmItem = d.benchmark_returns?.find((b: any) => b.benchmark_code === bm.benchmark_code)
+      bmCum *= (1 + (bmItem?.benchmark_return || 0))
+      return ((bmCum - 1) * 100).toFixed(2)
+    })
+    series.push({
+      name: `${bm.benchmark_name}`,
+      type: 'line',
+      data: bmData,
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 1.5, type: 'dashed' }
+    })
+    
+    // 超额累计收益 = 分组累计 - 基准累计
+    let groupCum2 = 1
+    let bmCum2 = 1
+    const excessData = data.map((d: any) => {
+      const groupReturn = d.layer_returns?.[groupIndex] || 0
+      const bmItem = d.benchmark_returns?.find((b: any) => b.benchmark_code === bm.benchmark_code)
+      const bmReturn = bmItem?.benchmark_return || 0
+      groupCum2 *= (1 + groupReturn)
+      bmCum2 *= (1 + bmReturn)
+      return (((groupCum2 / bmCum2) - 1) * 100).toFixed(2)
+    })
+    series.push({
+      name: `超额(${bm.benchmark_name})`,
+      type: 'line',
+      data: excessData,
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 2 }
+    })
+  })
+  
+  // 因子收益红色，每个基准用一组颜色（浅色=基准，深色=超额）
+  const colorPairs = [
+    ['#93c5fd', '#2563eb'],  // 蓝色系
+    ['#86efac', '#16a34a'],  // 绿色系
+    ['#fdba74', '#ea580c'],  // 橙色系
+    ['#f9a8d4', '#db2777'],  // 粉色系
+    ['#c4b5fd', '#7c3aed'],  // 紫色系
+    ['#67e8f9', '#0891b2'],  // 青色系
+  ]
+  const colors: string[] = ['#e74c3c']  // 因子收益 - 红色
+  firstRow.benchmark_returns.forEach((_: any, idx: number) => {
+    const pair = colorPairs[idx % colorPairs.length]
+    colors.push(pair[0], pair[1])  // 基准浅色，超额深色
+  })
+  
+  const option: echarts.EChartsOption = {
+    color: colors,
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        if (!params?.length) return ''
+        let html = `<div style="font-weight: bold; margin-bottom: 8px;">${params[0].axisValue}</div>`
+        params.forEach((p: any) => {
+          const color = p.color
+          const value = p.value != null ? `${p.value}%` : '-'
+          html += `<div style="display: flex; align-items: center; margin: 4px 0;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: ${color}; border-radius: 50%; margin-right: 8px;"></span>
+            <span style="min-width: 140px;">${p.seriesName}: </span>
+            <span style="font-weight: bold;">${value}</span>
+          </div>`
+        })
+        return html
+      }
+    },
+    legend: {
+      data: series.map(s => s.name),
+      bottom: 0,
+      type: 'scroll',
+      textStyle: { fontSize: 12 }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '15%',
+      top: '5%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false,
+      axisLabel: {
+        formatter: (val: string) => {
+          // 只显示月份
+          return val.substring(5, 10)
+        },
+        interval: Math.floor(dates.length / 10)
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: '{value}%'
+      },
+      splitLine: {
+        lineStyle: {
+          type: 'dashed'
+        }
+      }
+    },
+    series,
+    dataZoom: [
+      {
+        type: 'inside',
+        start: 0,
+        end: 100
+      }
+    ]
+  }
+  
+  excessReturnChart.setOption(option)
+}
+
+// 监听窗口大小变化，调整图表
+const handleResize = () => {
+  excessReturnChart?.resize()
+}
+
 // 每个因子选中的周期
 const selectedPeriods = ref<Record<number, number>>({})
+
+// 选中的分组（1-10，用于计算分组收益）
+const selectedGroup = ref(1)
+
+// 分组选项
+const groupOptions = Array.from({ length: 10 }, (_, i) => ({
+  value: i + 1,
+  label: `第${i + 1}组`
+}))
+
+// 分组切换处理
+const handleGroupChange = async () => {
+  // 如果还没有加载全量数据，先加载
+  if (chartDailyData.value.length === 0) {
+    await loadChartData()
+  }
+  // 如果曲线对话框已打开，重新渲染
+  if (excessReturnDialogVisible.value) {
+    renderExcessReturnChart()
+  }
+}
 
 // 获取当前选中周期的数据
 const getCurrentPeriodData = (factor: any, index: number) => {
@@ -578,6 +939,109 @@ const getCurrentPeriodData = (factor: any, index: number) => {
   return factor.period_ic_stats.find((p: any) => p.period === period) || factor.period_ic_stats[0]
 }
 
+// 计算分组的绩效指标
+const calcGroupMetrics = (dailyReturns: number[]) => {
+  if (!dailyReturns?.length) return { annualReturn: null, sharpe: null, maxDrawdown: null }
+  
+  const totalDays = dailyReturns.length
+  
+  // 累计收益
+  let cumReturn = 1
+  const cumReturns: number[] = []
+  dailyReturns.forEach(r => {
+    cumReturn *= (1 + (r || 0))
+    cumReturns.push(cumReturn - 1)
+  })
+  
+  // 年化收益
+  const annualReturn = Math.pow(cumReturn, 252 / totalDays) - 1
+  
+  // 夏普比率
+  const mean = dailyReturns.reduce((a, b) => a + (b || 0), 0) / totalDays
+  const variance = dailyReturns.map(r => Math.pow((r || 0) - mean, 2)).reduce((a, b) => a + b, 0) / totalDays
+  const std = Math.sqrt(variance)
+  const sharpe = std > 0 ? (mean * 252) / (std * Math.sqrt(252)) : 0
+  
+  // 最大回撤
+  let maxDrawdown = 0
+  let peak = 1
+  cumReturns.forEach(cr => {
+    const value = 1 + cr
+    if (value > peak) peak = value
+    const dd = (peak - value) / peak
+    if (dd > maxDrawdown) maxDrawdown = dd
+  })
+  
+  return { annualReturn, sharpe, maxDrawdown }
+}
+
+// 生成基准指数对比表格数据
+const benchmarkCompareData = (_factor: any, _index: number) => {
+  if (!result.value?.benchmark_metrics) return []
+  
+  // 使用全量数据计算分组指标
+  const data = chartDailyData.value.length > 0 ? chartDailyData.value : dailyMetrics.value
+  
+  // 获取选中分组的每日收益 (layer_returns[selectedGroup - 1])
+  const groupIndex = selectedGroup.value - 1
+  const groupDailyReturns = data.map((d: any) => d.layer_returns?.[groupIndex] || 0)
+  
+  // 计算分组指标
+  const groupMetrics = calcGroupMetrics(groupDailyReturns)
+  
+  const rows: any[] = []
+  
+  // 年化收益
+  const row1: any = { metric_name: '年化收益' }
+  row1.strategy_raw = groupMetrics.annualReturn
+  row1.strategy = formatPercent(groupMetrics.annualReturn)
+  result.value?.benchmark_metrics?.forEach((bm: any) => {
+    row1[bm.benchmark_code + '_raw'] = bm.benchmark_annual_return
+    row1[bm.benchmark_code] = formatPercent(bm.benchmark_annual_return)
+  })
+  rows.push(row1)
+  
+  // 夏普比率
+  const row2: any = { metric_name: '夏普比率' }
+  row2.strategy_raw = groupMetrics.sharpe
+  row2.strategy = formatNumber(groupMetrics.sharpe, 2)
+  result.value?.benchmark_metrics?.forEach((bm: any) => {
+    row2[bm.benchmark_code + '_raw'] = bm.benchmark_sharpe
+    row2[bm.benchmark_code] = formatNumber(bm.benchmark_sharpe, 2)
+  })
+  rows.push(row2)
+  
+  // 最大回撤
+  const row3: any = { metric_name: '最大回撤' }
+  row3.strategy_raw = groupMetrics.maxDrawdown
+  row3.strategy = formatPercent(groupMetrics.maxDrawdown)
+  result.value?.benchmark_metrics?.forEach((bm: any) => {
+    row3[bm.benchmark_code + '_raw'] = bm.benchmark_max_drawdown
+    row3[bm.benchmark_code] = formatPercent(bm.benchmark_max_drawdown)
+  })
+  rows.push(row3)
+  
+  // 超额收益 (分组年化 - 基准年化)
+  const row4: any = { metric_name: '超额收益', strategy: '-', strategy_raw: null }
+  result.value?.benchmark_metrics?.forEach((bm: any) => {
+    const excess = (groupMetrics.annualReturn || 0) - (bm.benchmark_annual_return || 0)
+    row4[bm.benchmark_code + '_raw'] = excess
+    row4[bm.benchmark_code] = formatPercent(excess)
+  })
+  rows.push(row4)
+  
+  // 超额夏普
+  const row5: any = { metric_name: '超额夏普', strategy: '-', strategy_raw: null }
+  result.value?.benchmark_metrics?.forEach((bm: any) => {
+    const excess = (groupMetrics.sharpe || 0) - (bm.benchmark_sharpe || 0)
+    row5[bm.benchmark_code + '_raw'] = excess
+    row5[bm.benchmark_code] = formatNumber(excess, 2)
+  })
+  rows.push(row5)
+  
+  return rows
+}
+
 // 获取每日明细中指定周期的IC数据
 const getDailyPeriodIC = (row: any, index: number, field: 'ic' | 'rank_ic') => {
   const period = selectedPeriods.value[index]
@@ -586,6 +1050,18 @@ const getDailyPeriodIC = (row: any, index: number, field: 'ic' | 'rank_ic') => {
   }
   const periodData = row.period_ics.find((p: any) => p.period === period)
   return periodData ? periodData[field] : row[field]
+}
+
+// 获取每日明细中指定基准的收益
+const getBenchmarkReturn = (row: any, benchmarkCode: string) => {
+  const bmData = row.benchmark_returns?.find((b: any) => b.benchmark_code === benchmarkCode)
+  return bmData?.benchmark_return
+}
+
+// 获取每日明细中指定基准的超额收益
+const getExcessReturn = (row: any, benchmarkCode: string) => {
+  const bmData = row.benchmark_returns?.find((b: any) => b.benchmark_code === benchmarkCode)
+  return bmData?.excess_return
 }
 
 // 初始化周期选择
@@ -617,9 +1093,50 @@ const getStatusName = (status: string) => {
   return map[status] || status
 }
 
+// 股票池数据缓存
+const stockPoolCache = ref<Map<string, string>>(new Map())
+
+// 加载股票池列表（用于名称映射）
+const loadStockPoolsForMapping = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getStockPools()
+    if (result.success && result.data) {
+      const cache = new Map<string, string>()
+      const data = result.data as any
+      // 处理新格式（按维度分组），添加维度前缀
+      if (data.index?.pools) {
+        data.index.pools.forEach((p: any) => cache.set(p.id, p.name))
+      }
+      if (data.industry?.pools) {
+        // 申万行业加前缀
+        data.industry.pools.forEach((p: any) => cache.set(p.id, `申万-${p.name}`))
+      }
+      if (data.citic?.pools) {
+        // 中信行业加前缀
+        data.citic.pools.forEach((p: any) => cache.set(p.id, `中信-${p.name}`))
+      }
+      // 兼容旧格式
+      if (Array.isArray(data)) {
+        data.forEach((p: any) => cache.set(p.id, p.name))
+      }
+      stockPoolCache.value = cache
+    }
+  } catch (error) {
+    console.error('加载股票池映射失败:', error)
+  }
+}
+
 const getUniverseName = (universe: any) => {
   if (!universe) return '全市场'
   if (universe.type === 'custom') return '自定义股票池'
+  
+  const presetName = universe.preset_name
+  // 先从缓存查找
+  if (stockPoolCache.value.has(presetName)) {
+    return stockPoolCache.value.get(presetName)
+  }
+  
+  // 兜底映射
   const presetMap: Record<string, string> = {
     'all': '全市场',
     'hs300': '沪深300',
@@ -628,7 +1145,42 @@ const getUniverseName = (universe: any) => {
     'sz50': '上证50',
     'zz2000': '中证2000'
   }
-  return presetMap[universe.preset_name] || universe.preset_name || '全市场'
+  return presetMap[presetName] || presetName || '全市场'
+}
+
+// 基准指数缓存
+const benchmarkCache = ref<Map<string, string>>(new Map())
+
+// 加载基准指数映射
+const loadBenchmarkMapping = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getPriceTypeOptions()
+    if (result.success && result.data?.benchmarks) {
+      const cache = new Map<string, string>()
+      result.data.benchmarks.forEach((b: any) => cache.set(b.value, b.label))
+      benchmarkCache.value = cache
+    }
+  } catch (error) {
+    console.error('加载基准指数映射失败:', error)
+  }
+}
+
+// 获取基准指数名称列表
+const getBenchmarkNames = (benchmarks: string[]) => {
+  if (!benchmarks?.length) return '-'
+  return benchmarks.map(code => {
+    if (benchmarkCache.value.has(code)) {
+      return benchmarkCache.value.get(code)
+    }
+    // 兜底映射
+    const map: Record<string, string> = {
+      'SH.000300': '沪深300',
+      'SH.000905': '中证500',
+      'SH.000852': '中证1000',
+      'SH.000688': '科创50'
+    }
+    return map[code] || code
+  }).join('、')
 }
 
 const getDirectionName = (direction: string) => {
@@ -675,12 +1227,12 @@ const calcDuration = (start: string, end: string) => {
   return `${Math.floor(duration / 3600)}时${Math.floor((duration % 3600) / 60)}分`
 }
 
-const formatNumber = (num: number | undefined, decimals: number = 2) => {
+const formatNumber = (num: number | undefined | null, decimals: number = 2) => {
   if (num === undefined || num === null || isNaN(num)) return '-'
   return num.toFixed(decimals)
 }
 
-const formatPercent = (num: number | undefined) => {
+const formatPercent = (num: number | undefined | null) => {
   if (num === undefined || num === null || isNaN(num)) return '-'
   return (num * 100).toFixed(2) + '%'
 }
@@ -804,6 +1356,8 @@ const loadResult = async () => {
         const resultRes = await window.electronAPI.backtest.getResult(props.taskId)
         if (resultRes.success && resultRes.data) {
           result.value = resultRes.data
+          console.log('📊 回测结果数据:', JSON.stringify(resultRes.data, null, 2))
+          console.log('📊 benchmark_metrics:', JSON.stringify(resultRes.data.benchmark_metrics, null, 2))
           initPeriodSelections()
           // 单独加载每日明细数据
           loadDailyMetrics()
@@ -886,6 +1440,18 @@ watch(() => props.taskId, (newId) => {
 onMounted(() => {
   if (!props.taskId) {
     loadCompletedTasks()
+  }
+  window.addEventListener('resize', handleResize)
+  // 加载股票池和基准指数映射
+  loadStockPoolsForMapping()
+  loadBenchmarkMapping()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (excessReturnChart) {
+    excessReturnChart.dispose()
+    excessReturnChart = null
   }
 })
 </script>
@@ -1129,6 +1695,12 @@ onMounted(() => {
         
         .meta-divider {
           opacity: 0.5;
+        }
+        
+        .task-id-text {
+          font-family: 'Monaco', 'Menlo', monospace;
+          font-size: 12px;
+          opacity: 0.8;
         }
       }
       
@@ -1490,5 +2062,123 @@ onMounted(() => {
   // 全局样式
   .positive { color: #67c23a; }
   .negative { color: #f56c6c; }
+  
+  // 基准指数对比表格样式
+  .benchmark-table {
+    :deep(.el-table__header) {
+      th {
+        background: #fafafa !important;
+        font-weight: 600;
+        font-size: 13px;
+        color: #606266;
+      }
+    }
+    
+    :deep(.el-table__body) {
+      td {
+        font-size: 13px;
+        
+        &:first-child {
+          font-weight: 500;
+          color: #303133;
+        }
+      }
+    }
+    
+    :deep(.el-table__row) {
+      &:hover > td {
+        background: #f5f7fa !important;
+      }
+    }
+  }
+  
+  // 超额收益曲线图预览区
+  .chart-preview {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    
+    .chart-hint {
+      color: #909399;
+      font-size: 13px;
+    }
+  }
+}
+
+// 超额收益曲线图对话框
+.excess-return-chart-dialog {
+  width: 100%;
+  height: 500px;
+}
+
+.chart-legend-hint {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-top: 12px;
+  color: #606266;
+  font-size: 13px;
+  
+  .data-count {
+    color: #909399;
+  }
+}
+
+// 分组选择器分隔条
+.group-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 28px 0 20px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #f8f9fc 0%, #eef1f6 100%);
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  
+  .bar-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #d0d5dd 50%, transparent);
+  }
+  
+  .bar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #667eea;
+    white-space: nowrap;
+  }
+  
+  .bar-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    
+    .selector-label {
+      font-size: 13px;
+      color: #606266;
+      white-space: nowrap;
+    }
+  }
+  
+  .bar-hint {
+    font-size: 12px;
+    color: #909399;
+    white-space: nowrap;
+  }
+}
+
+// 面板标签
+.panel-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 4px;
 }
 </style>

@@ -144,9 +144,6 @@
             </div>
             <div class="factor-metrics">
               <el-tag size="small" type="success" effect="plain">
-                IC IR: {{ factor.ic_ir?.toFixed(2) || '-' }}
-              </el-tag>
-              <el-tag size="small" type="primary" effect="plain">
                 Rank IC IR: {{ factor.rank_ic_ir?.toFixed(2) || '-' }}
               </el-tag>
             </div>
@@ -260,17 +257,9 @@
               </div>
             </template>
             <el-descriptions :column="2" size="small" border>
-              <el-descriptions-item label="IC均值">
-                <el-text :type="getICColor(selectedFactorDetail?.ic_mean)">
-                  {{ selectedFactorDetail?.ic_mean?.toFixed(4) || '-' }}
-                </el-text>
-              </el-descriptions-item>
-              <el-descriptions-item label="IC标准差">
-                {{ selectedFactorDetail?.ic_std?.toFixed(4) || '-' }}
-              </el-descriptions-item>
-              <el-descriptions-item label="IC IR">
-                <el-text type="primary" style="font-weight: bold;">
-                  {{ selectedFactorDetail?.ic_ir?.toFixed(2) || '-' }}
+              <el-descriptions-item label="Rank IC均值">
+                <el-text :type="getICColor(selectedFactorDetail?.rank_ic_mean)">
+                  {{ selectedFactorDetail?.rank_ic_mean?.toFixed(4) || '-' }}
                 </el-text>
               </el-descriptions-item>
               <el-descriptions-item label="Rank IC IR">

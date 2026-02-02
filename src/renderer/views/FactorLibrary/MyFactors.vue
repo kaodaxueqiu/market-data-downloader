@@ -132,9 +132,8 @@
                 <el-button text size="small" :icon="Plus" @click="openAddRootCategory">
                   新建
                 </el-button>
-                <el-button text size="small" @click="clearCategory">
+                <el-button text size="small" @click="refreshCategories" :loading="loadingCategories">
                   <el-icon><Refresh /></el-icon>
-                  重置
                 </el-button>
               </div>
             </div>
@@ -290,11 +289,8 @@
               <div class="factor-category">
                 {{ factor.category_l1_name }} / {{ factor.category_l2_name }} / {{ factor.category_l3_name }}
               </div>
-              <div class="factor-metrics" v-if="factor.ic_ir">
+              <div class="factor-metrics" v-if="factor.rank_ic_ir">
                 <el-tag size="small" type="success" effect="plain">
-                  IC IR: {{ factor.ic_ir?.toFixed(2) || '-' }}
-                </el-tag>
-                <el-tag size="small" type="primary" effect="plain">
                   Rank IC IR: {{ factor.rank_ic_ir?.toFixed(2) || '-' }}
                 </el-tag>
               </div>
@@ -451,14 +447,6 @@
                 
                 <!-- 有多周期数据时显示选中周期的指标 -->
                 <el-descriptions v-if="currentPeriodStats" :column="2" size="small" border>
-                  <el-descriptions-item label="IC均值">
-                    {{ currentPeriodStats.ic_mean?.toFixed(4) || '-' }}
-                  </el-descriptions-item>
-                  <el-descriptions-item label="IC IR">
-                    <el-text type="primary" style="font-weight: bold;">
-                      {{ currentPeriodStats.ic_ir?.toFixed(2) || '-' }}
-                    </el-text>
-                  </el-descriptions-item>
                   <el-descriptions-item label="Rank IC均值">
                     {{ currentPeriodStats.rank_ic_mean?.toFixed(4) || '-' }}
                   </el-descriptions-item>
@@ -487,14 +475,6 @@
                 
                 <!-- 降级：无多周期数据时显示汇总指标 -->
                 <el-descriptions v-else :column="2" size="small" border>
-                  <el-descriptions-item label="IC均值">
-                    {{ currentFactorDetail?.ic_mean?.toFixed(4) || '-' }}
-                  </el-descriptions-item>
-                  <el-descriptions-item label="IC IR">
-                    <el-text type="primary" style="font-weight: bold;">
-                      {{ currentFactorDetail?.ic_ir?.toFixed(2) || '-' }}
-                    </el-text>
-                  </el-descriptions-item>
                   <el-descriptions-item label="Rank IC均值">
                     {{ currentFactorDetail?.rank_ic_mean?.toFixed(4) || '-' }}
                   </el-descriptions-item>
@@ -520,6 +500,9 @@
                   <span>版本信息</span>
                 </template>
                 <el-descriptions :column="1" size="small" border>
+                  <el-descriptions-item label="因子ID">
+                    {{ currentFactorDetail?.factor_id }}
+                  </el-descriptions-item>
                   <el-descriptions-item label="版本">
                     {{ currentFactorDetail?.version || '1.0' }}
                   </el-descriptions-item>
@@ -564,9 +547,9 @@
                         {{ getUniverseName(row.universe) }}
                       </template>
                     </el-table-column>
-                    <el-table-column label="IC均值" width="90">
+                    <el-table-column label="Rank IC" width="90">
                       <template #default="{ row }">
-                        {{ row.factor_result?.ic_mean?.toFixed(4) || '-' }}
+                        {{ row.factor_result?.rank_ic_mean?.toFixed(4) || '-' }}
                       </template>
                     </el-table-column>
                     <el-table-column label="夏普" width="80">
@@ -952,14 +935,30 @@
           </el-row>
           
           <el-form-item label="股票池">
-            <el-select v-model="backtestForm.universe_preset" style="width: 100%">
-              <el-option label="全市场" value="all" />
-              <el-option label="沪深300" value="hs300" />
-              <el-option label="中证500" value="zz500" />
-              <el-option label="中证1000" value="zz1000" />
-              <el-option label="上证50" value="sz50" />
-              <el-option label="中证2000" value="zz2000" />
-            </el-select>
+            <el-tabs v-model="stockPoolTab" @tab-change="handleStockPoolTabChange" class="stock-pool-tabs-mini">
+              <el-tab-pane label="标准指数" name="index">
+                <el-radio-group v-model="backtestForm.universe_preset" v-loading="stockPoolsLoading" class="pool-radio-list-mini">
+                  <el-radio 
+                    v-for="pool in stockPoolData?.index?.pools || []" 
+                    :key="pool.id" 
+                    :value="pool.id"
+                  >
+                    {{ pool.name }}
+                  </el-radio>
+                </el-radio-group>
+              </el-tab-pane>
+              <el-tab-pane label="申万行业" name="industry">
+                <el-radio-group v-model="backtestForm.universe_preset" v-loading="stockPoolsLoading" class="pool-radio-grid-mini">
+                  <el-radio 
+                    v-for="pool in stockPoolData?.industry?.pools || []" 
+                    :key="pool.id" 
+                    :value="pool.id"
+                  >
+                    {{ pool.name }}
+                  </el-radio>
+                </el-radio-group>
+              </el-tab-pane>
+            </el-tabs>
           </el-form-item>
           
           <el-row :gutter="16">
@@ -993,23 +992,43 @@
             <el-col :span="12">
               <el-form-item label="买入价格">
                 <el-select v-model="backtestForm.buy_price_type" style="width: 100%">
-                  <el-option label="日线开盘价" value="daily_open" />
-                  <el-option label="30分钟VWAP" value="vwap_30min" />
-                  <el-option label="60分钟VWAP" value="vwap_60min" />
+                  <el-option 
+                    v-for="opt in buyPriceTypes" 
+                    :key="opt.value" 
+                    :label="opt.label" 
+                    :value="opt.value" 
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="12">
               <el-form-item label="卖出价格">
                 <el-select v-model="backtestForm.sell_price_type" style="width: 100%">
-                  <el-option label="日线收盘价" value="daily_close" />
-                  <el-option label="日线VWAP" value="daily_vwap" />
-                  <el-option label="30分钟VWAP" value="vwap_30min" />
-                  <el-option label="60分钟VWAP" value="vwap_60min" />
+                  <el-option 
+                    v-for="opt in sellPriceTypes" 
+                    :key="opt.value" 
+                    :label="opt.label" 
+                    :value="opt.value" 
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
           </el-row>
+          
+          <el-form-item label="基准指数">
+            <el-checkbox-group v-model="selectedBenchmarks" @change="(val: string[]) => console.log('📊 checkbox changed:', val)">
+              <el-checkbox 
+                v-for="opt in benchmarkOptions" 
+                :key="opt.value" 
+                :label="opt.value"
+              >
+                {{ opt.label }}
+              </el-checkbox>
+            </el-checkbox-group>
+            <div v-if="benchmarkOptions.length === 0" style="color: #909399; font-size: 12px;">
+              正在加载基准指数选项...
+            </div>
+          </el-form-item>
         </el-form>
         
         <el-alert
@@ -1177,7 +1196,6 @@
             <el-table-column prop="rowNum" label="行号" width="60" />
             <el-table-column prop="factor_code" label="因子代码" width="120" />
             <el-table-column prop="factor_name" label="因子名称" width="150" />
-            <el-table-column prop="category_l3_id" label="分类ID" width="80" />
             <el-table-column prop="expression" label="表达式" show-overflow-tooltip />
             <el-table-column prop="error" label="校验结果" width="150">
               <template #default="{ row }">
@@ -1710,6 +1728,15 @@ const loadFactors = async () => {
 const handleStatusChange = (status: string) => {
   currentStatus.value = status
   page.value = 1
+  // 清除分类筛选
+  selectedCategoryId.value = null
+  selectedCategoryLevel.value = null
+  if (treeRef.value) {
+    treeRef.value.setCurrentKey(null)
+  }
+  // 清除标签筛选
+  selectedTagId.value = null
+  // 清除选中的因子
   selectedFactor.value = null
   currentFactorDetail.value = null
   loadFactors()
@@ -1719,19 +1746,18 @@ const handleStatusChange = (status: string) => {
 const handleCategoryClick = (data: any, node: any) => {
   selectedCategoryId.value = data.id
   selectedCategoryLevel.value = node.level  // 1, 2, 3
+  // 点击分类时，取消状态筛选高亮
+  currentStatus.value = ''
   page.value = 1
   loadFactors()
 }
 
-// 重置分类筛选
-const clearCategory = () => {
-  selectedCategoryId.value = null
-  selectedCategoryLevel.value = null
-  if (treeRef.value) {
-    treeRef.value.setCurrentKey(null)
-  }
-  page.value = 1
+
+// 刷新分类树
+const refreshCategories = async () => {
+  await loadCategories()
   loadFactors()
+  ElMessage.success('刷新成功')
 }
 
 // ========== 分类管理 ==========
@@ -1966,6 +1992,8 @@ const handleTagClick = (tag: any) => {
   } else {
     selectedTagId.value = tag.tag_id
   }
+  // 点击标签时，取消状态筛选高亮
+  currentStatus.value = ''
   page.value = 1
   loadFactors()
 }
@@ -2137,35 +2165,51 @@ const selectFactor = async (factor: any) => {
 const loadBacktestHistory = async () => {
   if (!currentFactorDetail.value?.factor_id) return
   
+  // 保存请求时的 factorId，用于防止竞态条件
+  const requestFactorId = currentFactorDetail.value.factor_id
+  
   loadingBacktestHistory.value = true
   
   try {
-    console.log('加载回测历史, factorId:', currentFactorDetail.value.factor_id)
-    const result = await window.electronAPI.factor.myBacktestHistory(currentFactorDetail.value.factor_id)
-    console.log('回测历史完整响应:', JSON.stringify(result, null, 2))
+    console.log('========== 加载回测历史 ==========')
+    console.log('请求的 factorId:', requestFactorId)
+    console.log('当前因子代码:', currentFactorDetail.value?.factor_code)
+    
+    const result = await window.electronAPI.factor.myBacktestHistory(requestFactorId)
+    
+    // 防止竞态条件：如果用户已切换到其他因子，丢弃这个响应
+    if (currentFactorDetail.value?.factor_id !== requestFactorId) {
+      console.log('因子已切换，丢弃旧的回测历史响应')
+      return
+    }
+    
+    console.log('回测历史响应 success:', result.success)
+    
     if (result.success && result.data) {
-      console.log('回测历史 result.data 类型:', typeof result.data, Array.isArray(result.data))
-      console.log('回测历史 result.data:', result.data)
-      
       // 兼容不同的数据结构
+      let historyData: any[] = []
       if (Array.isArray(result.data)) {
-        backtestHistory.value = result.data
-        console.log('使用 result.data（数组）')
+        historyData = result.data
       } else if (result.data.records) {
-        backtestHistory.value = result.data.records
-        console.log('使用 result.data.records')
-      } else {
-        backtestHistory.value = []
-        console.log('无法解析回测历史数据结构')
-      }
-      console.log('回测历史记录数:', backtestHistory.value.length)
-      if (backtestHistory.value.length > 0) {
-        console.log('第一条记录:', backtestHistory.value[0])
+        historyData = result.data.records
       }
       
-      // 如果因子详情没有周期数据，从回测历史获取并重置周期选择
-      if (backtestHistory.value.length > 0) {
-        const latestRecord = backtestHistory.value[0]
+      // 过滤：只保留属于当前因子的回测记录
+      const filteredData = historyData.filter((record: any) => {
+        // 如果记录中有 factor_id，验证是否匹配
+        if (record.factor_id !== undefined && record.factor_id !== requestFactorId) {
+          console.warn('过滤掉不匹配的回测记录, 记录的 factor_id:', record.factor_id, ', 请求的 factor_id:', requestFactorId)
+          return false
+        }
+        return true
+      })
+      
+      backtestHistory.value = filteredData
+      console.log('回测历史记录数:', filteredData.length)
+      
+      if (filteredData.length > 0) {
+        console.log('第一条记录:', filteredData[0])
+        const latestRecord = filteredData[0]
         // 新数据结构：period_ic_stats 在 factor_result 里面
         const periodStats = latestRecord.factor_result?.period_ic_stats || latestRecord.period_stats
         if (Array.isArray(periodStats) && periodStats.length > 0) {
@@ -2175,9 +2219,11 @@ const loadBacktestHistory = async () => {
         }
       }
     } else {
+      backtestHistory.value = []
       console.error('获取回测历史失败:', result.error)
     }
   } catch (error: any) {
+    backtestHistory.value = []
     console.error('加载回测历史失败:', error)
   } finally {
     loadingBacktestHistory.value = false
@@ -2383,8 +2429,88 @@ const backtestForm = reactive({
   forward_periods: [1, 5, 10, 20],
   factor_direction: 'auto',
   buy_price_type: 'daily_open',
-  sell_price_type: 'daily_close'
+  sell_price_type: 'daily_close',
+  benchmarks: [] as string[]
 })
+
+// 价格类型和基准指数选项
+const buyPriceTypes = ref<Array<{ value: string; label: string }>>([
+  { value: 'daily_open', label: '日线开盘价' }
+])
+const sellPriceTypes = ref<Array<{ value: string; label: string }>>([
+  { value: 'daily_close', label: '日线收盘价' }
+])
+const benchmarkOptions = ref<Array<{ value: string; label: string }>>([])
+const selectedBenchmarks = ref<string[]>([])
+
+// 股票池数据
+interface StockPool {
+  id: string
+  name: string
+  description: string
+  start_date: string
+}
+interface StockPoolGroup {
+  name: string
+  pools: StockPool[]
+}
+interface StockPoolData {
+  index: StockPoolGroup
+  industry: StockPoolGroup
+  custom: StockPoolGroup
+}
+const stockPoolData = ref<StockPoolData | null>(null)
+const stockPoolsLoading = ref(false)
+const stockPoolTab = ref('index')
+
+// 加载股票池列表
+const loadStockPools = async () => {
+  stockPoolsLoading.value = true
+  try {
+    const result = await window.electronAPI.backtest.getStockPools()
+    if (result.success && result.data) {
+      const data = result.data as any
+      if (data.index || data.industry) {
+        stockPoolData.value = data as StockPoolData
+      } else if (Array.isArray(data)) {
+        stockPoolData.value = {
+          index: { name: '标准指数维度', pools: data },
+          industry: { name: '申万行业维度', pools: [] },
+          custom: { name: '自定义', pools: [] }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('加载股票池失败:', error)
+  } finally {
+    stockPoolsLoading.value = false
+  }
+}
+
+// 切换股票池维度
+const handleStockPoolTabChange = (tab: string) => {
+  stockPoolTab.value = tab
+  const pools = stockPoolData.value?.[tab as keyof StockPoolData]?.pools || []
+  if (pools.length > 0) {
+    backtestForm.universe_preset = pools[0].id
+  }
+}
+
+// 加载价格类型和基准指数选项
+const loadPriceTypeOptions = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getPriceTypeOptions()
+    console.log('📊 [MyFactors] 价格类型选项接口返回:', result)
+    if (result.success && result.data) {
+      buyPriceTypes.value = result.data.buy_price_types || []
+      sellPriceTypes.value = result.data.sell_price_types || []
+      benchmarkOptions.value = result.data.benchmarks || []
+      console.log('📊 [MyFactors] 基准指数选项:', benchmarkOptions.value)
+    }
+  } catch (error) {
+    console.error('加载价格类型选项失败:', error)
+  }
+}
 
 // 批量选择相关函数
 const toggleFactorSelection = (factor: any, checked: boolean) => {
@@ -2471,23 +2597,43 @@ const clearSelection = () => {
 }
 
 // 单个因子回测
-const goToBacktest = (factor: any) => {
+const goToBacktest = async (factor: any) => {
   if (!factor) return
   backtestFactor.value = factor
   backtestFactors.value = [factor]
+  // 确保选项已加载
+  if (benchmarkOptions.value.length === 0) {
+    await loadPriceTypeOptions()
+  }
+  if (!stockPoolData.value) {
+    await loadStockPools()
+  }
+  // 重置选择
+  selectedBenchmarks.value = []
+  stockPoolTab.value = 'index'
   backtestDialogVisible.value = true
 }
 
 // 批量回测
 const backtestFactors = ref<any[]>([])
 
-const openBatchBacktest = () => {
+const openBatchBacktest = async () => {
   if (selectedFactorIds.value.length === 0) {
     ElMessage.warning('请先选择要回测的因子')
     return
   }
   backtestFactor.value = null
   backtestFactors.value = [...selectedFactorsData.value]
+  // 确保选项已加载
+  if (benchmarkOptions.value.length === 0) {
+    await loadPriceTypeOptions()
+  }
+  if (!stockPoolData.value) {
+    await loadStockPools()
+  }
+  // 重置选择
+  selectedBenchmarks.value = []
+  stockPoolTab.value = 'index'
   backtestDialogVisible.value = true
 }
 
@@ -2538,11 +2684,13 @@ const submitBacktest = async () => {
         forward_periods: [...backtestForm.forward_periods],
         factor_direction: backtestForm.factor_direction,
         buy_price_type: backtestForm.buy_price_type,
-        sell_price_type: backtestForm.sell_price_type
+        sell_price_type: backtestForm.sell_price_type,
+        benchmarks: [...selectedBenchmarks.value]
       }
     }
     
-    console.log('提交回测请求数据:', JSON.stringify(data, null, 2))
+    console.log('📊 selectedBenchmarks:', selectedBenchmarks.value)
+    console.log('📊 提交回测请求数据:', JSON.stringify(data, null, 2))
     
     const result = await window.electronAPI.factor.myBacktest(data)
     
@@ -2582,10 +2730,9 @@ const templateFields = [
   { field: 'factor_code', required: true, description: '因子代码，英文开头，只能包含字母数字下划线', example: 'momentum_5d' },
   { field: 'factor_name', required: true, description: '因子中文名称', example: '5日动量' },
   { field: 'factor_name_en', required: false, description: '因子英文名称', example: '5-Day Momentum' },
-  { field: 'category_l3_id', required: true, description: '三级分类ID（从分类树获取）', example: '10' },
-  { field: 'expression', required: true, description: '因子表达式', example: '(close - lag(close, 5)) / lag(close, 5)' },
+  { field: 'expression', required: true, description: '因子表达式，字段名须与data_sources中fields一致', example: '(hfq_close_price - lag(hfq_close_price, 5)) / lag(hfq_close_price, 5)' },
   { field: 'description', required: false, description: '因子描述', example: '计算5日收益率' },
-  { field: 'data_sources', required: true, description: '数据依赖，JSON格式，支持多表', example: '{"daily_quotes":{"date_field":"trade_date","code_field":"stock_code","fields":["close"]}}' }
+  { field: 'data_sources', required: true, description: '数据依赖JSON，每个表必须包含date_field、code_field、fields三个字段', example: '{"zz_500D":{"date_field":"trade_date","code_field":"stock_code","fields":["hfq_close_price"]}}' }
 ]
 
 // 有效/无效统计
@@ -2602,8 +2749,8 @@ const openBatchUploadDialog = () => {
 // 下载模板
 const downloadTemplate = async () => {
   try {
-    // 使用 exceljs 生成模板
-    const ExcelJS = require('exceljs')
+    // 使用 exceljs 生成模板（动态导入）
+    const ExcelJS = await import('exceljs')
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('因子模板')
     
@@ -2612,7 +2759,6 @@ const downloadTemplate = async () => {
       { header: 'factor_code', key: 'factor_code', width: 20 },
       { header: 'factor_name', key: 'factor_name', width: 20 },
       { header: 'factor_name_en', key: 'factor_name_en', width: 25 },
-      { header: 'category_l3_id', key: 'category_l3_id', width: 15 },
       { header: 'expression', key: 'expression', width: 50 },
       { header: 'description', key: 'description', width: 40 },
       { header: 'data_sources', key: 'data_sources', width: 80 }
@@ -2631,20 +2777,18 @@ const downloadTemplate = async () => {
       factor_code: 'momentum_5d',
       factor_name: '5日动量',
       factor_name_en: '5-Day Momentum',
-      category_l3_id: '10',
-      expression: '(close - lag(close, 5)) / lag(close, 5)',
+      expression: '(hfq_close_price - lag(hfq_close_price, 5)) / lag(hfq_close_price, 5)',
       description: '计算股票5日收益率作为动量因子',
-      data_sources: '{"stk_daily":{"date_field":"trade_date","code_field":"stock_code","fields":["close"]}}'
+      data_sources: '{"zz_500D":{"date_field":"trade_date","code_field":"stock_code","fields":["hfq_close_price"]}}'
     })
     
     worksheet.addRow({
-      factor_code: 'vol_20d',
-      factor_name: '20日波动率',
-      factor_name_en: '20-Day Volatility',
-      category_l3_id: '15',
-      expression: 'std(returns, 20)',
-      description: '计算股票20日收益率标准差',
-      data_sources: '{"stk_daily":{"date_field":"trade_date","code_field":"stock_code","fields":["close","returns"]}}'
+      factor_code: 'price_ma5_bias',
+      factor_name: '价格MA5偏离',
+      factor_name_en: 'Price MA5 Bias',
+      expression: 'hfq_close_price / ma5 - 1',
+      description: '后复权收盘价相对5日均线的偏离度（跨表示例）',
+      data_sources: '{"zz_500D":{"date_field":"trade_date","code_field":"stock_code","fields":["hfq_close_price"]},"zz_500D_1":{"date_field":"trade_date","code_field":"stock_code","fields":["ma5"]}}'
     })
     
     // 添加说明 sheet
@@ -2688,7 +2832,7 @@ const handleFileChange = async (file: any) => {
   if (!file || !file.raw) return
   
   try {
-    const ExcelJS = require('exceljs')
+    const ExcelJS = await import('exceljs')
     const workbook = new ExcelJS.Workbook()
     const arrayBuffer = await file.raw.arrayBuffer()
     await workbook.xlsx.load(arrayBuffer)
@@ -2731,6 +2875,9 @@ const handleFileChange = async (file: any) => {
     parsedFactors.value = factors
     uploadStep.value = 2
     
+    // 清除上传组件的文件列表，避免重复选择问题
+    uploadRef.value?.clearFiles()
+    
     if (factors.length === 0) {
       ElMessage.warning('未读取到有效数据')
     } else {
@@ -2747,7 +2894,6 @@ const validateFactor = (factor: any): string => {
   if (!factor.factor_code) return '缺少因子代码'
   if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(factor.factor_code)) return '因子代码格式错误'
   if (!factor.factor_name) return '缺少因子名称'
-  if (!factor.category_l3_id) return '缺少分类ID'
   if (!factor.expression) return '缺少因子表达式'
   if (!factor.data_sources) return '缺少数据依赖'
   
@@ -2792,47 +2938,44 @@ const submitBatchUpload = async () => {
   }
   
   batchUploading.value = true
-  let successCount = 0
-  let failCount = 0
-  const errors: string[] = []
   
   try {
-    for (const factor of validFactors) {
-      try {
-        const result = await window.electronAPI.factor.myCreate({
-          factor_code: factor.factor_code,
-          factor_name: factor.factor_name,
-          factor_name_en: factor.factor_name_en || undefined,
-          category_l3_id: Number(factor.category_l3_id),
-          expression: factor.expression,
-          description: factor.description || undefined,
-          data_sources: JSON.parse(factor.data_sources)
-        })
-        
-        if (result.success) {
-          successCount++
-        } else {
-          failCount++
-          errors.push(`${factor.factor_code}: ${result.error}`)
-        }
-      } catch (error: any) {
-        failCount++
-        errors.push(`${factor.factor_code}: ${error.message}`)
+    // 构建批量创建的数据
+    const factorsData = validFactors.map(factor => ({
+      factor_code: factor.factor_code,
+      factor_name: factor.factor_name,
+      factor_name_en: factor.factor_name_en || undefined,
+      expression: factor.expression,
+      description: factor.description || undefined,
+      data_sources: JSON.parse(factor.data_sources)
+    }))
+    
+    // 调用批量创建接口
+    const result = await window.electronAPI.factor.myBatchCreate(factorsData)
+    
+    if (result.success && result.data) {
+      const { success_count, fail_count, results } = result.data
+      
+      if (success_count > 0) {
+        ElMessage.success(`成功创建 ${success_count} 个因子`)
+        // 刷新分类树和因子列表
+        await loadCategories()
+        loadFactors()
       }
-    }
-    
-    if (successCount > 0) {
-      ElMessage.success(`成功创建 ${successCount} 个因子`)
-      loadFactors()
-    }
-    
-    if (failCount > 0) {
-      console.error('部分因子创建失败:', errors)
-      ElMessage.warning(`${failCount} 个因子创建失败，请查看控制台`)
-    }
-    
-    if (successCount > 0 && failCount === 0) {
-      batchUploadDialogVisible.value = false
+      
+      if (fail_count > 0) {
+        // 收集失败信息
+        const failedItems = results.filter(r => !r.success)
+        const errors = failedItems.map(r => `${r.factor_code}: ${r.error}`)
+        console.error('部分因子创建失败:', errors)
+        ElMessage.warning(`${fail_count} 个因子创建失败，请查看控制台`)
+      }
+      
+      if (success_count > 0 && fail_count === 0) {
+        batchUploadDialogVisible.value = false
+      }
+    } else {
+      ElMessage.error('批量上传失败: ' + (result.error || '未知错误'))
     }
   } catch (error: any) {
     ElMessage.error('批量上传失败: ' + error.message)
@@ -2926,6 +3069,7 @@ const formatFullTime = (time: string) => {
 
 onMounted(() => {
   checkStatus()
+  loadPriceTypeOptions()
 })
 </script>
 
@@ -3833,6 +3977,71 @@ onMounted(() => {
   
   :deep(.error-row) {
     background-color: #fef0f0 !important;
+  }
+}
+
+// 股票池 Tab 样式（回测对话框）
+.stock-pool-tabs-mini {
+  :deep(.el-tabs__header) {
+    margin-bottom: 10px;
+    
+    .el-tabs__nav-wrap::after {
+      display: none;
+    }
+    
+    .el-tabs__item {
+      padding: 0 12px;
+      height: 32px;
+      line-height: 32px;
+      font-size: 13px;
+    }
+  }
+  
+  :deep(.el-tabs__content) {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+}
+
+.pool-radio-list-mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  
+  .el-radio {
+    margin: 0;
+    padding: 6px 12px;
+    background: #f5f7fa;
+    border-radius: 6px;
+    
+    &:hover {
+      background: #e6f0ff;
+    }
+    
+    :deep(.el-radio__label) {
+      font-size: 13px;
+    }
+  }
+}
+
+.pool-radio-grid-mini {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  
+  .el-radio {
+    margin: 0;
+    padding: 6px 8px;
+    background: #f5f7fa;
+    border-radius: 6px;
+    
+    &:hover {
+      background: #e6f0ff;
+    }
+    
+    :deep(.el-radio__label) {
+      font-size: 12px;
+    }
   }
 }
 </style>
