@@ -469,12 +469,17 @@ export class ConfigManager {
       }
     } catch (error: any) {
       console.error('❌ 创建失败:', error)
+      console.error('❌ 服务端响应:', error.response?.status, error.response?.data)
       if (error.response?.status === 401) {
         return { success: false, error: 'API Key无效或已过期' }
       } else if (error.response?.status === 403) {
         return { success: false, error: '权限不足' }
+      } else if (error.response?.status === 500) {
+        const serverError = error.response?.data?.error || error.response?.data?.message || JSON.stringify(error.response?.data) || '服务器内部错误'
+        return { success: false, error: `服务器错误: ${serverError}` }
       } else {
-        return { success: false, error: error.message || '网络错误' }
+        const detail = error.response?.data?.error || error.response?.data?.message || error.message || '网络错误'
+        return { success: false, error: detail }
       }
     }
   }

@@ -1,5 +1,5 @@
-appId: com.zizhou.quant-platform
-productName: ZiZhou-Quant-Platform
+appId: com.zizhou.g-snowball
+productName: ZiZhou G-Snowball
 publish:
   provider: github
   owner: kaodaxueqiu

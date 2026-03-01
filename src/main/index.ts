@@ -123,7 +123,7 @@ function createWindow() {
 
   // 开发环境
   if (process.env.NODE_ENV === 'development') {
-    console.log('正在加载开发服务器: http://localhost:3000')
+    console.log('正在加载开发服务器: http://localhost:3010')
     
     // 延迟加载，确保Vite服务器准备就绪
     let retryCount = 0
@@ -133,7 +133,7 @@ function createWindow() {
       try {
         retryCount++
         console.log(`🔄 尝试加载页面... (第${retryCount}次)`)
-        await mainWindow!.loadURL('http://localhost:3000')
+        await mainWindow!.loadURL('http://localhost:3010')
         console.log('✅ 页面加载成功！')
         // 开发模式下启用DevTools
         mainWindow!.webContents.openDevTools()
@@ -1981,6 +1981,46 @@ ipcMain.handle('shell:showItemInFolder', async (_event, filePath: string) => {
   shell.showItemInFolder(filePath)
 })
 
+ipcMain.handle('file:extractDoc', async (_event, url: string) => {
+  const fs = require('fs')
+  const os = require('os')
+  const path = require('path')
+  try {
+    const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 })
+    const tmpDir = path.join(os.tmpdir(), 'snowball-preview')
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
+    const tmpFile = path.join(tmpDir, `doc_${Date.now()}.doc`)
+    fs.writeFileSync(tmpFile, Buffer.from(resp.data))
+    const WordExtractor = require('word-extractor')
+    const extractor = new WordExtractor()
+    const doc = await extractor.extract(tmpFile)
+    const body = doc.getBody() || ''
+    const headers = doc.getHeaders({ includeFooters: false }) || ''
+    const footers = doc.getFooters() || ''
+    try { fs.unlinkSync(tmpFile) } catch {}
+    return { success: true, text: body, headers, footers }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('file:openWithSystemApp', async (_event, url: string, fileName: string) => {
+  const fs = require('fs')
+  const os = require('os')
+  const path = require('path')
+  try {
+    const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 })
+    const tmpDir = path.join(os.tmpdir(), 'snowball-preview')
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
+    const filePath = path.join(tmpDir, fileName)
+    fs.writeFileSync(filePath, Buffer.from(resp.data))
+    const err = await shell.openPath(filePath)
+    return { success: !err, path: filePath, error: err || undefined }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
 // 🆕 打开文件或文件夹
 ipcMain.handle('shell:openPath', async (_event, path: string) => {
   const result = await shell.openPath(path)
@@ -3023,6 +3063,35 @@ ipcMain.handle('factor:myDelete', async (_event, factorId: string | number) => {
     return { success: true, message: response.data.message }
   } catch (error: any) {
     console.error('删除因子失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 批量删除因子
+ipcMain.handle('factor:myBatchDelete', async (_event, factorIds: string[]) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/batch-delete`,
+      { factor_ids: factorIds },
+      {
+        headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+        timeout: 30000
+      }
+    )
+    return {
+      success: response.data.success,
+      message: response.data.message,
+      deleted_count: response.data.deleted_count,
+      requested: response.data.requested
+    }
+  } catch (error: any) {
+    console.error('批量删除因子失败:', error.response?.data || error.message)
     return { success: false, error: error.response?.data?.error || error.message }
   }
 })
@@ -4922,6 +4991,187 @@ ipcMain.handle('backtest:report', async (_event, taskId: string, _options?: Reco
   }
 })
 
+// 回测: 因子值分页查询
+ipcMain.handle('backtest:getFactorValues', async (_event, taskId: string, params?: {
+  trade_date?: string
+  stock_code?: string
+  sort_by?: string
+  sort_order?: string
+  page?: number
+  page_size?: number
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/factor-values`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        params: {
+          trade_date: params?.trade_date,
+          stock_code: params?.stock_code,
+          sort_by: params?.sort_by || 'factor_value',
+          sort_order: params?.sort_order || 'desc',
+          page: params?.page || 1,
+          page_size: params?.page_size || 50
+        },
+        timeout: 30000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取因子值失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 因子值可用日期列表
+ipcMain.handle('backtest:getFactorValueDates', async (_event, taskId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/factor-values/dates`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 30000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取因子值日期失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 因子值截面统计
+ipcMain.handle('backtest:getFactorValueStats', async (_event, taskId: string, tradeDate: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/factor-values/stats`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        params: { trade_date: tradeDate },
+        timeout: 30000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取因子值统计失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 因子值分布直方图
+ipcMain.handle('backtest:getFactorValueDistribution', async (_event, taskId: string, params: {
+  trade_date: string
+  bins?: number
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/factor-values/distribution`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        params: {
+          trade_date: params.trade_date,
+          bins: params.bins || 50
+        },
+        timeout: 30000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取因子值分布失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 因子值下载CSV
+ipcMain.handle('backtest:downloadFactorValues', async (_event, taskId: string, tradeDate?: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const dateLabel = tradeDate || '全部'
+    const defaultFileName = `因子值_${taskId}_${dateLabel}.csv`
+
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+      title: '导出因子值数据',
+      defaultPath: defaultFileName,
+      filters: [{ name: 'CSV 文件', extensions: ['csv'] }]
+    })
+
+    if (canceled || !filePath) {
+      return { success: false, error: '用户取消' }
+    }
+
+    const axios = require('axios')
+    const fs = require('fs')
+
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/factor-values/download`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        params: tradeDate ? { trade_date: tradeDate } : {},
+        responseType: 'arraybuffer',
+        timeout: 120000
+      }
+    )
+
+    fs.writeFileSync(filePath, Buffer.from(response.data))
+    console.log('✅ 因子值数据导出成功:', filePath)
+    return { success: true, filePath }
+  } catch (error: any) {
+    console.error('❌ 导出因子值失败:', error)
+    if (error.response?.status === 404) {
+      return { success: false, error: '因子值数据不存在' }
+    }
+    return { success: false, error: error.message || '导出失败' }
+  }
+})
+
 // 回测: 取消任务
 ipcMain.handle('backtest:cancelTask', async (_event, taskId: string) => {
   try {
@@ -5413,4 +5663,169 @@ ipcMain.handle('workorder:getStats', async () => {
     console.error('❌ 获取工单统计失败:', error)
     return { success: false, error: error.message || '获取失败' }
   }
+})
+
+// IM: 获取 IM Token（通过 API Key 自动获取/创建）
+ipcMain.handle('im:getToken', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      'http://61.151.241.233:8080/api/v1/account/im-token',
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return {
+        success: true,
+        userID: response.data.userID,
+        token: response.data.token,
+        expireTimeSeconds: response.data.expireTimeSeconds,
+        phoneNumber: response.data.phoneNumber || '',
+        nickname: response.data.nickname || '',
+        email: response.data.email || '',
+        company: response.data.company || '',
+      }
+    } else {
+      return { success: false, error: response.data.error || '获取IM凭证失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取IM Token失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// IM: 搜索用户（通过后端 API）
+ipcMain.handle('im:searchUsers', async (_event, keyword: string, _token: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+
+    // 通过后端搜索 IM 用户
+    const resp = await axios.get(
+      'http://61.151.241.233:8080/api/v1/account/im-search',
+      {
+        params: { keyword },
+        headers: { 'X-API-Key': apiKey },
+        timeout: 10000,
+      }
+    )
+
+    if (resp.data?.success && resp.data?.users) {
+      return { success: true, users: resp.data.users }
+    }
+
+    return { success: false, error: resp.data?.error || '搜索返回异常', raw: resp.data }
+  } catch (error: any) {
+    console.error('❌ IM搜索用户失败:', error?.response?.data || error.message)
+    return {
+      success: false,
+      error: error?.response?.data?.error || error.message || '搜索失败',
+      statusCode: error?.response?.status,
+    }
+  }
+})
+
+// ========== 数据库权限管理 API ==========
+
+const DB_PERM_API_BASE = 'http://61.151.241.233:8080/api/v1/admin/db-permissions'
+
+function dbPermHeaders() {
+  const apiKey = getDefaultApiKeyForBacktest()
+  if (!apiKey) throw new Error('未找到API Key')
+  return { 'X-API-Key': apiKey }
+}
+
+async function dbPermGet(path: string, params?: Record<string, string>) {
+  const axios = require('axios')
+  const resp = await axios.get(`${DB_PERM_API_BASE}${path}`, { headers: dbPermHeaders(), params, timeout: 15000 })
+  return resp.data
+}
+
+async function dbPermPost(path: string, body: any) {
+  const axios = require('axios')
+  const resp = await axios.post(`${DB_PERM_API_BASE}${path}`, body, { headers: dbPermHeaders(), timeout: 15000 })
+  return resp.data
+}
+
+async function dbPermPut(path: string, body: any) {
+  const axios = require('axios')
+  const resp = await axios.put(`${DB_PERM_API_BASE}${path}`, body, { headers: dbPermHeaders(), timeout: 15000 })
+  return resp.data
+}
+
+async function dbPermDelete(path: string, params?: Record<string, string>, body?: any) {
+  const axios = require('axios')
+  const config: any = { headers: dbPermHeaders(), timeout: 15000 }
+  if (params) config.params = params
+  if (body) config.data = body
+  const resp = await axios.delete(`${DB_PERM_API_BASE}${path}`, config)
+  return resp.data
+}
+
+function wrapDbPerm(fn: () => Promise<any>) {
+  return async () => {
+    try {
+      const data = await fn()
+      return { success: true, ...data }
+    } catch (e: any) {
+      const rd = e?.response?.data
+      return { success: false, error: rd?.error || e.message || '请求失败', field: rd?.field }
+    }
+  }
+}
+
+ipcMain.handle('dbPerm:listDatabases', async (_e, dbType?: string) => {
+  return wrapDbPerm(() => dbPermGet('/databases', dbType ? { db_type: dbType } : undefined))()
+})
+
+ipcMain.handle('dbPerm:listTables', async (_e, dbType: string, dbName: string) => {
+  return wrapDbPerm(() => dbPermGet(`/databases/${dbType}/${dbName}/tables`))()
+})
+
+ipcMain.handle('dbPerm:listUsers', async (_e, dbType?: string) => {
+  return wrapDbPerm(() => dbPermGet('/users', dbType ? { db_type: dbType } : undefined))()
+})
+
+ipcMain.handle('dbPerm:createUser', async (_e, body: any) => {
+  return wrapDbPerm(() => dbPermPost('/users', body))()
+})
+
+ipcMain.handle('dbPerm:deleteUser', async (_e, username: string, dbType?: string) => {
+  return wrapDbPerm(() => dbPermDelete(`/users/${username}`, dbType ? { db_type: dbType } : undefined))()
+})
+
+ipcMain.handle('dbPerm:changePassword', async (_e, username: string, body: any) => {
+  return wrapDbPerm(() => dbPermPut(`/users/${username}/password`, body))()
+})
+
+ipcMain.handle('dbPerm:getUserGrants', async (_e, username: string, dbType?: string) => {
+  return wrapDbPerm(() => dbPermGet(`/users/${username}/grants`, dbType ? { db_type: dbType } : undefined))()
+})
+
+ipcMain.handle('dbPerm:grantPrivileges', async (_e, username: string, body: any) => {
+  return wrapDbPerm(() => dbPermPost(`/users/${username}/grants`, body))()
+})
+
+ipcMain.handle('dbPerm:revokePrivileges', async (_e, username: string, body: any) => {
+  return wrapDbPerm(() => dbPermDelete(`/users/${username}/grants`, undefined, body))()
+})
+
+ipcMain.handle('dbPerm:revokeAllPrivileges', async (_e, username: string, body: any) => {
+  return wrapDbPerm(() => dbPermDelete(`/users/${username}/grants/all`, undefined, body))()
+})
+
+ipcMain.handle('dbPerm:batchGrant', async (_e, username: string, body: any) => {
+  return wrapDbPerm(() => dbPermPost(`/users/${username}/grants/batch`, body))()
 })

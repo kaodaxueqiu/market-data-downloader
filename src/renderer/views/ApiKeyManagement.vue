@@ -192,14 +192,6 @@
                 {{ cat.name }} ({{ getSelectedInCategory(cat.code) }}/{{ getCategoryPermissions(cat.code).length }})
               </el-button>
               
-              <!-- 数据源权限（固定） -->
-              <el-button
-                :type="activePermissionCategory === 'datasource' ? 'primary' : ''"
-                @click="activePermissionCategory = 'datasource'"
-              >
-                数据源权限 ({{ selectedDatasources.length }}/{{ allDatasources.length }})
-              </el-button>
-              
               <!-- 基础配置（固定） -->
               <el-button
                 :type="activePermissionCategory === 'basic' ? 'primary' : ''"
@@ -302,54 +294,6 @@
                 <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
                   <el-button @click="resetApiPermissions">重置</el-button>
                   <el-button type="primary" @click="saveApiPermissions">保存{{ getCategoryDisplayName(activePermissionCategory) }}</el-button>
-                </div>
-              </div>
-
-              <!-- 数据源权限 -->
-              <div v-else-if="activePermissionCategory === 'datasource'" style="padding: 30px;">
-                <div style="margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
-                  <div>
-                    <el-button size="default" @click="selectAllDatasources">全选</el-button>
-                    <el-button size="default" @click="unselectAllDatasources">全不选</el-button>
-                  </div>
-                </div>
-
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-                  <div 
-                    v-for="ds in allDatasources" 
-                    :key="ds.code"
-                    :class="{ 'datasource-card-selected': selectedDatasources.includes(ds.code) }"
-                    class="datasource-card"
-                    @click="toggleDatasource(ds.code)"
-                  >
-                    <div class="datasource-card-inner">
-                      <div class="datasource-checkbox">
-                        <el-checkbox 
-                          :model-value="selectedDatasources.includes(ds.code)"
-                          size="large"
-                          @change="toggleDatasource(ds.code)"
-                          @click.stop
-                        />
-                      </div>
-                      <div class="datasource-content">
-                        <div class="datasource-header">
-                          <div class="datasource-name">{{ ds.name }}</div>
-                          <el-tag :type="getDataSourceTagType(ds.code)" effect="plain" size="default">
-                            {{ ds.tables }}{{ ds.type }}
-                          </el-tag>
-                        </div>
-                        <div class="datasource-description">{{ ds.description }}</div>
-                        <div class="datasource-footer">
-                          <el-tag size="small" effect="plain">{{ ds.code }}</el-tag>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div style="margin-top: 30px; text-align: right;">
-                  <el-button size="large" @click="resetDatasourcePermissions">重置</el-button>
-                  <el-button size="large" type="primary" @click="saveDatasourcePermissions">保存数据源权限</el-button>
                 </div>
               </div>
 
@@ -890,8 +834,6 @@ const permissionLoading = ref(false)
 // 可编辑的权限
 const selectedMenuPermissions = ref<string[]>([])
 const selectedApiPermissions = ref<string[]>([])
-const selectedDatasources = ref<string[]>([])
-
 // 基础配置
 const basicConfig = ref({
   name: '',
@@ -899,14 +841,6 @@ const basicConfig = ref({
   data_level: 'L2',
   rate_limit: -1
 })
-
-// 所有可用数据源
-const allDatasources = [
-  { code: 'postgresql', name: '财务数据库', description: '原始静态数据（财务、基本信息等）', tables: 755, type: '张表' },
-  { code: 'redis', name: '实时行情库', description: '实时行情数据（ZZ-01~ZZ-107）', tables: 53, type: '个数据源' },
-  { code: 'clickhouse', name: '数据加工库', description: '数据加工和宽表', tables: 183, type: '张表' },
-  { code: 'clickhouse_data', name: '行情镜像库', description: '完整行情数据（ZZ-01~ZZ-107等）', tables: 56, type: '张表' }
-]
 
 // Tab 3: 数据库配置相关
 const selectedDatabaseKey = ref('')
@@ -1638,76 +1572,6 @@ const saveApiPermissions = async () => {
   }
 }
 
-// 🆕 数据源权限相关方法
-const toggleDatasource = (code: string) => {
-  const index = selectedDatasources.value.indexOf(code)
-  if (index > -1) {
-    selectedDatasources.value.splice(index, 1)
-  } else {
-    selectedDatasources.value.push(code)
-  }
-}
-
-const selectAllDatasources = () => {
-  selectedDatasources.value = allDatasources.map(ds => ds.code)
-}
-
-const unselectAllDatasources = () => {
-  selectedDatasources.value = []
-}
-
-const resetDatasourcePermissions = () => {
-  selectedDatasources.value = [...(permissionConfig.value?.datasource_access || [])]
-}
-
-const saveDatasourcePermissions = async () => {
-  if (!selectedPermissionKey.value) {
-    ElMessage.error('请先选择用户')
-    return
-  }
-  
-  try {
-    console.log('💾 保存数据源权限:', selectedDatasources.value)
-    
-    // 转换为普通对象（避免IPC序列化错误）
-    const updates = {
-      datasource_access: [...selectedDatasources.value]
-    }
-    
-    const result = await window.electronAPI.config.patchPermissionConfig(
-      selectedPermissionKey.value,
-      updates
-    )
-    
-    if (result.success) {
-      ElMessage.success('数据源权限保存成功！')
-      
-      // 直接重新获取权限配置
-      const fetchResult = await window.electronAPI.config.fetchPermissionConfig(selectedPermissionKey.value)
-      if (fetchResult.success && fetchResult.data) {
-        permissionConfig.value = fetchResult.data
-        // 强制更新数据源权限显示
-        selectedDatasources.value = [...(fetchResult.data.datasource_access || [])]
-        console.log('✅ 数据源权限已刷新:', selectedDatasources.value)
-      }
-    } else {
-      ElMessage.error(result.error || '保存失败')
-    }
-  } catch (error: any) {
-    ElMessage.error('保存失败: ' + error.message)
-  }
-}
-
-// 获取数据源Tag颜色
-const getDataSourceTagType = (code: string) => {
-  const colorMap: Record<string, any> = {
-    'postgresql': 'success',
-    'redis': 'primary',
-    'clickhouse': 'warning',
-    'clickhouse_data': 'info'
-  }
-  return colorMap[code] || 'info'
-}
 
 // 🆕 基础配置相关方法
 const resetBasicConfig = () => {
@@ -1794,7 +1658,6 @@ const loadUserPermissions = async () => {
     // 清空选择
     selectedMenuPermissions.value = []
     selectedApiPermissions.value = []
-    selectedDatasources.value = []
     basicConfig.value = { name: '', description: '', data_level: 'L2', rate_limit: -1 }
     permissionConfig.value = null
     return
@@ -1856,9 +1719,6 @@ const loadUserPermissions = async () => {
         console.log('✅ 使用具体权限列表，共', selectedApiPermissions.value.length, '个')
       }
       
-      // 填充数据源权限
-      selectedDatasources.value = [...(result.data.datasource_access || [])]
-      
       // 填充基础配置（从两个接口合并数据）
       basicConfig.value = {
         name: detailResult.data?.name || result.data.name || '',
@@ -1870,7 +1730,6 @@ const loadUserPermissions = async () => {
       console.log('✅ 用户权限已加载')
       console.log('  - 菜单权限:', selectedMenuPermissions.value)
       console.log('  - API权限数量:', selectedApiPermissions.value.length)
-      console.log('  - 数据源权限:', selectedDatasources.value)
       console.log('  - 基础配置:', basicConfig.value)
     } else {
       ElMessage.error(result.error || '获取用户权限失败')
@@ -2028,73 +1887,6 @@ onMounted(async () => {
     }
   }
   
-  // 数据源卡片样式
-  .datasource-card {
-    background: #ffffff;
-    border: 2px solid #e4e7ed;
-    border-radius: 12px;
-    padding: 20px;
-    cursor: pointer;
-    transition: all 0.25s ease;
-    
-    &:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-      border-color: #409eff;
-    }
-    
-    &.datasource-card-selected {
-      border-color: #409eff;
-      background: linear-gradient(135deg, #f6f9ff 0%, #ecf5ff 100%);
-      box-shadow: 0 4px 16px rgba(64, 158, 255, 0.2);
-      
-      .datasource-name {
-        color: #409eff;
-      }
-    }
-    
-    .datasource-card-inner {
-      display: flex;
-      align-items: flex-start;
-      gap: 15px;
-    }
-    
-    .datasource-checkbox {
-      padding-top: 2px;
-    }
-    
-    .datasource-content {
-      flex: 1;
-      min-width: 0;
-    }
-    
-    .datasource-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    
-    .datasource-name {
-      font-size: 17px;
-      font-weight: 600;
-      color: #303133;
-      transition: color 0.25s;
-    }
-    
-    .datasource-description {
-      color: #606266;
-      font-size: 14px;
-      line-height: 1.6;
-      margin-bottom: 12px;
-    }
-    
-    .datasource-footer {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-  }
 }
 </style>
 

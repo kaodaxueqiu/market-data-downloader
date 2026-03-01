@@ -260,6 +260,9 @@
               <el-button type="success" size="small" :icon="DataAnalysis" @click="openBatchBacktest">
                 批量回测
               </el-button>
+              <el-button type="danger" size="small" :icon="Delete" @click="handleBatchDelete" :loading="batchDeleting">
+                批量删除
+              </el-button>
               <el-button size="small" text @click="clearSelection">清空</el-button>
             </div>
           </div>
@@ -672,14 +675,35 @@
           <div class="section-header">
             <el-icon><Connection /></el-icon>
             <span class="required-label">数据源配置</span>
-            <el-button type="primary" size="small" text :icon="Plus" @click="addDataSource">
-              添加数据源
-            </el-button>
+            <el-dropdown @command="handleAddDataSource" class="add-datasource-dropdown">
+              <el-button type="primary" size="small" text :icon="Plus">
+                添加数据源
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="normal">
+                    <el-icon><Document /></el-icon>
+                    日频数据源
+                  </el-dropdown-item>
+                  <el-dropdown-item command="intraday">
+                    <el-icon><Clock /></el-icon>
+                    日内时段筛选数据源
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
           <div class="section-body">
-            <div v-for="(source, index) in dataSources" :key="index" class="datasource-item">
+            <div v-for="(source, index) in dataSources" :key="index" class="datasource-item" :class="{ 'intraday-mode': source.mode === 'intraday' }">
               <div class="datasource-header">
                 <span class="datasource-title">数据源 {{ index + 1 }}: {{ source.table || '未选择' }}</span>
+                <el-tag 
+                  :type="source.mode === 'intraday' ? 'warning' : 'info'" 
+                  size="small"
+                  effect="plain"
+                >
+                  {{ source.mode === 'intraday' ? '日内时段筛选' : '日频数据' }}
+                </el-tag>
                 <el-button 
                   v-if="dataSources.length > 1"
                   type="danger" 
@@ -748,6 +772,74 @@
                   </el-select>
                 </div>
               </div>
+              
+              <!-- 时段筛选配置（仅 intraday 模式显示） -->
+              <template v-if="source.mode === 'intraday'">
+                <div class="time-filter-section">
+                  <!-- 时间字段选择 -->
+                  <div class="time-field-row">
+                    <span class="field-label"><span class="required">*</span>时间字段</span>
+                    <el-select 
+                      v-model="source.time_field" 
+                      filterable 
+                      placeholder="选择时间字段（如 trade_time）"
+                      style="width: 200px;"
+                    >
+                      <el-option 
+                        v-for="f in source.availableFields" 
+                        :key="f.column_name" 
+                        :label="f.column_name" 
+                        :value="f.column_name"
+                      >
+                        <span>{{ f.column_name }}</span>
+                        <span v-if="f.column_comment" class="field-desc">{{ f.column_comment }}</span>
+                      </el-option>
+                    </el-select>
+                  </div>
+                  
+                  <!-- 快捷预设按钮 -->
+                  <div v-if="timeFilterPresets.length > 0" class="time-presets">
+                    <span class="presets-label">快捷选择：</span>
+                    <div class="presets-buttons">
+                      <el-button
+                        v-for="preset in timeFilterPresets"
+                        :key="preset.value"
+                        size="small"
+                        :type="isPresetActive(index, preset) ? 'primary' : 'default'"
+                        @click="onPresetClick(index, preset)"
+                      >
+                        {{ preset.label }}
+                      </el-button>
+                    </div>
+                  </div>
+                  
+                  <!-- 时间范围 -->
+                  <div class="time-range-row">
+                    <span class="field-label"><span class="required">*</span>时间范围</span>
+                    <div class="time-range-inputs">
+                      <el-input
+                        v-model="source.time_start"
+                        placeholder="09:30"
+                        style="width: 100px;"
+                        maxlength="5"
+                      />
+                      <span class="range-separator">~</span>
+                      <el-input
+                        v-model="source.time_end"
+                        placeholder="10:00"
+                        style="width: 100px;"
+                        maxlength="5"
+                      />
+                    </div>
+                  </div>
+                  
+                  <!-- 提示信息 -->
+                  <div class="time-filter-hint">
+                    <el-icon><WarningFilled /></el-icon>
+                    <span>分钟级数据将按指定时段筛选后，自动聚合为日频数据</span>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -1016,17 +1108,56 @@
           </el-row>
           
           <el-form-item label="基准指数">
-            <el-checkbox-group v-model="selectedBenchmarks" @change="(val: string[]) => console.log('📊 checkbox changed:', val)">
-              <el-checkbox 
-                v-for="opt in benchmarkOptions" 
-                :key="opt.value" 
-                :label="opt.value"
+            <el-tabs v-model="benchmarkTab" class="benchmark-tabs-mini">
+              <!-- 标准指数 Tab -->
+              <el-tab-pane label="标准指数" name="standard">
+                <el-checkbox-group v-model="selectedBenchmarks" class="benchmark-checkbox-group">
+                  <el-checkbox 
+                    v-for="opt in standardIndexes" 
+                    :key="opt.value" 
+                    :label="opt.value"
+                  >
+                    {{ opt.label }}
+                  </el-checkbox>
+                </el-checkbox-group>
+              </el-tab-pane>
+              <!-- 指数行业 Tab -->
+              <el-tab-pane label="指数行业" name="industry">
+                <el-tabs v-model="industryIndexTab" type="card" class="industry-sub-tabs-mini">
+                  <el-tab-pane 
+                    v-for="idx in indexList" 
+                    :key="idx.code" 
+                    :label="idx.label" 
+                    :name="idx.code"
+                  >
+                    <el-checkbox-group v-model="selectedBenchmarks" class="industry-grid-mini">
+                      <el-checkbox 
+                        v-for="opt in (indexIndustries[idx.code] || [])" 
+                        :key="opt.value" 
+                        :label="opt.value"
+                      >
+                        {{ opt.industry }}
+                      </el-checkbox>
+                    </el-checkbox-group>
+                  </el-tab-pane>
+                </el-tabs>
+              </el-tab-pane>
+            </el-tabs>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+              选择基准计算超额收益，可多选
+            </div>
+            <div v-if="selectedBenchmarks.length > 0" class="selected-benchmarks-list">
+              <span class="selected-label">已选 ({{ selectedBenchmarks.length }})：</span>
+              <el-tag 
+                v-for="bm in selectedBenchmarks" 
+                :key="bm" 
+                size="small" 
+                closable 
+                @close="removeBenchmark(bm)"
+                style="margin: 2px 4px 2px 0;"
               >
-                {{ opt.label }}
-              </el-checkbox>
-            </el-checkbox-group>
-            <div v-if="benchmarkOptions.length === 0" style="color: #909399; font-size: 12px;">
-              正在加载基准指数选项...
+                {{ getBenchmarkLabel(bm) }}
+              </el-tag>
             </div>
           </el-form-item>
         </el-form>
@@ -1228,7 +1359,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
   Loading, Box, Plus, Search, Edit, Delete, DataAnalysis, WarningFilled, Refresh,
-  Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document
+  Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document, Clock
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -1384,15 +1515,30 @@ const form = reactive({
 
 // 数据依赖
 interface DataSourceItem {
+  mode: 'normal' | 'intraday'  // 'normal' 日频数据 | 'intraday' 日内时段筛选
   table: string
   database: string
   fields: string[]
   date_field: string
   code_field: string
+  // 时段筛选字段（仅 intraday 模式使用）
+  time_field?: string
+  time_start?: string
+  time_end?: string
   availableFields: any[]
   loadingFields: boolean
 }
+
+// 时段预设选项类型
+interface TimeFilterPreset {
+  value: string
+  label: string
+  description: string
+  time_start: string
+  time_end: string
+}
 const dataSources = ref<DataSourceItem[]>([{ 
+  mode: 'normal',
   table: '', 
   database: 'clickhouse',
   fields: [], 
@@ -1401,6 +1547,9 @@ const dataSources = ref<DataSourceItem[]>([{
   availableFields: [], 
   loadingFields: false 
 }])
+
+// 时段筛选预设选项
+const timeFilterPresets = ref<TimeFilterPreset[]>([])
 
 // 搜索对话框
 const searchDialogVisible = ref(false)
@@ -1488,9 +1637,10 @@ const handleTableChange = async (index: number) => {
   }
 }
 
-// 添加数据源
-const addDataSource = () => {
-  dataSources.value.push({ 
+// 添加数据源（通过下拉菜单选择类型）
+const handleAddDataSource = (mode: 'normal' | 'intraday') => {
+  const ds: DataSourceItem = {
+    mode,
     table: '', 
     database: 'clickhouse',
     fields: [], 
@@ -1498,7 +1648,37 @@ const addDataSource = () => {
     code_field: '',
     availableFields: [], 
     loadingFields: false 
-  })
+  }
+  // 日内时段筛选模式需要额外字段
+  if (mode === 'intraday') {
+    ds.time_field = ''
+    ds.time_start = ''
+    ds.time_end = ''
+  }
+  dataSources.value.push(ds)
+}
+
+// 时段预设相关函数
+const onPresetClick = (index: number, preset: TimeFilterPreset) => {
+  const ds = dataSources.value[index]
+  if (preset.value === 'custom') {
+    ds.time_start = ''
+    ds.time_end = ''
+  } else {
+    ds.time_start = preset.time_start
+    ds.time_end = preset.time_end
+  }
+}
+
+const isPresetActive = (index: number, preset: TimeFilterPreset): boolean => {
+  const ds = dataSources.value[index]
+  if (preset.value === 'custom') {
+    if (!ds.time_start || !ds.time_end) return false
+    return !timeFilterPresets.value.some(p => 
+      p.value !== 'custom' && p.time_start === ds.time_start && p.time_end === ds.time_end
+    )
+  }
+  return ds.time_start === preset.time_start && ds.time_end === preset.time_end
 }
 
 // 移除数据源
@@ -1508,24 +1688,32 @@ const removeDataSource = (index: number) => {
   }
 }
 
-// 构建 data_sources 对象（新格式）
+// 构建 data_sources 对象（新格式，支持时段筛选）
 const buildDataSources = () => {
-  const result: Record<string, { date_field: string; code_field: string; fields: string[] }> = {}
+  const result: Record<string, any> = {}
   for (const source of dataSources.value) {
     if (source.table && source.fields.length > 0 && source.date_field && source.code_field) {
-      result[source.table] = {
+      const dsConfig: any = {
         date_field: source.date_field,
         code_field: source.code_field,
         fields: source.fields
       }
+      // 日内时段筛选模式：加入时段字段
+      if (source.mode === 'intraday' && source.time_field && source.time_start && source.time_end) {
+        dsConfig.time_field = source.time_field
+        dsConfig.time_start = source.time_start
+        dsConfig.time_end = source.time_end
+      }
+      result[source.table] = dsConfig
     }
   }
   return Object.keys(result).length > 0 ? result : undefined
 }
 
-// 解析 data_sources 字符串（新格式）
+// 解析 data_sources 字符串（新格式，支持时段筛选）
 const parseDataSources = (dataSourcesStr: string | object | null) => {
   const defaultSource: DataSourceItem = { 
+    mode: 'normal',
     table: '', 
     database: 'clickhouse',
     fields: [], 
@@ -1540,7 +1728,7 @@ const parseDataSources = (dataSourcesStr: string | object | null) => {
     return
   }
   
-  let parsed: Record<string, { date_field: string; code_field: string; fields: string[] }>
+  let parsed: Record<string, any>
   if (typeof dataSourcesStr === 'string') {
     try {
       parsed = JSON.parse(dataSourcesStr)
@@ -1549,7 +1737,7 @@ const parseDataSources = (dataSourcesStr: string | object | null) => {
       return
     }
   } else {
-    parsed = dataSourcesStr as Record<string, { date_field: string; code_field: string; fields: string[] }>
+    parsed = dataSourcesStr as Record<string, any>
   }
   
   const entries = Object.entries(parsed)
@@ -1558,15 +1746,27 @@ const parseDataSources = (dataSourcesStr: string | object | null) => {
     return
   }
   
-  dataSources.value = entries.map(([table, value]) => ({
-    table,
-    database: 'clickhouse',
-    fields: value.fields || [],
-    date_field: value.date_field || '',
-    code_field: value.code_field || '',
-    availableFields: [],
-    loadingFields: false
-  }))
+  dataSources.value = entries.map(([table, value]) => {
+    // 判断是否是日内时段筛选模式（有 time_field 字段）
+    const isIntraday = !!(value.time_field && value.time_start && value.time_end)
+    const ds: DataSourceItem = {
+      mode: isIntraday ? 'intraday' : 'normal',
+      table,
+      database: 'clickhouse',
+      fields: value.fields || [],
+      date_field: value.date_field || '',
+      code_field: value.code_field || '',
+      availableFields: [],
+      loadingFields: false
+    }
+    // 时段筛选字段
+    if (isIntraday) {
+      ds.time_field = value.time_field
+      ds.time_start = value.time_start
+      ds.time_end = value.time_end
+    }
+    return ds
+  })
   
   // 加载每个表的字段
   dataSources.value.forEach((_, index) => {
@@ -2273,6 +2473,7 @@ const openCreateDialog = async () => {
   })
   // 重置数据依赖
   dataSources.value = [{ 
+    mode: 'normal' as const,
     table: '', 
     database: 'clickhouse',
     fields: [], 
@@ -2336,6 +2537,26 @@ const handleSubmit = async () => {
         ElMessage.error(`数据源 ${source.table} 缺少因子字段`)
         return
       }
+      // 日内时段筛选模式验证
+      if (source.mode === 'intraday') {
+        if (!source.time_field) {
+          ElMessage.error(`数据源 ${source.table} 日内时段筛选模式必须选择时间字段`)
+          return
+        }
+        if (!source.time_start || !source.time_end) {
+          ElMessage.error(`数据源 ${source.table} 日内时段筛选模式必须配置时间范围`)
+          return
+        }
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/
+        if (!timeRegex.test(source.time_start)) {
+          ElMessage.error(`数据源 ${source.table} 开始时间格式错误，应为 HH:MM`)
+          return
+        }
+        if (!timeRegex.test(source.time_end)) {
+          ElMessage.error(`数据源 ${source.table} 结束时间格式错误，应为 HH:MM`)
+          return
+        }
+      }
     }
   }
   
@@ -2344,7 +2565,8 @@ const handleSubmit = async () => {
   try {
     
     if (isEdit.value && editingId.value) {
-      const result = await window.electronAPI.factor.myUpdate(editingId.value, {
+      // 使用 JSON 深拷贝确保是纯对象，避免 IPC 序列化错误
+      const updateData = JSON.parse(JSON.stringify({
         factor_name: form.factor_name,
         factor_name_en: form.factor_name_en || undefined,
         category_l3_id: form.category_l3_id,
@@ -2352,7 +2574,8 @@ const handleSubmit = async () => {
         description: form.description || undefined,
         data_sources: dataSourcesObj,
         tag_ids: form.tag_ids.length > 0 ? form.tag_ids : undefined
-      })
+      }))
+      const result = await window.electronAPI.factor.myUpdate(editingId.value, updateData)
       
       if (result.success) {
         ElMessage.success('更新成功')
@@ -2366,7 +2589,8 @@ const handleSubmit = async () => {
         ElMessage.error(result.error || '更新失败')
       }
     } else {
-      const result = await window.electronAPI.factor.myCreate({
+      // 使用 JSON 深拷贝确保是纯对象，避免 IPC 序列化错误
+      const createData = JSON.parse(JSON.stringify({
         factor_code: form.factor_code,
         factor_name: form.factor_name,
         factor_name_en: form.factor_name_en || undefined,
@@ -2375,7 +2599,8 @@ const handleSubmit = async () => {
         description: form.description || undefined,
         data_sources: dataSourcesObj,
         tag_ids: form.tag_ids.length > 0 ? form.tag_ids : undefined
-      })
+      }))
+      const result = await window.electronAPI.factor.myCreate(createData)
       
       if (result.success) {
         ElMessage.success(result.message || '创建成功')
@@ -2389,6 +2614,42 @@ const handleSubmit = async () => {
     ElMessage.error(error.message || '操作失败')
   } finally {
     submitting.value = false
+  }
+}
+
+// 批量删除因子
+const batchDeleting = ref(false)
+const handleBatchDelete = async () => {
+  if (selectedFactorIds.value.length === 0) {
+    ElMessage.warning('请先选择要删除的因子')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedFactorIds.value.length} 个因子吗？此操作不可恢复。`,
+      '批量删除确认',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' }
+    )
+
+    batchDeleting.value = true
+    const result = await window.electronAPI.factor.myBatchDelete(selectedFactorIds.value.map(String))
+    if (result.success) {
+      ElMessage.success(`成功删除 ${result.deleted_count} 个因子`)
+      if (result.deleted_count !== undefined && result.requested !== undefined && result.deleted_count < result.requested) {
+        ElMessage.info(`${result.requested - result.deleted_count} 个因子未找到（可能已被删除）`)
+      }
+      selectedFactorIds.value = []
+      selectedFactor.value = null
+      currentFactorDetail.value = null
+      loadFactors()
+    } else {
+      ElMessage.error(result.error || '批量删除失败')
+    }
+  } catch {
+    // 取消删除
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -2440,8 +2701,52 @@ const buyPriceTypes = ref<Array<{ value: string; label: string }>>([
 const sellPriceTypes = ref<Array<{ value: string; label: string }>>([
   { value: 'daily_close', label: '日线收盘价' }
 ])
-const benchmarkOptions = ref<Array<{ value: string; label: string }>>([])
+
+// 基准指数数据
+interface BenchmarkOption {
+  value: string
+  label: string
+  description?: string
+}
+interface IndexIndustryOption {
+  value: string
+  label: string
+  index_code: string
+  index_name: string
+  industry: string
+}
+interface IndexItem {
+  code: string
+  name: string
+  label: string
+}
+const benchmarkTab = ref('standard')
+const industryIndexTab = ref('CSI300')
+const standardIndexes = ref<BenchmarkOption[]>([])
+const indexList = ref<IndexItem[]>([])
+const indexIndustries = ref<Record<string, IndexIndustryOption[]>>({})
 const selectedBenchmarks = ref<string[]>([])
+
+// 获取基准标签名称
+const getBenchmarkLabel = (value: string) => {
+  // 先从标准指数查找
+  const std = standardIndexes.value.find(s => s.value === value)
+  if (std) return std.label
+  // 再从指数行业查找
+  for (const code in indexIndustries.value) {
+    const ind = indexIndustries.value[code].find(i => i.value === value)
+    if (ind) return ind.label
+  }
+  return value
+}
+
+// 移除基准
+const removeBenchmark = (value: string) => {
+  const idx = selectedBenchmarks.value.indexOf(value)
+  if (idx > -1) {
+    selectedBenchmarks.value.splice(idx, 1)
+  }
+}
 
 // 股票池数据
 interface StockPool {
@@ -2504,8 +2809,35 @@ const loadPriceTypeOptions = async () => {
     if (result.success && result.data) {
       buyPriceTypes.value = result.data.buy_price_types || []
       sellPriceTypes.value = result.data.sell_price_types || []
-      benchmarkOptions.value = result.data.benchmarks || []
-      console.log('📊 [MyFactors] 基准指数选项:', benchmarkOptions.value)
+      
+      // 获取时段筛选预设选项（转换后端格式到前端格式）
+      if (result.data.time_filter_presets) {
+        timeFilterPresets.value = result.data.time_filter_presets.map(preset => ({
+          value: preset.name,
+          label: preset.name,
+          description: preset.description || '',
+          time_start: preset.start,
+          time_end: preset.end
+        }))
+        console.log('📊 [MyFactors] 时段筛选预设:', timeFilterPresets.value)
+      }
+      
+      // 解析基准指数新格式
+      const benchmarks = result.data.benchmarks as any
+      if (benchmarks && !Array.isArray(benchmarks)) {
+        standardIndexes.value = benchmarks.standard_indexes || []
+        indexList.value = benchmarks.index_list || []
+        indexIndustries.value = benchmarks.index_industries || {}
+        
+        if (indexList.value.length > 0 && !indexList.value.find(i => i.code === industryIndexTab.value)) {
+          industryIndexTab.value = indexList.value[0].code
+        }
+        console.log('📊 [MyFactors] 标准指数:', standardIndexes.value)
+        console.log('📊 [MyFactors] 指数行业:', indexIndustries.value)
+      } else if (Array.isArray(benchmarks)) {
+        // 兼容旧格式
+        standardIndexes.value = benchmarks
+      }
     }
   } catch (error) {
     console.error('加载价格类型选项失败:', error)
@@ -2602,7 +2934,7 @@ const goToBacktest = async (factor: any) => {
   backtestFactor.value = factor
   backtestFactors.value = [factor]
   // 确保选项已加载
-  if (benchmarkOptions.value.length === 0) {
+  if (standardIndexes.value.length === 0) {
     await loadPriceTypeOptions()
   }
   if (!stockPoolData.value) {
@@ -2625,7 +2957,7 @@ const openBatchBacktest = async () => {
   backtestFactor.value = null
   backtestFactors.value = [...selectedFactorsData.value]
   // 确保选项已加载
-  if (benchmarkOptions.value.length === 0) {
+  if (standardIndexes.value.length === 0) {
     await loadPriceTypeOptions()
   }
   if (!stockPoolData.value) {
@@ -2732,7 +3064,7 @@ const templateFields = [
   { field: 'factor_name_en', required: false, description: '因子英文名称', example: '5-Day Momentum' },
   { field: 'expression', required: true, description: '因子表达式，字段名须与data_sources中fields一致', example: '(hfq_close_price - lag(hfq_close_price, 5)) / lag(hfq_close_price, 5)' },
   { field: 'description', required: false, description: '因子描述', example: '计算5日收益率' },
-  { field: 'data_sources', required: true, description: '数据依赖JSON，每个表必须包含date_field、code_field、fields三个字段', example: '{"zz_500D":{"date_field":"trade_date","code_field":"stock_code","fields":["hfq_close_price"]}}' }
+  { field: 'data_sources', required: true, description: '数据依赖JSON，每个表必须包含date_field、code_field、fields；日内时段筛选还需time_field、time_start、time_end', example: '{"zz_500D":{"date_field":"trade_date","code_field":"stock_code","fields":["hfq_close_price"]}}' }
 ]
 
 // 有效/无效统计
@@ -2789,6 +3121,16 @@ const downloadTemplate = async () => {
       expression: 'hfq_close_price / ma5 - 1',
       description: '后复权收盘价相对5日均线的偏离度（跨表示例）',
       data_sources: '{"zz_500D":{"date_field":"trade_date","code_field":"stock_code","fields":["hfq_close_price"]},"zz_500D_1":{"date_field":"trade_date","code_field":"stock_code","fields":["ma5"]}}'
+    })
+    
+    // 日内时段筛选示例
+    worksheet.addRow({
+      factor_code: 'opening_volume',
+      factor_name: '开盘时段成交量',
+      factor_name_en: 'Opening Volume',
+      expression: 'volume',
+      description: '开盘30分钟（9:30-10:00）的总成交量（日内时段筛选示例）',
+      data_sources: '{"zz_5001":{"date_field":"trade_date","code_field":"stock_code","fields":["volume"],"time_field":"trade_time","time_start":"09:30","time_end":"10:00"}}'
     })
     
     // 添加说明 sheet
@@ -2910,6 +3252,23 @@ const validateFactor = (factor: any): string => {
       if (!cfg.code_field) return `${table} 缺少 code_field`
       if (!cfg.fields || !Array.isArray(cfg.fields) || cfg.fields.length === 0) {
         return `${table} 缺少 fields`
+      }
+      // 日内时段筛选校验：三个字段要么都不传，要么必须同时提供
+      const hasTimeField = !!cfg.time_field
+      const hasTimeStart = !!cfg.time_start
+      const hasTimeEnd = !!cfg.time_end
+      if (hasTimeField || hasTimeStart || hasTimeEnd) {
+        if (!hasTimeField) return `${table} 时段筛选缺少 time_field`
+        if (!hasTimeStart) return `${table} 时段筛选缺少 time_start`
+        if (!hasTimeEnd) return `${table} 时段筛选缺少 time_end`
+        // 验证时间格式 HH:MM
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/
+        if (!timeRegex.test(cfg.time_start)) {
+          return `${table} time_start 格式错误，应为 HH:MM`
+        }
+        if (!timeRegex.test(cfg.time_end)) {
+          return `${table} time_end 格式错误，应为 HH:MM`
+        }
       }
     }
   } catch {
@@ -3690,6 +4049,21 @@ onMounted(() => {
     .el-button {
       margin-left: auto;
     }
+    
+    .add-datasource-dropdown {
+      margin-left: auto;
+      
+      :deep(.el-dropdown-menu__item) {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        
+        .el-icon {
+          font-size: 16px;
+          color: #606266;
+        }
+      }
+    }
   }
   
   .section-body {
@@ -3710,8 +4084,8 @@ onMounted(() => {
   
   .datasource-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 10px;
     margin-bottom: 12px;
     padding-bottom: 8px;
     border-bottom: 1px dashed #e4e7ed;
@@ -3720,6 +4094,14 @@ onMounted(() => {
       font-weight: 600;
       color: #303133;
       font-size: 14px;
+    }
+    
+    .el-tag {
+      font-size: 11px;
+    }
+    
+    .el-button {
+      margin-left: auto;
     }
   }
   
@@ -3756,6 +4138,91 @@ onMounted(() => {
     color: #999;
     font-size: 12px;
     margin-left: 8px;
+  }
+  
+  // 日内时段筛选模式的数据源样式
+  &.intraday-mode {
+    border-color: #fbbf24;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    
+    .datasource-header {
+      border-bottom-color: #fde68a;
+    }
+  }
+  
+  // 时段筛选区域样式
+  .time-filter-section {
+    margin-top: 12px;
+    padding: 14px;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    
+    .time-field-row,
+    .time-range-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      
+      .field-label {
+        font-size: 13px;
+        color: #606266;
+        min-width: 70px;
+        
+        .required {
+          color: #f56c6c;
+          margin-right: 2px;
+        }
+      }
+    }
+    
+    .time-presets {
+      margin-bottom: 12px;
+      
+      .presets-label {
+        font-size: 13px;
+        color: #606266;
+      }
+      
+      .presets-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+        
+        .el-button {
+          font-size: 12px;
+        }
+      }
+    }
+    
+    .time-range-inputs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      .range-separator {
+        color: #909399;
+      }
+    }
+    
+    .time-filter-hint {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 6px;
+      font-size: 12px;
+      color: #b45309;
+      margin-top: 4px;
+      
+      .el-icon {
+        font-size: 14px;
+        color: #d97706;
+      }
+    }
   }
 }
 
@@ -4041,6 +4508,78 @@ onMounted(() => {
     
     :deep(.el-radio__label) {
       font-size: 12px;
+    }
+  }
+}
+
+// 已选基准列表
+.selected-benchmarks-list {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  
+  .selected-label {
+    font-size: 12px;
+    color: #606266;
+    font-weight: 500;
+    margin-right: 8px;
+  }
+}
+
+// 基准指数 Tab 样式（回测对话框）
+.benchmark-tabs-mini {
+  :deep(.el-tabs__header) {
+    margin-bottom: 8px;
+    
+    .el-tabs__item {
+      padding: 0 12px;
+      height: 30px;
+      line-height: 30px;
+      font-size: 13px;
+    }
+  }
+  
+  .benchmark-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    
+    .el-checkbox {
+      margin-right: 0;
+      
+      :deep(.el-checkbox__label) {
+        font-size: 13px;
+      }
+    }
+  }
+  
+  .industry-sub-tabs-mini {
+    :deep(.el-tabs__header) {
+      margin-bottom: 8px;
+    }
+    
+    :deep(.el-tabs__item) {
+      padding: 0 10px;
+      font-size: 12px;
+      height: 28px;
+      line-height: 28px;
+    }
+  }
+  
+  .industry-grid-mini {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px 8px;
+    max-height: 150px;
+    overflow-y: auto;
+    
+    .el-checkbox {
+      margin-right: 0;
+      
+      :deep(.el-checkbox__label) {
+        font-size: 12px;
+      }
     }
   }
 }

@@ -807,13 +807,36 @@ const getBenchmarkDisplay = (benchmarks: string[]) => {
     if (benchmarkCache.value.has(code)) {
       return benchmarkCache.value.get(code)
     }
-    const map: Record<string, string> = {
+    // 标准指数映射
+    const standardMap: Record<string, string> = {
+      'sh000001': '上证指数',
+      'sh000300': '沪深300',
+      'sh000905': '中证500',
+      'sh000852': '中证1000',
+      'sh000016': '上证50',
+      'sz399001': '深证成指',
+      'sz399006': '创业板指',
+      'sh000688': '科创50',
+      'csi2000': '中证2000',
       'SH.000300': '沪深300',
       'SH.000905': '中证500',
       'SH.000852': '中证1000',
       'SH.000688': '科创50'
     }
-    return map[code] || code
+    if (standardMap[code]) return standardMap[code]
+    // 指数行业格式：CSI500_医药生物 -> 中证500-医药生物
+    if (code.includes('_')) {
+      const [indexCode, industry] = code.split('_')
+      const indexNames: Record<string, string> = {
+        'SSE50': '上证50',
+        'CSI300': '沪深300',
+        'CSI500': '中证500',
+        'CSI1000': '中证1000',
+        'CSI2000': '中证2000'
+      }
+      return `${indexNames[indexCode] || indexCode}-${industry}`
+    }
+    return code
   }).join('、')
 }
 

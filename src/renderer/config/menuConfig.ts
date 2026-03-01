@@ -13,12 +13,13 @@ import {
   List,
   Clock,
   Download,
-  Key,
   Monitor,
   Setting,
   DataBoard,
   TrendCharts,
-  Grid
+  Grid,
+  ChatDotRound,
+  Operation
 } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 
@@ -154,12 +155,24 @@ export const allMenus: MenuItem[] = [
     description: '下载开发工具包'
   },
   { 
-    id: 'api_key_management', 
-    name: 'API Key管理', 
-    path: '/api-key-management', 
-    icon: Key,
+    id: 'control_center', 
+    name: '控制中心', 
+    path: '/control-center', 
+    icon: Operation,
     color: '#91CC75',
-    description: '管理用户和权限'
+    description: '系统控制中心',
+    children: [
+      { id: 'api_key_management', name: 'API Key管理', path: '/control-center/api-key', icon: null },
+      { id: 'db_management', name: '数据库管理', path: '/control-center/db-management', icon: null }
+    ]
+  },
+  { 
+    id: 'im_assistant', 
+    name: '智能助手', 
+    path: '/im', 
+    icon: ChatDotRound,
+    color: '#8B5CF6',
+    description: 'AI智能助手，支持与AI智能体对话'
   },
   { 
     id: 'system_monitor', 

@@ -7,6 +7,7 @@
           <span class="tab-label">
             <el-icon><DataLine /></el-icon>
             行情数据 <el-tag size="small" type="primary">{{ marketSourceCount }}</el-tag>
+            <span class="tab-db-name">Redis</span>
           </span>
         </template>
       </el-tab-pane>
@@ -16,6 +17,7 @@
           <span class="tab-label">
             <el-icon><Document /></el-icon>
             静态元数据 <el-tag size="small" type="success">{{ staticSourceCount }}</el-tag>
+            <span class="tab-db-name">PG / finance_db</span>
           </span>
         </template>
       </el-tab-pane>
@@ -25,6 +27,7 @@
           <span class="tab-label">
             <el-icon><Operation /></el-icon>
             加工数据 <el-tag size="small" type="warning">{{ processedSourceCount }}</el-tag>
+            <span class="tab-db-name">CH / market_mart</span>
           </span>
         </template>
       </el-tab-pane>
@@ -34,6 +37,7 @@
           <span class="tab-label">
             <el-icon><CopyDocument /></el-icon>
             行情镜像库 <el-tag size="small" type="info">{{ mirrorSourceCount }}</el-tag>
+            <span class="tab-db-name">CH / market_data</span>
           </span>
         </template>
       </el-tab-pane>
@@ -991,6 +995,16 @@ onUnmounted(() => {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tab-db-name {
+      width: 100%;
+      font-size: 11px;
+      color: #909399;
+      font-weight: 400;
+      line-height: 1;
+      margin-top: -2px;
+      margin-bottom: 2px;
     }
 
     :deep(.el-tabs__nav-wrap::after) {

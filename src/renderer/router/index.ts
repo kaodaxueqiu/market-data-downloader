@@ -224,10 +224,24 @@ const routes: RouteRecordRaw[] = [
     meta: { menuId: 'sdk_download' }
   },
   {
-    path: '/api-key-management',
-    name: 'ApiKeyManagement',
-    component: () => import('../views/ApiKeyManagement.vue'),
-    meta: { menuId: 'api_key_management' }
+    path: '/control-center',
+    name: 'ControlCenter',
+    redirect: '/control-center/api-key',
+    meta: { menuId: 'control_center' },
+    children: [
+      {
+        path: 'api-key',
+        name: 'ApiKeyManagement',
+        component: () => import('../views/ApiKeyManagement.vue'),
+        meta: { menuId: 'api_key_management' }
+      },
+      {
+        path: 'db-management',
+        name: 'DatabaseManagement',
+        component: () => import('../views/DatabaseManagement.vue'),
+        meta: { menuId: 'db_management' }
+      }
+    ]
   },
   {
     path: '/monitoring',
@@ -310,6 +324,12 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/im',
+    name: 'IM',
+    component: () => import('../views/IM/index.vue'),
+    meta: { menuId: 'im_assistant' }
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue'),
@@ -354,6 +374,26 @@ router.beforeEach((to, _from, next) => {
       // 有父菜单权限但没有子菜单权限，显示提示
       console.warn('⚠️ 有基金管理权限，但没有子菜单权限')
       next('/')  // 跳转到首页
+      return
+    }
+  }
+  
+  // 特殊处理：访问 /control-center 时，自动跳转到第一个有权限的子路由
+  if (to.path === '/control-center') {
+    const subRoutes = [
+      { path: '/control-center/api-key', menuId: 'api_key_management' },
+      { path: '/control-center/db-management', menuId: 'db_management' }
+    ]
+    
+    const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
+    
+    if (allowedRoute) {
+      console.log('🔀 自动跳转到:', allowedRoute.path)
+      next(allowedRoute.path)
+      return
+    } else if (userMenuPermissions.includes('control_center')) {
+      console.warn('⚠️ 有控制中心权限，但没有子菜单权限')
+      next('/')
       return
     }
   }

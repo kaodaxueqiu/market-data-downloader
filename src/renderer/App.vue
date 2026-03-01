@@ -515,11 +515,13 @@ const pageTitle = computed(() => {
     '/database-dictionary': '静态元数据字典',
     '/static-data-download': '静态元数据下载',
     '/sdk-download': 'SDK下载',
-    '/api-key-management': 'API Key管理',
+    '/control-center/api-key': 'API Key管理',
+    '/control-center/db-management': '数据库管理',
     '/monitoring/redis': 'Redis监控',
     '/monitoring/markets': '市场监控',
     '/monitoring/services': '服务监控',
     '/monitoring/clickhouse-cron': 'ClickHouse定时任务',
+    '/im': '智能助手',
     '/settings': '系统设置'
   }
   // 处理动态路由

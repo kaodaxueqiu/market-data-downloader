@@ -363,11 +363,21 @@
                   <el-icon><Histogram /></el-icon>
                   分层收益 ({{ getCurrentPeriodData(factor, index)?.layer_returns?.length }}组)
                   <span class="period-tag">({{ selectedPeriods[index] }}日)</span>
+                  <!-- 年化/累计切换 -->
+                  <div class="return-type-switch">
+                    <el-radio-group v-model="layerReturnType" size="small">
+                      <el-radio-button label="annual">年化</el-radio-button>
+                      <el-radio-button label="total">累计</el-radio-button>
+                    </el-radio-group>
+                  </div>
                 </div>
                 <div class="panel-body">
-                  <div class="layer-returns-chart">
+                  <!-- 添加 key 强制响应式更新 -->
+                  <div class="layer-returns-chart" :key="'layer-chart-' + layerReturnType">
                     <div 
-                      v-for="(ret, idx) in getCurrentPeriodData(factor, index)?.layer_returns" 
+                      v-for="(ret, idx) in (layerReturnType === 'total' 
+                        ? (getCurrentPeriodData(factor, index)?.layer_total_returns || getCurrentPeriodData(factor, index)?.layer_returns || [])
+                        : (getCurrentPeriodData(factor, index)?.layer_returns || []))" 
                       :key="idx"
                       class="layer-bar-wrapper"
                     >
@@ -376,7 +386,9 @@
                         <div 
                           class="layer-bar"
                           :class="ret >= 0 ? 'positive' : 'negative'"
-                          :style="getBarStyle(ret, getCurrentPeriodData(factor, index)?.layer_returns || [])"
+                          :style="getBarStyle(ret, layerReturnType === 'total' 
+                            ? (getCurrentPeriodData(factor, index)?.layer_total_returns || getCurrentPeriodData(factor, index)?.layer_returns || [])
+                            : (getCurrentPeriodData(factor, index)?.layer_returns || []))"
                         ></div>
                       </div>
                       <div class="layer-value" :class="ret >= 0 ? 'positive' : 'negative'">
@@ -395,14 +407,24 @@
                 </div>
                 <div class="panel-body">
                   <div class="other-metrics">
-                    <div class="other-metric-item ic-related">
-                      <span class="label">Rank IC标准差</span>
-                      <span class="value">{{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_std, 4) }}</span>
+                    <!-- Rank IC 详细统计 -->
+                    <div class="other-metric-item">
+                      <span class="label">Rank IC 最大值</span>
+                      <span class="value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_max)">
+                        {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_max, 4) }}
+                      </span>
                     </div>
-                    <div class="other-metric-item ic-related">
-                      <span class="label">Rank IC_IR</span>
-                      <span class="value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_ir)">{{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_ir, 3) }}</span>
+                    <div class="other-metric-item">
+                      <span class="label">Rank IC 最小值</span>
+                      <span class="value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_min)">
+                        {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_min, 4) }}
+                      </span>
                     </div>
+                    <div class="other-metric-item">
+                      <span class="label">Rank IC 胜率(>0)</span>
+                      <span class="value">{{ formatPercent(getCurrentPeriodData(factor, index)?.rank_ic_positive_ratio) }}</span>
+                    </div>
+                    <!-- 原有指标 -->
                     <div class="other-metric-item">
                       <span class="label">年化波动率</span>
                       <span class="value">{{ formatPercent(factor.annual_volatility) }}</span>
@@ -451,7 +473,7 @@
                   <span class="panel-tag">第{{ selectedGroup }}组</span>
                 </div>
                 <div class="panel-body">
-                  <el-table :data="benchmarkCompareData(factor, index)" size="small" class="benchmark-table" v-loading="chartDataLoading">
+                  <el-table :data="benchmarkCompareData(factor, index)" :key="'benchmark-' + selectedPeriods[index] + '-' + selectedGroup" size="small" class="benchmark-table">
                     <el-table-column prop="metric_name" label="指标" width="100" fixed />
                     <el-table-column :label="`因子(第${selectedGroup}组)`" width="120" align="center">
                       <template #default="{ row }">
@@ -585,6 +607,9 @@
             </el-collapse-item>
           </el-collapse>
 
+          <!-- 因子值明细 -->
+          <FactorValuesSection :task-id="props.taskId!" />
+
           <el-empty v-if="!result.factor_results?.length" description="暂无回测结果数据" />
         </template>
       </template>
@@ -593,7 +618,7 @@
     <!-- 累计收益曲线图对话框 -->
     <el-dialog 
       v-model="excessReturnDialogVisible" 
-      title="累计收益曲线（因子 vs 基准）" 
+      :title="`累计收益曲线（因子 vs 基准）- ${selectedPeriods[0] || 1}日周期 / 第${selectedGroup}组`"
       width="90%" 
       top="5vh"
       destroy-on-close
@@ -619,6 +644,7 @@ import {
   CircleCheck, TrendCharts, Histogram, DataLine, Document, Download, Tickets
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import FactorValuesSection from './FactorValuesSection.vue'
 
 // electronAPI 类型已在 preload/index.ts 中全局定义
 
@@ -745,6 +771,19 @@ const initExcessReturnChart = () => {
 }
 
 // 渲染超额收益图表（累计收益曲线）
+// 从每日明细获取指定周期、指定分组的收益
+const getDailyGroupReturn = (dailyData: any, period: number, groupIndex: number): number => {
+  // 优先从 period_returns 获取指定周期的数据
+  if (dailyData.period_returns?.length) {
+    const periodData = dailyData.period_returns.find((p: any) => p.period === period)
+    if (periodData?.layer_returns?.[groupIndex] !== undefined) {
+      return periodData.layer_returns[groupIndex]
+    }
+  }
+  // 兼容旧数据：直接使用 layer_returns（默认1日周期）
+  return dailyData.layer_returns?.[groupIndex] || 0
+}
+
 const renderExcessReturnChart = () => {
   if (!excessReturnChart) return
   
@@ -761,11 +800,13 @@ const renderExcessReturnChart = () => {
   
   const series: any[] = []
   const groupIndex = selectedGroup.value - 1
+  // 获取当前选中的周期（默认1日）
+  const currentPeriod = selectedPeriods.value[0] || 1
   
-  // 1. 选中分组的累计收益（使用 layer_returns）
+  // 1. 选中分组的累计收益（根据周期从 period_returns 获取）
   let groupCum = 1
   const groupData = data.map((d: any) => {
-    const dailyReturn = d.layer_returns?.[groupIndex] || 0
+    const dailyReturn = getDailyGroupReturn(d, currentPeriod, groupIndex)
     groupCum *= (1 + dailyReturn)
     return ((groupCum - 1) * 100).toFixed(2)
   })
@@ -800,7 +841,7 @@ const renderExcessReturnChart = () => {
     let groupCum2 = 1
     let bmCum2 = 1
     const excessData = data.map((d: any) => {
-      const groupReturn = d.layer_returns?.[groupIndex] || 0
+      const groupReturn = getDailyGroupReturn(d, currentPeriod, groupIndex)
       const bmItem = d.benchmark_returns?.find((b: any) => b.benchmark_code === bm.benchmark_code)
       const bmReturn = bmItem?.benchmark_return || 0
       groupCum2 *= (1 + groupReturn)
@@ -908,6 +949,9 @@ const handleResize = () => {
 // 每个因子选中的周期
 const selectedPeriods = ref<Record<number, number>>({})
 
+// 分层收益显示类型：年化 or 累计
+const layerReturnType = ref<'annual' | 'total'>('annual')
+
 // 选中的分组（1-10，用于计算分组收益）
 const selectedGroup = ref(1)
 
@@ -939,62 +983,28 @@ const getCurrentPeriodData = (factor: any, index: number) => {
   return factor.period_ic_stats.find((p: any) => p.period === period) || factor.period_ic_stats[0]
 }
 
-// 计算分组的绩效指标
-const calcGroupMetrics = (dailyReturns: number[]) => {
-  if (!dailyReturns?.length) return { annualReturn: null, sharpe: null, maxDrawdown: null }
-  
-  const totalDays = dailyReturns.length
-  
-  // 累计收益
-  let cumReturn = 1
-  const cumReturns: number[] = []
-  dailyReturns.forEach(r => {
-    cumReturn *= (1 + (r || 0))
-    cumReturns.push(cumReturn - 1)
-  })
-  
-  // 年化收益
-  const annualReturn = Math.pow(cumReturn, 252 / totalDays) - 1
-  
-  // 夏普比率
-  const mean = dailyReturns.reduce((a, b) => a + (b || 0), 0) / totalDays
-  const variance = dailyReturns.map(r => Math.pow((r || 0) - mean, 2)).reduce((a, b) => a + b, 0) / totalDays
-  const std = Math.sqrt(variance)
-  const sharpe = std > 0 ? (mean * 252) / (std * Math.sqrt(252)) : 0
-  
-  // 最大回撤
-  let maxDrawdown = 0
-  let peak = 1
-  cumReturns.forEach(cr => {
-    const value = 1 + cr
-    if (value > peak) peak = value
-    const dd = (peak - value) / peak
-    if (dd > maxDrawdown) maxDrawdown = dd
-  })
-  
-  return { annualReturn, sharpe, maxDrawdown }
-}
-
 // 生成基准指数对比表格数据
-const benchmarkCompareData = (_factor: any, _index: number) => {
+const benchmarkCompareData = (factor: any, index: number) => {
   if (!result.value?.benchmark_metrics) return []
   
-  // 使用全量数据计算分组指标
-  const data = chartDailyData.value.length > 0 ? chartDailyData.value : dailyMetrics.value
+  // 获取当前选中周期的数据
+  const periodData = getCurrentPeriodData(factor, index)
+  if (!periodData) return []
   
-  // 获取选中分组的每日收益 (layer_returns[selectedGroup - 1])
+  // 获取选中分组的索引 (0-9)
   const groupIndex = selectedGroup.value - 1
-  const groupDailyReturns = data.map((d: any) => d.layer_returns?.[groupIndex] || 0)
   
-  // 计算分组指标
-  const groupMetrics = calcGroupMetrics(groupDailyReturns)
+  // 从 period_ic_stats 获取分组指标
+  const groupAnnualReturn = periodData.layer_returns?.[groupIndex]
+  const groupSharpe = periodData.layer_sharpe_ratios?.[groupIndex]
+  const groupMaxDrawdown = periodData.layer_max_drawdowns?.[groupIndex]
   
   const rows: any[] = []
   
   // 年化收益
   const row1: any = { metric_name: '年化收益' }
-  row1.strategy_raw = groupMetrics.annualReturn
-  row1.strategy = formatPercent(groupMetrics.annualReturn)
+  row1.strategy_raw = groupAnnualReturn
+  row1.strategy = formatPercent(groupAnnualReturn)
   result.value?.benchmark_metrics?.forEach((bm: any) => {
     row1[bm.benchmark_code + '_raw'] = bm.benchmark_annual_return
     row1[bm.benchmark_code] = formatPercent(bm.benchmark_annual_return)
@@ -1003,8 +1013,8 @@ const benchmarkCompareData = (_factor: any, _index: number) => {
   
   // 夏普比率
   const row2: any = { metric_name: '夏普比率' }
-  row2.strategy_raw = groupMetrics.sharpe
-  row2.strategy = formatNumber(groupMetrics.sharpe, 2)
+  row2.strategy_raw = groupSharpe
+  row2.strategy = formatNumber(groupSharpe, 2)
   result.value?.benchmark_metrics?.forEach((bm: any) => {
     row2[bm.benchmark_code + '_raw'] = bm.benchmark_sharpe
     row2[bm.benchmark_code] = formatNumber(bm.benchmark_sharpe, 2)
@@ -1013,8 +1023,8 @@ const benchmarkCompareData = (_factor: any, _index: number) => {
   
   // 最大回撤
   const row3: any = { metric_name: '最大回撤' }
-  row3.strategy_raw = groupMetrics.maxDrawdown
-  row3.strategy = formatPercent(groupMetrics.maxDrawdown)
+  row3.strategy_raw = groupMaxDrawdown
+  row3.strategy = formatPercent(groupMaxDrawdown)
   result.value?.benchmark_metrics?.forEach((bm: any) => {
     row3[bm.benchmark_code + '_raw'] = bm.benchmark_max_drawdown
     row3[bm.benchmark_code] = formatPercent(bm.benchmark_max_drawdown)
@@ -1024,7 +1034,7 @@ const benchmarkCompareData = (_factor: any, _index: number) => {
   // 超额收益 (分组年化 - 基准年化)
   const row4: any = { metric_name: '超额收益', strategy: '-', strategy_raw: null }
   result.value?.benchmark_metrics?.forEach((bm: any) => {
-    const excess = (groupMetrics.annualReturn || 0) - (bm.benchmark_annual_return || 0)
+    const excess = (groupAnnualReturn || 0) - (bm.benchmark_annual_return || 0)
     row4[bm.benchmark_code + '_raw'] = excess
     row4[bm.benchmark_code] = formatPercent(excess)
   })
@@ -1033,7 +1043,7 @@ const benchmarkCompareData = (_factor: any, _index: number) => {
   // 超额夏普
   const row5: any = { metric_name: '超额夏普', strategy: '-', strategy_raw: null }
   result.value?.benchmark_metrics?.forEach((bm: any) => {
-    const excess = (groupMetrics.sharpe || 0) - (bm.benchmark_sharpe || 0)
+    const excess = (groupSharpe || 0) - (bm.benchmark_sharpe || 0)
     row5[bm.benchmark_code + '_raw'] = excess
     row5[bm.benchmark_code] = formatNumber(excess, 2)
   })
@@ -1172,14 +1182,36 @@ const getBenchmarkNames = (benchmarks: string[]) => {
     if (benchmarkCache.value.has(code)) {
       return benchmarkCache.value.get(code)
     }
-    // 兜底映射
-    const map: Record<string, string> = {
+    // 标准指数映射
+    const standardMap: Record<string, string> = {
+      'sh000001': '上证指数',
+      'sh000300': '沪深300',
+      'sh000905': '中证500',
+      'sh000852': '中证1000',
+      'sh000016': '上证50',
+      'sz399001': '深证成指',
+      'sz399006': '创业板指',
+      'sh000688': '科创50',
+      'csi2000': '中证2000',
       'SH.000300': '沪深300',
       'SH.000905': '中证500',
       'SH.000852': '中证1000',
       'SH.000688': '科创50'
     }
-    return map[code] || code
+    if (standardMap[code]) return standardMap[code]
+    // 指数行业格式：CSI500_医药生物 -> 中证500-医药生物
+    if (code.includes('_')) {
+      const [indexCode, industry] = code.split('_')
+      const indexNames: Record<string, string> = {
+        'SSE50': '上证50',
+        'CSI300': '沪深300',
+        'CSI500': '中证500',
+        'CSI1000': '中证1000',
+        'CSI2000': '中证2000'
+      }
+      return `${indexNames[indexCode] || indexCode}-${industry}`
+    }
+    return code
   }).join('、')
 }
 
@@ -1356,8 +1388,6 @@ const loadResult = async () => {
         const resultRes = await window.electronAPI.backtest.getResult(props.taskId)
         if (resultRes.success && resultRes.data) {
           result.value = resultRes.data
-          console.log('📊 回测结果数据:', JSON.stringify(resultRes.data, null, 2))
-          console.log('📊 benchmark_metrics:', JSON.stringify(resultRes.data.benchmark_metrics, null, 2))
           initPeriodSelections()
           // 单独加载每日明细数据
           loadDailyMetrics()
@@ -1457,53 +1487,121 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+// ============================================
+// 设计系统变量 - 清新明亮的 SaaS 风格
+// ============================================
+$primary: #4F86F7;           // 明亮蓝主色（更清新）
+$primary-light: #60A5FA;     // 天蓝次色
+$primary-lighter: #EFF6FF;   // 极浅蓝背景
+$primary-soft: #BFDBFE;      // 柔和蓝
+$accent: #F59E0B;            // 琥珀高亮 CTA
+$accent-light: #FEF3C7;      // 浅琥珀背景
+$positive: #22C55E;          // 明亮绿正值
+$positive-light: #DCFCE7;    // 浅绿背景
+$negative: #F43F5E;          // 玫红负值（比红色柔和）
+$negative-light: #FFE4E6;    // 浅粉背景
+$bg-page: #FAFBFD;           // 页面背景（近白）
+$bg-card: #FFFFFF;           // 卡片背景
+$bg-muted: #F8FAFC;          // 次要背景（更浅）
+$border: #E5E7EB;            // 边框色（更柔和）
+$border-light: #F3F4F6;      // 浅边框
+$text-primary: #1F2937;      // 主文字（稍浅）
+$text-secondary: #6B7280;    // 次要文字
+$text-muted: #9CA3AF;        // 弱化文字
+$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+$shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+$shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+$radius-sm: 6px;
+$radius-md: 10px;
+$radius-lg: 14px;
+$font-mono: 'Fira Code', 'JetBrains Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+$transition-fast: 150ms ease;
+$transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
 .result-content {
+  background: $bg-page;
+  min-height: 100%;
+  
   .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid $border;
     
     h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 600;
-      color: #303133;
+      color: $text-primary;
+      letter-spacing: -0.025em;
     }
   }
 
-  // 任务卡片列表
+  // 任务卡片列表 - 现代化设计
   .task-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
     
     .task-card {
-      background: #fff;
-      border: 1px solid #ebeef5;
-      border-radius: 8px;
-      padding: 16px;
+      background: $bg-card;
+      border: 1px solid $border;
+      border-radius: $radius-lg;
+      padding: 20px;
       cursor: pointer;
-      transition: all 0.3s;
+      transition: all $transition-normal;
+      position: relative;
+      overflow: hidden;
+      
+      // 顶部装饰条
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, $primary, $primary-light);
+        opacity: 0;
+        transition: opacity $transition-normal;
+      }
       
       &:hover {
-        border-color: #409eff;
-        box-shadow: 0 4px 16px rgba(64, 158, 255, 0.15);
-        transform: translateY(-2px);
+        border-color: $primary-light;
+        box-shadow: $shadow-lg;
+        transform: translateY(-4px);
+        
+        &::before {
+          opacity: 1;
+        }
+        
+        .card-footer .el-button {
+          color: $primary;
+        }
       }
       
       .card-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 12px;
+        margin-bottom: 16px;
         
         .task-name {
           font-weight: 600;
-          font-size: 14px;
-          color: #303133;
+          font-size: 15px;
+          color: $text-primary;
           flex: 1;
-          margin-right: 8px;
+          margin-right: 12px;
+          line-height: 1.4;
+        }
+        
+        :deep(.el-tag) {
+          background: $primary-lighter;
+          border-color: transparent;
+          color: $primary;
+          font-weight: 500;
         }
       }
       
@@ -1511,64 +1609,100 @@ onUnmounted(() => {
         .card-meta {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           font-size: 13px;
-          color: #909399;
-          margin-bottom: 6px;
+          color: $text-secondary;
+          margin-bottom: 8px;
           
           .el-icon {
-            font-size: 14px;
+            font-size: 15px;
+            color: $text-muted;
           }
         }
       }
       
       .card-footer {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid #f0f0f0;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid $border-light;
         text-align: right;
+        
+        .el-button {
+          color: $text-secondary;
+          font-weight: 500;
+          transition: color $transition-fast;
+        }
       }
     }
   }
 
-  // 详情页
+  // 详情页头部
   .detail-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    background: $bg-card;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-sm;
     
     .header-actions {
       display: flex;
       gap: 12px;
       align-items: center;
+      
+      .el-button--primary {
+        background: $primary;
+        border-color: $primary;
+        
+        &:hover {
+          background: $primary-light;
+          border-color: $primary-light;
+        }
+      }
+      
+      .el-button--success {
+        background: $positive;
+        border-color: $positive;
+      }
     }
   }
   
   .loading-wrapper {
     text-align: center;
-    padding: 80px;
-    color: #909399;
+    padding: 100px 40px;
+    color: $text-muted;
     
-    p { margin-top: 16px; }
+    .el-icon {
+      color: $primary-light;
+    }
+    
+    p { 
+      margin-top: 20px;
+      font-size: 15px;
+    }
   }
   
   .error-section {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     
     .error-content {
-      margin-top: 8px;
+      margin-top: 12px;
       
       p {
         margin: 0;
         font-size: 14px;
-        line-height: 1.6;
-        color: #c45656;
+        line-height: 1.7;
+        color: $negative;
         word-break: break-all;
       }
     }
     
     :deep(.el-alert) {
+      border-radius: $radius-md;
+      border: 1px solid $negative-light;
+      
       .el-alert__title {
         font-size: 16px;
         font-weight: 600;
@@ -1576,31 +1710,31 @@ onUnmounted(() => {
     }
     
     .failed-factor-info {
-      margin-top: 20px;
+      margin-top: 24px;
       
       .factor-expression-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
-        border: none;
-        border-radius: 12px;
+        background: $bg-card;
+        border: 1px solid $border;
+        border-radius: $radius-lg;
         padding: 24px;
-        margin-bottom: 16px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        margin-bottom: 20px;
+        box-shadow: $shadow-sm;
         
         .card-title {
-          font-size: 16px;
+          font-size: 15px;
           font-weight: 600;
-          color: #303133;
+          color: $text-primary;
           margin-bottom: 16px;
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
           
           &::before {
             content: '';
             display: inline-block;
             width: 4px;
-            height: 18px;
-            background: linear-gradient(180deg, #409eff 0%, #667eea 100%);
+            height: 20px;
+            background: linear-gradient(180deg, $primary 0%, $primary-light 100%);
             border-radius: 2px;
           }
         }
@@ -1608,46 +1742,48 @@ onUnmounted(() => {
         .card-content {
           code {
             display: block;
-            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d3a 100%);
+            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             border: none;
-            border-radius: 8px;
+            border-radius: $radius-md;
             padding: 20px 24px;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 15px;
+            font-family: $font-mono;
+            font-size: 14px;
             line-height: 1.8;
-            color: #e2e8f0;
+            color: #E2E8F0;
             word-break: break-all;
             white-space: pre-wrap;
-            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
           }
           
           pre {
             margin: 0;
-            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d3a 100%);
+            background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             border: none;
-            border-radius: 8px;
+            border-radius: $radius-md;
             padding: 20px 24px;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 14px;
+            font-family: $font-mono;
+            font-size: 13px;
             line-height: 1.8;
-            color: #e2e8f0;
+            color: #E2E8F0;
             white-space: pre-wrap;
             word-break: break-all;
             max-height: 400px;
             overflow-y: auto;
-            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
             
             &::-webkit-scrollbar {
               width: 8px;
             }
             &::-webkit-scrollbar-track {
-              background: #2d2d3a;
+              background: #1E293B;
               border-radius: 4px;
             }
             &::-webkit-scrollbar-thumb {
-              background: #4a4a5a;
+              background: #475569;
               border-radius: 4px;
+              
+              &:hover {
+                background: #64748B;
+              }
             }
           }
         }
@@ -1655,144 +1791,184 @@ onUnmounted(() => {
     }
   }
   
+  // 信息横幅 - 专业深蓝渐变
   .info-banner {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 12px;
-    padding: 24px;
+    background: linear-gradient(135deg, $primary 0%, #1E3A8A 50%, #312E81 100%);
+    border-radius: $radius-lg;
+    padding: 28px 32px;
     color: #fff;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
+    box-shadow: $shadow-lg;
+    position: relative;
+    overflow: hidden;
+    
+    // 装饰图案
+    &::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
     
     .banner-main {
+      position: relative;
+      z-index: 1;
+      
       .banner-top {
-        margin-bottom: 16px;
+        margin-bottom: 20px;
         
         h2 {
-          margin: 0 0 12px 0;
-          font-size: 22px;
-          font-weight: 600;
+          margin: 0 0 14px 0;
+          font-size: 24px;
+          font-weight: 700;
+          letter-spacing: -0.025em;
         }
       }
       
       .banner-meta {
         display: flex;
         align-items: center;
-        gap: 12px;
+        flex-wrap: wrap;
+        gap: 16px;
         font-size: 14px;
-        opacity: 0.9;
         
         .status-badge {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          padding: 4px 12px;
+          gap: 6px;
+          padding: 6px 14px;
           background: rgba(255, 255, 255, 0.2);
-          border-radius: 4px;
-          font-weight: 500;
+          border-radius: $radius-sm;
+          font-weight: 600;
+          backdrop-filter: blur(4px);
           
-          &.completed { background: rgba(103, 194, 58, 0.3); }
-          &.running { background: rgba(64, 158, 255, 0.3); }
+          &.completed { 
+            background: rgba($positive, 0.3);
+          }
+          &.running { 
+            background: rgba($accent, 0.3);
+          }
         }
         
         .meta-divider {
-          opacity: 0.5;
+          opacity: 0.4;
+          color: #fff;
         }
         
         .task-id-text {
-          font-family: 'Monaco', 'Menlo', monospace;
+          font-family: $font-mono;
           font-size: 12px;
-          opacity: 0.8;
+          opacity: 0.75;
+          background: rgba(255,255,255,0.1);
+          padding: 4px 10px;
+          border-radius: $radius-sm;
         }
       }
       
       .banner-config {
         display: flex;
         flex-wrap: wrap;
-        gap: 24px;
-        padding-top: 16px;
-        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        gap: 20px;
+        padding-top: 20px;
+        margin-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
         
         .config-item {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
           
           .config-label {
             font-size: 13px;
-            opacity: 0.7;
+            opacity: 0.75;
           }
           
           .config-value {
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 600;
             background: rgba(255, 255, 255, 0.15);
-            padding: 4px 10px;
-            border-radius: 4px;
+            padding: 5px 12px;
+            border-radius: $radius-sm;
+            backdrop-filter: blur(4px);
           }
         }
       }
     }
   }
 
-  // 因子结果区域
+  // 因子结果区域 - 现代卡片设计
   .factor-result-section {
-    background: #fff;
-    border: 1px solid #ebeef5;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 24px;
+    background: $bg-card;
+    border: 1px solid $border;
+    border-radius: $radius-lg;
+    padding: 28px;
+    margin-bottom: 28px;
+    box-shadow: $shadow-sm;
+    transition: box-shadow $transition-normal;
+    
+    &:hover {
+      box-shadow: $shadow-md;
+    }
     
     .factor-header {
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       
       .factor-title-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
-        gap: 12px;
-        margin-bottom: 8px;
+        gap: 16px;
+        margin-bottom: 12px;
         
         h3 {
           margin: 0;
-          font-size: 18px;
-          font-weight: 600;
-          color: #303133;
+          font-size: 20px;
+          font-weight: 700;
+          color: $text-primary;
+          letter-spacing: -0.025em;
         }
         
         .period-selector {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 14px;
           
           .period-label {
             font-size: 13px;
-            color: #909399;
+            color: $text-secondary;
             font-weight: 500;
           }
           
           .period-tabs {
             display: flex;
-            background: #f0f2f5;
-            border-radius: 8px;
-            padding: 3px;
+            background: $bg-muted;
+            border-radius: $radius-md;
+            padding: 4px;
             
             .period-tab {
-              padding: 6px 16px;
+              padding: 8px 18px;
               font-size: 13px;
-              color: #606266;
+              color: $text-secondary;
               cursor: pointer;
-              border-radius: 6px;
-              transition: all 0.2s;
+              border-radius: $radius-sm;
+              transition: all $transition-fast;
               font-weight: 500;
               
               &:hover {
-                color: #409eff;
+                color: $primary;
+                background: rgba($primary, 0.05);
               }
               
               &.active {
-                background: #fff;
-                color: #409eff;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                background: $bg-card;
+                color: $primary;
+                box-shadow: $shadow-sm;
+                font-weight: 600;
               }
             }
           }
@@ -1801,232 +1977,327 @@ onUnmounted(() => {
       
       .factor-code {
         code {
-          background: #f5f7fa;
-          padding: 6px 12px;
-          border-radius: 4px;
+          background: $bg-muted;
+          padding: 8px 14px;
+          border-radius: $radius-sm;
+          font-family: $font-mono;
           font-size: 13px;
-          color: #606266;
+          color: $text-secondary;
           display: inline-block;
           max-width: 100%;
           overflow-x: auto;
           white-space: nowrap;
+          border: 1px solid $border;
         }
       }
     }
   }
 
-  // 核心指标卡片
+  // 核心指标卡片 - 专业仪表板风格
   .metrics-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
     
     .metric-card {
-      background: #f8f9fa;
-      border-radius: 8px;
-      padding: 16px;
+      background: $bg-card;
+      border: 1px solid $border;
+      border-radius: $radius-md;
+      padding: 20px 16px;
       text-align: center;
-      transition: all 0.3s;
+      transition: all $transition-normal;
+      position: relative;
+      overflow: hidden;
+      
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: $border;
+        transition: background $transition-normal;
+      }
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: $shadow-md;
+        border-color: $primary-light;
+        
+        &::before {
+          background: $primary-light;
+        }
+      }
       
       &.ic-metric {
-        background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%);
-        border: 1px solid #d4e8fc;
+        background: linear-gradient(135deg, #EFF6FF 0%, $bg-card 100%);
+        border-color: $primary-lighter;
+        
+        &::before {
+          background: linear-gradient(90deg, $primary, $primary-light);
+        }
       }
       
       .metric-value {
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 700;
-        font-family: 'Monaco', 'Menlo', monospace;
-        color: #303133;
-        margin-bottom: 4px;
+        font-family: $font-mono;
+        color: $text-primary;
+        margin-bottom: 6px;
+        letter-spacing: -0.025em;
         
-        &.positive { color: #67c23a; }
-        &.negative { color: #f56c6c; }
+        &.positive { 
+          color: $positive;
+        }
+        &.negative { 
+          color: $negative;
+        }
       }
       
       .metric-label {
         font-size: 12px;
-        color: #909399;
+        color: $text-muted;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
     }
   }
 
-  // 详细面板
+  // 详细面板 - 清晰分区
   .detail-panels {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
     
     .detail-panel {
-      background: #fafafa;
-      border-radius: 8px;
+      background: $bg-card;
+      border: 1px solid $border;
+      border-radius: $radius-lg;
       overflow: hidden;
+      box-shadow: $shadow-sm;
       
       .panel-title {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 12px 16px;
-        background: #f0f2f5;
+        gap: 10px;
+        padding: 16px 20px;
+        background: $bg-muted;
         font-size: 14px;
         font-weight: 600;
-        color: #303133;
+        color: $text-primary;
+        border-bottom: 1px solid $border;
         
         .el-icon {
-          color: #409eff;
+          color: $primary;
+          font-size: 18px;
+        }
+        
+        // 年化/累计切换按钮
+        .return-type-switch {
+          margin-left: auto;
+          
+          :deep(.el-radio-group) {
+            .el-radio-button__inner {
+              padding: 6px 14px;
+              font-size: 12px;
+              font-weight: 500;
+              border-color: $border;
+              background: $bg-card;
+              color: $text-secondary;
+            }
+            
+            .el-radio-button__original-radio:checked + .el-radio-button__inner {
+              background: $primary;
+              border-color: $primary;
+              color: #fff;
+              box-shadow: none;
+            }
+          }
         }
       }
       
       .panel-body {
-        padding: 16px;
+        padding: 20px;
         
         .table-hint {
           text-align: center;
           font-size: 12px;
-          color: #909399;
-          margin-top: 8px;
+          color: $text-muted;
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px dashed $border;
         }
         
         :deep(.selected-row) {
-          background-color: #ecf5ff !important;
+          background-color: $primary-lighter !important;
           
           td {
-            background-color: #ecf5ff !important;
+            background-color: $primary-lighter !important;
           }
         }
         
         .period-active {
-          color: #409eff;
+          color: $primary;
           font-weight: 600;
         }
       }
     }
   }
 
-  // 分层收益图表
+  // 分层收益图表 - 可视化增强
   .layer-returns-chart {
     .layer-bar-wrapper {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
+      gap: 12px;
+      margin-bottom: 10px;
+      padding: 4px 0;
+      transition: background $transition-fast;
+      border-radius: $radius-sm;
+      
+      &:hover {
+        background: $bg-muted;
+        margin: 0 -8px;
+        padding: 4px 8px;
+        margin-bottom: 10px;
+      }
       
       .layer-label {
-        width: 40px;
-        font-size: 12px;
-        color: #909399;
+        width: 44px;
+        font-size: 13px;
+        color: $text-secondary;
         text-align: right;
+        font-weight: 500;
       }
       
       .layer-bar-container {
         flex: 1;
-        height: 20px;
-        background: #ebeef5;
-        border-radius: 4px;
+        height: 24px;
+        background: $bg-muted;
+        border-radius: $radius-sm;
         overflow: hidden;
       }
       
       .layer-bar {
         height: 100%;
-        border-radius: 4px;
-        transition: width 0.3s;
+        border-radius: $radius-sm;
+        transition: width 0.4s ease-out;
         
         &.positive {
-          background: linear-gradient(90deg, #67c23a, #85ce61);
+          background: linear-gradient(90deg, $positive, #34D399);
         }
         
         &.negative {
-          background: linear-gradient(90deg, #f56c6c, #f89898);
+          background: linear-gradient(90deg, $negative, #F87171);
         }
       }
       
       .layer-value {
-        width: 70px;
-        font-size: 12px;
-        font-family: 'Monaco', 'Menlo', monospace;
+        width: 80px;
+        font-size: 13px;
+        font-family: $font-mono;
         text-align: right;
+        font-weight: 600;
         
-        &.positive { color: #67c23a; }
-        &.negative { color: #f56c6c; }
+        &.positive { color: $positive; }
+        &.negative { color: $negative; }
       }
     }
   }
 
-  // 其他指标
+  // 其他指标 - 清晰布局
   .other-metrics {
     .other-metric-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px dashed #e4e7ed;
+      padding: 12px 0;
+      border-bottom: 1px solid $border-light;
+      transition: background $transition-fast;
       
       &:last-child {
         border-bottom: none;
       }
       
-      &.ic-related {
-        background: #f0f7ff;
+      &:hover {
+        background: $bg-muted;
         margin: 0 -12px;
-        padding: 8px 12px;
-        border-radius: 4px;
-        border-bottom: none;
-        margin-bottom: 4px;
+        padding: 12px;
+        border-radius: $radius-sm;
+      }
+      
+      // ic-related 不再有特殊样式，完全统一
+      &.ic-related {
+        // 继承默认样式，无需额外设置
       }
       
       .label {
         font-size: 13px;
-        color: #909399;
+        color: $text-secondary;
+        font-weight: 500;
       }
       
       .value {
-        font-size: 14px;
-        font-weight: 500;
-        font-family: 'Monaco', 'Menlo', monospace;
-        color: #303133;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: $font-mono;
+        color: $text-primary;
         
-        &.positive { color: #67c23a; }
-        &.negative { color: #f56c6c; }
+        &.positive { color: $positive; }
+        &.negative { color: $negative; }
       }
     }
   }
   
   .period-tag {
     font-size: 12px;
-    font-weight: normal;
-    color: #409eff;
+    font-weight: 500;
+    color: $primary;
+    background: $primary-lighter;
+    padding: 2px 8px;
+    border-radius: $radius-sm;
+    margin-left: 8px;
   }
 
-  // 每日明细折叠
+  // 每日明细折叠 - 整洁设计
   .daily-collapse {
-    margin-top: 20px;
-    background: #fff;
-    border: 1px solid #ebeef5;
-    border-radius: 12px;
+    margin-top: 24px;
+    background: $bg-card;
+    border: 1px solid $border;
+    border-radius: $radius-lg;
     overflow: hidden;
+    box-shadow: $shadow-sm;
     
     :deep(.el-collapse-item__header) {
-      padding: 0 20px;
-      height: 52px;
-      background: #fafbfc;
+      padding: 0 24px;
+      height: 56px;
+      background: $bg-muted;
+      border-bottom: 1px solid $border;
+      
+      &:hover {
+        background: darken($bg-muted, 2%);
+      }
     }
     
     :deep(.el-collapse-item__content) {
-      padding: 16px 20px 0;
+      padding: 20px 24px 0;
     }
     
     .collapse-title {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      color: #303133;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      color: $text-primary;
       
       .el-icon {
-        color: #409eff;
+        color: $primary;
+        font-size: 18px;
       }
     }
     
@@ -2034,60 +2305,71 @@ onUnmounted(() => {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 20px;
-      margin: 16px -20px 0;
-      background: #f5f7fa;
-      border-top: 1px solid #ebeef5;
+      padding: 16px 24px;
+      margin: 20px -24px 0;
+      background: $bg-muted;
+      border-top: 1px solid $border;
       
       .loaded-info {
         font-size: 13px;
-        color: #909399;
+        color: $text-secondary;
+        font-weight: 500;
       }
     }
     
     .more-hint {
       text-align: center;
-      padding: 12px;
+      padding: 16px;
       font-size: 13px;
-      color: #909399;
+      color: $text-muted;
     }
   }
   
   .pagination-wrapper {
-    margin-top: 20px;
+    margin-top: 24px;
     display: flex;
     justify-content: center;
+    
+    :deep(.el-pagination) {
+      --el-pagination-button-bg-color: #{$bg-card};
+      --el-pagination-hover-color: #{$primary};
+    }
   }
   
   // 全局样式
-  .positive { color: #67c23a; }
-  .negative { color: #f56c6c; }
+  .positive { color: $positive !important; }
+  .negative { color: $negative !important; }
   
   // 基准指数对比表格样式
   .benchmark-table {
     :deep(.el-table__header) {
       th {
-        background: #fafafa !important;
+        background: $bg-muted !important;
         font-weight: 600;
         font-size: 13px;
-        color: #606266;
+        color: $text-primary;
+        border-bottom: 2px solid $border !important;
       }
     }
     
     :deep(.el-table__body) {
       td {
         font-size: 13px;
+        font-family: $font-mono;
         
         &:first-child {
-          font-weight: 500;
-          color: #303133;
+          font-weight: 600;
+          color: $text-primary;
+          font-family: inherit;
         }
       }
     }
     
     :deep(.el-table__row) {
+      transition: background $transition-fast;
+      
       &:hover > td {
-        background: #f5f7fa !important;
+        background: $primary-lighter !important;
       }
     }
   }
@@ -2096,10 +2378,23 @@ onUnmounted(() => {
   .chart-preview {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 20px;
+    padding: 16px;
+    background: $bg-muted;
+    border-radius: $radius-md;
+    
+    .el-button {
+      background: $primary;
+      border-color: $primary;
+      
+      &:hover {
+        background: $primary-light;
+        border-color: $primary-light;
+      }
+    }
     
     .chart-hint {
-      color: #909399;
+      color: $text-secondary;
       font-size: 13px;
     }
   }
@@ -2108,77 +2403,155 @@ onUnmounted(() => {
 // 超额收益曲线图对话框
 .excess-return-chart-dialog {
   width: 100%;
-  height: 500px;
+  height: 520px;
+  background: $bg-card;
+  border-radius: $radius-md;
 }
 
 .chart-legend-hint {
   display: flex;
   justify-content: center;
-  gap: 32px;
-  margin-top: 12px;
-  color: #606266;
+  gap: 40px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid $border;
+  color: $text-secondary;
   font-size: 13px;
   
+  b {
+    color: $text-primary;
+  }
+  
   .data-count {
-    color: #909399;
+    color: $text-muted;
+    background: $bg-muted;
+    padding: 4px 12px;
+    border-radius: $radius-sm;
   }
 }
 
-// 分组选择器分隔条
+// 分组选择器分隔条 - 视觉分区
 .group-selector-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin: 28px 0 20px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #f8f9fc 0%, #eef1f6 100%);
-  border-radius: 8px;
-  border: 1px solid #e4e7ed;
+  gap: 20px;
+  margin: 32px 0 24px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, $bg-muted 0%, $bg-card 100%);
+  border-radius: $radius-lg;
+  border: 1px solid $border;
   
   .bar-line {
     flex: 1;
     height: 1px;
-    background: linear-gradient(90deg, transparent, #d0d5dd 50%, transparent);
+    background: linear-gradient(90deg, transparent, $border 50%, transparent);
   }
   
   .bar-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #667eea;
+    font-size: 15px;
+    font-weight: 700;
+    color: $primary;
     white-space: nowrap;
+    letter-spacing: -0.025em;
   }
   
   .bar-selector {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 12px;
-    background: #fff;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    gap: 10px;
+    padding: 6px 16px;
+    background: $bg-card;
+    border-radius: $radius-md;
+    box-shadow: $shadow-sm;
+    border: 1px solid $border;
     
     .selector-label {
       font-size: 13px;
-      color: #606266;
+      color: $text-secondary;
       white-space: nowrap;
+      font-weight: 500;
+    }
+    
+    :deep(.el-select) {
+      .el-input__wrapper {
+        box-shadow: none !important;
+        background: $bg-muted;
+        border-radius: $radius-sm;
+      }
     }
   }
   
   .bar-hint {
     font-size: 12px;
-    color: #909399;
+    color: $text-muted;
     white-space: nowrap;
+    background: $accent-light;
+    padding: 4px 12px;
+    border-radius: $radius-sm;
+    color: darken($accent, 15%);
   }
 }
 
 // 面板标签
 .panel-tag {
-  margin-left: 8px;
-  padding: 2px 8px;
+  margin-left: 10px;
+  padding: 4px 10px;
   font-size: 12px;
+  font-weight: 600;
+  color: $primary;
+  background: $primary-lighter;
+  border-radius: $radius-sm;
+}
+
+// Element Plus 组件覆盖
+:deep(.el-button) {
+  border-radius: $radius-sm;
   font-weight: 500;
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
-  border-radius: 4px;
+  transition: all $transition-fast;
+}
+
+:deep(.el-tag) {
+  border-radius: $radius-sm;
+  font-weight: 500;
+}
+
+:deep(.el-table) {
+  --el-table-border-color: #{$border};
+  --el-table-header-bg-color: #{$bg-muted};
+  border-radius: $radius-md;
+  overflow: hidden;
+  
+  th.el-table__cell {
+    font-weight: 600;
+    color: $text-primary;
+  }
+  
+  td.el-table__cell {
+    color: $text-secondary;
+  }
+}
+
+:deep(.el-card) {
+  border-radius: $radius-lg;
+  border-color: $border;
+  box-shadow: $shadow-sm;
+}
+
+:deep(.el-dialog) {
+  border-radius: $radius-lg;
+  
+  .el-dialog__header {
+    border-bottom: 1px solid $border;
+    padding: 20px 24px;
+    
+    .el-dialog__title {
+      font-weight: 600;
+      color: $text-primary;
+    }
+  }
+  
+  .el-dialog__body {
+    padding: 24px;
+  }
 }
 </style>

@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>资舟量化研究平台 - ZiZhou Quant Platform</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; connect-src 'self' ws: wss: http: https:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self' blob: http: https:; media-src 'self' blob: http: https:;">
+  <title>ZiZhou G-Snowball</title>
   <link rel="icon" href="/icon.png">
 </head>
 <body>
+  <script src="./wasm_exec.js"></script>
   <div id="app"></div>
   <script type="module" src="/src/renderer/main.ts"></script>
 </body>

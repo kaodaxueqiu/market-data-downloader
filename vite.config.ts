@@ -41,12 +41,17 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src/renderer')
+      '@': path.resolve(__dirname, './src/renderer'),
+      'vue-element-plus-x/css': path.resolve(__dirname, 'node_modules/vue-element-plus-x/dist/index.css')
     }
   },
   server: {
-    host: '127.0.0.1',  // 只监听IPv4，避免IPv6权限问题
-    port: 3000
+    host: '127.0.0.1',
+    port: 3010,
+    strictPort: true
+  },
+  define: {
+    'process.env.VSCODE_TEXTMATE_DEBUG': 'false'
   },
   build: {
     outDir: 'dist/renderer'

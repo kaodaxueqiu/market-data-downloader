@@ -52,6 +52,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('shell:showItemInFolder', filePath),
     openPath: (path: string) => 
       ipcRenderer.invoke('shell:openPath', path),
+    openWithSystemApp: (url: string, fileName: string) =>
+      ipcRenderer.invoke('file:openWithSystemApp', url, fileName),
+    extractDoc: (url: string) =>
+      ipcRenderer.invoke('file:extractDoc', url),
     downloadFile: (url: string, savePath: string, onProgress?: (percent: number) => void) => {
       // 监听下载进度
       if (onProgress) {
@@ -191,6 +195,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     myDetail: (factorId: string | number) => ipcRenderer.invoke('factor:myDetail', factorId),
     myUpdate: (factorId: string | number, data: any) => ipcRenderer.invoke('factor:myUpdate', factorId, data),
     myDelete: (factorId: string | number) => ipcRenderer.invoke('factor:myDelete', factorId),
+    myBatchDelete: (factorIds: string[]) => ipcRenderer.invoke('factor:myBatchDelete', factorIds),
     // 分类管理
     myCategoryCreate: (level: 1 | 2 | 3, data: any) => ipcRenderer.invoke('factor:myCategoryCreate', level, data),
     myCategoryUpdate: (level: 1 | 2 | 3, id: number, data: any) => ipcRenderer.invoke('factor:myCategoryUpdate', level, id, data),
@@ -224,7 +229,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
     download: (taskId: string, options?: { format?: 'csv' | 'xlsx'; type?: 'summary' | 'daily' | 'all'; period?: number }) =>
       ipcRenderer.invoke('backtest:download', taskId, options),
     report: (taskId: string, options?: { period?: number }) =>
-      ipcRenderer.invoke('backtest:report', taskId, options)
+      ipcRenderer.invoke('backtest:report', taskId, options),
+    getFactorValues: (taskId: string, params?: { trade_date?: string; stock_code?: string; sort_by?: string; sort_order?: string; page?: number; page_size?: number }) =>
+      ipcRenderer.invoke('backtest:getFactorValues', taskId, params),
+    getFactorValueDates: (taskId: string) =>
+      ipcRenderer.invoke('backtest:getFactorValueDates', taskId),
+    getFactorValueStats: (taskId: string, tradeDate: string) =>
+      ipcRenderer.invoke('backtest:getFactorValueStats', taskId, tradeDate),
+    getFactorValueDistribution: (taskId: string, params: { trade_date: string; bins?: number }) =>
+      ipcRenderer.invoke('backtest:getFactorValueDistribution', taskId, params),
+    downloadFactorValues: (taskId: string, tradeDate?: string) =>
+      ipcRenderer.invoke('backtest:downloadFactorValues', taskId, tradeDate)
+  },
+
+  // IM API
+  im: {
+    getToken: () => ipcRenderer.invoke('im:getToken'),
+    searchUsers: (keyword: string, token: string) => ipcRenderer.invoke('im:searchUsers', keyword, token),
+  },
+
+  // 数据库权限管理 API
+  dbPermissions: {
+    listDatabases: (dbType?: string) => ipcRenderer.invoke('dbPerm:listDatabases', dbType),
+    listTables: (dbType: string, dbName: string) => ipcRenderer.invoke('dbPerm:listTables', dbType, dbName),
+    listUsers: (dbType?: string) => ipcRenderer.invoke('dbPerm:listUsers', dbType),
+    createUser: (body: any) => ipcRenderer.invoke('dbPerm:createUser', body),
+    deleteUser: (username: string, dbType?: string) => ipcRenderer.invoke('dbPerm:deleteUser', username, dbType),
+    changePassword: (username: string, body: any) => ipcRenderer.invoke('dbPerm:changePassword', username, body),
+    getUserGrants: (username: string, dbType?: string) => ipcRenderer.invoke('dbPerm:getUserGrants', username, dbType),
+    grantPrivileges: (username: string, body: any) => ipcRenderer.invoke('dbPerm:grantPrivileges', username, body),
+    revokePrivileges: (username: string, body: any) => ipcRenderer.invoke('dbPerm:revokePrivileges', username, body),
+    revokeAllPrivileges: (username: string, body: any) => ipcRenderer.invoke('dbPerm:revokeAllPrivileges', username, body),
+    batchGrant: (username: string, body: any) => ipcRenderer.invoke('dbPerm:batchGrant', username, body),
   },
 
   // 研究成果API
@@ -550,6 +586,8 @@ declare global {
       shell: {
         showItemInFolder: (filePath: string) => Promise<void>
         openPath: (path: string) => Promise<string>
+        openWithSystemApp: (url: string, fileName: string) => Promise<{ success: boolean; path?: string; error?: string }>
+        extractDoc: (url: string) => Promise<{ success: boolean; text?: string; headers?: string; footers?: string; error?: string }>
         downloadFile: (url: string, savePath: string, onProgress?: (percent: number) => void) => Promise<{ path: string, size: number }>
         calculateMD5: (filePath: string) => Promise<string>
       }
@@ -650,6 +688,7 @@ declare global {
         myDetail: (factorId: string | number) => Promise<{ success: boolean; data?: any; error?: string }>
         myUpdate: (factorId: string | number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
         myDelete: (factorId: string | number) => Promise<{ success: boolean; message?: string; error?: string }>
+        myBatchDelete: (factorIds: string[]) => Promise<{ success: boolean; message?: string; deleted_count?: number; requested?: number; error?: string }>
         // 分类管理
         myCategoryCreate: (level: 1 | 2 | 3, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
         myCategoryUpdate: (level: 1 | 2 | 3, id: number, data: any) => Promise<{ success: boolean; message?: string; error?: string }>
@@ -674,10 +713,32 @@ declare global {
         getResult: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         cancelTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
-        getPriceTypeOptions: () => Promise<{ success: boolean; data?: { buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }> }; error?: string }>
+        getPriceTypeOptions: () => Promise<{ success: boolean; data?: { buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }>; time_filter_presets?: Array<{ name: string; start: string; end: string; description?: string }> }; error?: string }>
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         download: (taskId: string, options: { format: 'csv' | 'xlsx'; type: 'summary' | 'daily' | 'all'; period?: number }) => Promise<{ success: boolean; filePath?: string; error?: string }>
         report: (taskId: string, options: any) => Promise<{ success: boolean; filePath?: string; error?: string }>
+        getFactorValues: (taskId: string, params?: { trade_date?: string; stock_code?: string; sort_by?: string; sort_order?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getFactorValueDates: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getFactorValueStats: (taskId: string, tradeDate: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getFactorValueDistribution: (taskId: string, params: { trade_date: string; bins?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
+        downloadFactorValues: (taskId: string, tradeDate?: string) => Promise<{ success: boolean; filePath?: string; error?: string }>
+      }
+      im: {
+        getToken: () => Promise<{ success: boolean; userID?: string; token?: string; expireTimeSeconds?: number; phoneNumber?: string; nickname?: string; email?: string; company?: string; error?: string }>
+        searchUsers: (keyword: string, token: string) => Promise<{ success: boolean; users?: any[]; error?: string; raw?: any }>
+      }
+      dbPermissions: {
+        listDatabases: (dbType?: string) => Promise<any>
+        listTables: (dbType: string, dbName: string) => Promise<any>
+        listUsers: (dbType?: string) => Promise<any>
+        createUser: (body: any) => Promise<any>
+        deleteUser: (username: string, dbType?: string) => Promise<any>
+        changePassword: (username: string, body: any) => Promise<any>
+        getUserGrants: (username: string, dbType?: string) => Promise<any>
+        grantPrivileges: (username: string, body: any) => Promise<any>
+        revokePrivileges: (username: string, body: any) => Promise<any>
+        revokeAllPrivileges: (username: string, body: any) => Promise<any>
+        batchGrant: (username: string, body: any) => Promise<any>
       }
       research: {
         getList: (params?: { page?: number; page_size?: number; created_by?: string; status?: string; keyword?: string; sort_by?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
