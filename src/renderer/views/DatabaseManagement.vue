@@ -237,23 +237,21 @@ function onTreeNodeClick(node: any) {
 // ========== 用户列表 ==========
 const usersLoading = ref(false)
 const userSearch = ref('')
-const rawUsers = ref<any>({ postgresql: { users: [] }, clickhouse: { users: [] }, apikey_bindings: [] })
+const rawUsers = ref<any>({ postgresql: { users: [] }, clickhouse: { users: [] } })
 
 const mergedUsers = computed(() => {
   const map = new Map<string, { username: string; hasPg: boolean; hasCh: boolean; binding: any }>()
   for (const u of rawUsers.value.postgresql?.users || []) {
-    map.set(u.username, { username: u.username, hasPg: true, hasCh: false, binding: null })
+    map.set(u.username, { username: u.username, hasPg: true, hasCh: false, binding: u.bound_api_key || null })
   }
   for (const u of rawUsers.value.clickhouse?.users || []) {
     const existing = map.get(u.username)
-    if (existing) existing.hasCh = true
-    else map.set(u.username, { username: u.username, hasPg: false, hasCh: true, binding: null })
-  }
-  for (const b of rawUsers.value.apikey_bindings || []) {
-    const pg = b.postgresql_username
-    const ch = b.clickhouse_username
-    if (pg && map.has(pg)) map.get(pg)!.binding = b
-    if (ch && map.has(ch) && ch !== pg) map.get(ch)!.binding = b
+    if (existing) {
+      existing.hasCh = true
+      if (!existing.binding && u.bound_api_key) existing.binding = u.bound_api_key
+    } else {
+      map.set(u.username, { username: u.username, hasPg: false, hasCh: true, binding: u.bound_api_key || null })
+    }
   }
   return Array.from(map.values())
 })
@@ -270,6 +268,7 @@ async function loadUsers() {
   usersLoading.value = true
   try {
     const res = await api.listUsers()
+    console.log('📋 [listUsers] 接口返回:', JSON.stringify(res.data, null, 2))
     if (res.success && res.data) rawUsers.value = res.data
   } finally {
     usersLoading.value = false
