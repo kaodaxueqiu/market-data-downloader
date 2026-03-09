@@ -133,7 +133,7 @@ const TopSearchBar = () => {
   return (
     <>
       <div className="no-mobile app-drag flex h-10 min-h-10 items-center bg-(--top-search-bar)">
-        <div className="app-no-drag flex shrink-0 items-center pl-4">
+        <div className={`app-no-drag flex shrink-0 items-center pl-4 ${window.electronAPI?.getPlatform?.() === 4 || (window as any).imWindowControl?.platform === 4 ? "ml-16" : ""}`}>
           <img src={logo} alt="logo" className="h-5 w-5" />
           <span className="ml-2 text-sm font-semibold text-white">{APP_NAME}</span>
         </div>
