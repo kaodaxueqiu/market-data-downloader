@@ -72,12 +72,7 @@ jobs:
 
       - name: Build IM Electron
         working-directory: openIM/electron-client/app
-        run: |
-          pnpm run build:packages || true
-          pnpm run build:prod
-          pnpm run prepare:prod
-          npx electron-builder --config electron-builder.prod.json5 --publish never
-          pnpm run restore:package
+        run: pnpm electron:build:prod
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false

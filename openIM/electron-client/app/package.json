@@ -5,6 +5,10 @@
   "description": "G-Snowball IM Client.",
   "author": "ZiZhou",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaodaxueqiu/market-data-downloader"
+  },
   "workspaces": [
     "packages/*"
   ],
