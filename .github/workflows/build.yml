@@ -51,24 +51,25 @@ jobs:
         working-directory: openIM/electron-client/app
         run: pnpm build:prod
 
-      - name: Download FFI assets (Windows)
-        if: matrix.os == 'windows-latest'
-        working-directory: openIM/electron-client/app
-        run: |
-          mkdir -p extraResources
-          mkdir -p node_modules/@openim/electron-client-sdk/assets/win_x64
-        shell: bash
-
       - name: Setup FFI assets (Windows)
         if: matrix.os == 'windows-latest'
         working-directory: openIM/electron-client/app
         run: |
-          if (Test-Path "node_modules/@openim/electron-client-sdk/assets/win_x64/libopenimsdk.dll") {
-            echo "FFI assets already present"
-          } else {
-            echo "WARNING: FFI assets not found. IM will run in WASM mode."
-          }
-        shell: pwsh
+          mkdir -p node_modules/@openim/electron-client-sdk/assets/win_x64
+          cp -f extraResources/libopenimsdk.dll node_modules/@openim/electron-client-sdk/assets/win_x64/
+          cp -f extraResources/libopenimsdk.h node_modules/@openim/electron-client-sdk/assets/win_x64/
+          echo "Windows FFI assets copied"
+        shell: bash
+
+      - name: Setup FFI assets (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: openIM/electron-client/app
+        run: |
+          mkdir -p node_modules/@openim/electron-client-sdk/assets/mac_arm64
+          cp -f extraResources/mac_arm64/libopenimsdk.dylib node_modules/@openim/electron-client-sdk/assets/mac_arm64/
+          cp -f extraResources/mac_arm64/libopenimsdk.h node_modules/@openim/electron-client-sdk/assets/mac_arm64/
+          echo "macOS FFI assets copied"
+        shell: bash
 
       - name: Build IM Electron
         working-directory: openIM/electron-client/app
