@@ -70,17 +70,14 @@ jobs:
           }
         shell: pwsh
 
-      - name: Build IM Electron (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Build IM Electron
         working-directory: openIM/electron-client/app
-        run: pnpm electron:build:prod
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build IM Electron (macOS)
-        if: matrix.os == 'macos-latest'
-        working-directory: openIM/electron-client/app
-        run: pnpm electron:build:prod
+        run: |
+          pnpm run build:packages || true
+          pnpm run build:prod
+          pnpm run prepare:prod
+          npx electron-builder --config electron-builder.prod.json5 --publish never
+          pnpm run restore:package
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -96,7 +93,11 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           mkdir -p resources/im
-          cp -r openIM/electron-client/app/release/prod/1.0.0/mac*/* resources/im/ || true
+          if [ -d "openIM/electron-client/app/release/prod/1.0.0/mac-arm64" ]; then
+            cp -r openIM/electron-client/app/release/prod/1.0.0/mac-arm64/G-Snowball-IM.app resources/im/
+          elif [ -d "openIM/electron-client/app/release/prod/1.0.0/mac" ]; then
+            cp -r openIM/electron-client/app/release/prod/1.0.0/mac/G-Snowball-IM.app resources/im/
+          fi
         shell: bash
 
       # ── 构建量化平台 ──

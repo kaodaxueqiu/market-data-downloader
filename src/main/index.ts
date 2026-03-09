@@ -5833,10 +5833,15 @@ ipcMain.handle('dbPerm:batchGrant', async (_e, username: string, body: any) => {
 // ── IM 独立进程 ──
 ipcMain.handle('im:openWindow', async () => {
   try {
+    const isMac = process.platform === 'darwin'
     const imExePath =
       process.env.NODE_ENV === 'development'
-        ? join(__dirname, '../../../openIM/electron-client/app/release/prod/1.0.0/win-unpacked/G-Snowball-IM.exe')
-        : join(process.resourcesPath, 'im', 'G-Snowball-IM.exe')
+        ? isMac
+          ? join(__dirname, '../../../openIM/electron-client/app/release/prod/1.0.0/mac-arm64/G-Snowball-IM.app/Contents/MacOS/G-Snowball-IM')
+          : join(__dirname, '../../../openIM/electron-client/app/release/prod/1.0.0/win-unpacked/G-Snowball-IM.exe')
+        : isMac
+          ? join(process.resourcesPath, 'im', 'G-Snowball-IM.app', 'Contents', 'MacOS', 'G-Snowball-IM')
+          : join(process.resourcesPath, 'im', 'G-Snowball-IM.exe')
 
     const cleanEnv: Record<string, string> = {
       PATH: process.env.PATH || '',
