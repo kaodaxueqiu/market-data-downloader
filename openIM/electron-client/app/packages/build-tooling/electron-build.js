@@ -69,12 +69,13 @@ if (options.buildPackages) {
 run(`pnpm run build:${options.mode}`);
 run(`pnpm run prepare:${options.mode}`);
 
+const publishFlag = process.env.CI ? " --publish never" : "";
 if (options.all) {
-  run(`electron-builder --config ${config} --win --x64`);
-  run(`electron-builder --config ${config} --mac --x64 --arm64`);
+  run(`electron-builder --config ${config} --win --x64${publishFlag}`);
+  run(`electron-builder --config ${config} --mac --x64 --arm64${publishFlag}`);
 } else {
   const builderArgs = options.builderArgs.join(" ");
-  run(`electron-builder --config ${config}${builderArgs ? " " + builderArgs : ""}`);
+  run(`electron-builder --config ${config}${builderArgs ? " " + builderArgs : ""}${publishFlag}`);
 }
 
 run("pnpm run restore:package");
