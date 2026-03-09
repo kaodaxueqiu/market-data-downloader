@@ -27,9 +27,76 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: '22'
           
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      # ── 构建 IM ──
+      - name: Install IM dependencies
+        working-directory: openIM/electron-client/app
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build IM workspace packages
+        working-directory: openIM/electron-client/app
+        run: pnpm build:packages
+        continue-on-error: true
+
+      - name: Build IM frontend (production)
+        working-directory: openIM/electron-client/app
+        run: pnpm build:prod
+
+      - name: Download FFI assets (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: openIM/electron-client/app
+        run: |
+          mkdir -p extraResources
+          mkdir -p node_modules/@openim/electron-client-sdk/assets/win_x64
+        shell: bash
+
+      - name: Setup FFI assets (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: openIM/electron-client/app
+        run: |
+          if (Test-Path "node_modules/@openim/electron-client-sdk/assets/win_x64/libopenimsdk.dll") {
+            echo "FFI assets already present"
+          } else {
+            echo "WARNING: FFI assets not found. IM will run in WASM mode."
+          }
+        shell: pwsh
+
+      - name: Build IM Electron (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: openIM/electron-client/app
+        run: pnpm electron:build:prod
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build IM Electron (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: openIM/electron-client/app
+        run: pnpm electron:build:prod
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Copy IM to resources (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p resources/im
+          cp -r openIM/electron-client/app/release/prod/1.0.0/win-unpacked/* resources/im/
+        shell: bash
+
+      - name: Copy IM to resources (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir -p resources/im
+          cp -r openIM/electron-client/app/release/prod/1.0.0/mac*/* resources/im/ || true
+        shell: bash
+
+      # ── 构建量化平台 ──
       - name: Install dependencies
         run: npm install
         
