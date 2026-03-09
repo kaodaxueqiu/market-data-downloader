@@ -169,7 +169,7 @@ export const allMenus: MenuItem[] = [
   { 
     id: 'im_assistant', 
     name: '智能助手', 
-    path: '/im', 
+    path: '#im', 
     icon: ChatDotRound,
     color: '#8B5CF6',
     description: 'AI智能助手，支持与AI智能体对话'

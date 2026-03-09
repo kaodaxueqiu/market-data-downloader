@@ -1,0 +1,37 @@
+{
+  "system": {
+    "text": {
+      "close": "关闭",
+      "meeting": "视频会议",
+      "meetingInvitation": "通话邀请",
+      "mentionAll": "所有人",
+      "open": "开启",
+      "selectUser": "选择用户",
+      "somePerson": "等{{num}}人",
+      "you": "你"
+    },
+    "toast": {
+      "accessFailed": "操作失败！",
+      "allInvitedUserBusy": "被邀请的用户均在通话中，请稍后再试！",
+      "clearConversationMessagesFailed": "删除会话消息失败！",
+      "downloadFailed": "下载失败！",
+      "getBlackListFailed": "获取黑名单列表失败！",
+      "getConversationFailed": "获取会话列表失败！",
+      "getConversationGroupsFailed": "获取会话分组失败！",
+      "getFriendListFailed": "获取好友列表失败！",
+      "getGroupInfoFailed": "获取群信息失败！",
+      "getGroupListFailed": "获取群列表失败！",
+      "getGroupMemberFailed": "获取群成员信息失败！",
+      "getSelfInfoFailed": "获取个人信息失败！",
+      "inMeetingCannotRtcCall": "当前正在参与会议，请先结束会议再进行通话",
+      "inviteUserFailed": "发起邀请失败！",
+      "inviteeBusyLine": "对方正在通话中，请稍后再试！",
+      "joinedOtherMeetingOrRtc": "当前正在语音/视频通话或会议中，请先结束！",
+      "repeatOpenRtc": "当前正在通话中，请先结束当前通话！",
+      "setConversationRecvMessageOptFailed": "修改会话接收状态失败！",
+      "updateConversationPrivateStateFailed": "修改阅后即焚状态失败！",
+      "uploadFailed": "上传失败！",
+      "uploadSuccess": "上传成功"
+    }
+  }
+}

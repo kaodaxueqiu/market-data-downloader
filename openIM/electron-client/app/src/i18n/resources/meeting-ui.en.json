@@ -1,0 +1,256 @@
+{
+  "common": {
+    "add": "Add",
+    "back": "Back",
+    "cancel": "Cancel",
+    "chat": "Chat",
+    "confirm": "Confirm",
+    "done": "Done",
+    "host": "Host",
+    "inviteMembers": "Invite members",
+    "me": "Me",
+    "members": "Members",
+    "more": "More",
+    "moreOptions": "More options",
+    "otherMember": "Someone else",
+    "participantsCount": "{{count}} members",
+    "processing": "Processing...",
+    "selectAll": "Select all",
+    "syncing": "Syncing..."
+  },
+  "controls": {
+    "noCamera": "No camera detected",
+    "noMicrophone": "No microphone detected",
+    "muteDisabledByHost": "Host has disabled your microphone",
+    "unmute": "Unmute",
+    "mute": "Mute",
+    "selectMicrophone": "Select microphone",
+    "videoDisabledByHost": "Host has disabled your camera",
+    "videoOff": "Turn off camera",
+    "videoOn": "Turn on camera",
+    "screenShareDisabledByHost": "Host has disabled screen sharing",
+    "screenShareStop": "Stop sharing",
+    "screenShare": "Share screen",
+    "videoOffShort": "Camera off",
+    "videoOnShort": "Camera on"
+  },
+  "confirm": {
+    "media": {
+      "microphone": {
+        "title": "Turn on microphone?",
+        "description": "The host wants to turn on your microphone."
+      },
+      "camera": {
+        "title": "Turn on camera?",
+        "description": "The host wants to turn on your camera."
+      }
+    },
+    "endTitle": "End meeting",
+    "endDescription": "Are you sure you want to end meeting \"{{title}}\"?"
+  },
+  "recording": {
+    "disabled": {
+      "hostOnly": "Only the host can start recording",
+      "inProgress": "{{name}} started recording at {{time}}",
+      "notEnabled": "Recording is not enabled for this meeting",
+      "notInList": "You don't have permission to record"
+    },
+    "toast": {
+      "alreadyStarted": "Recording already started"
+    },
+    "status": {
+      "recording": "Recording",
+      "paused": "Recording paused",
+      "description": "Recording is in progress"
+    },
+    "start": {
+      "action": "Start recording",
+      "title": "Start recording",
+      "description": "All participants will be notified when recording starts.",
+      "autoNotice": "Recording will automatically stop when the meeting ends.",
+      "confirm": "Start"
+    },
+    "end": {
+      "title": "Stop recording",
+      "description": "The recording will be saved after stopping.",
+      "confirm": "Stop",
+      "action": "Stop recording"
+    },
+    "ended": {
+      "title": "Recording stopped",
+      "description": "The recording has been saved."
+    },
+    "permission": {
+      "hostOnly": "Host only",
+      "all": "All participants",
+      "specified": "Selected participants"
+    },
+    "settings": {
+      "title": "Recording settings",
+      "permissionTitle": "Who can record",
+      "allowedMembers": "Selected participants"
+    }
+  },
+  "settings": {
+    "title": "Meeting settings",
+    "hostOnlyTip": "Only the host can change these settings.",
+    "syncing": "Syncing...",
+    "groups": {
+      "general": "General",
+      "meetingControl": "Meeting controls",
+      "view": "View"
+    },
+    "options": {
+      "allowSelfUnmute": {
+        "label": "Allow participants to unmute themselves",
+        "description": "Participants can turn on their microphone",
+        "microphoneLabel": "Allow microphone"
+      },
+      "allowMemberVideo": {
+        "label": "Allow participants to turn on camera",
+        "description": "Participants can turn on their camera",
+        "cameraLabel": "Allow camera"
+      },
+      "onlyHostCanShare": {
+        "label": "Only host can share screen",
+        "description": "Other participants cannot share their screen",
+        "shortLabel": "Host-only sharing"
+      },
+      "onlyHostCanInvite": {
+        "label": "Only host can invite participants",
+        "description": "Other participants cannot invite new members",
+        "shortLabel": "Host-only invites"
+      },
+      "muteOnJoin": {
+        "label": "Mute participants on entry",
+        "description": "New participants join muted"
+      },
+      "showActiveSpeaker": "Highlight active speaker"
+    }
+  },
+  "endMeeting": {
+    "button": "Leave",
+    "tooltip": "Leave or end meeting",
+    "leave": "Leave meeting",
+    "endForAll": "End meeting"
+  },
+  "screenShare": {
+    "stop": "Stop sharing",
+    "statusPaused": "Sharing paused",
+    "statusSharing": "Sharing screen",
+    "resume": "Resume",
+    "pause": "Pause",
+    "unpin": "Unpin",
+    "pin": "Pin",
+    "modal": {
+      "title": "Choose what to share",
+      "tabScreen": "Entire screen",
+      "tabApp": "Application window",
+      "empty": "No windows available",
+      "startShare": "Share"
+    },
+    "label": "Screen share",
+    "title": "Screen Share",
+    "contentPlaceholder": "Waiting for shared content...",
+    "sharing": "Sharing"
+  },
+  "layout": {
+    "voice": "Voice mode",
+    "speaker": "Speaker view",
+    "grid": "Grid view",
+    "switch": "Switch layout"
+  },
+  "window": {
+    "title": "Meeting",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "meetingInfo": {
+    "inMeeting": "in meeting",
+    "title": "Meeting info",
+    "subject": "Subject",
+    "id": "Meeting ID",
+    "copied": "Copied",
+    "copy": "Copy",
+    "startTime": "Started at",
+    "duration": "Duration"
+  },
+  "sidebar": {
+    "close": "Close",
+    "popout": "Open in new window",
+    "closeAll": "Close all"
+  },
+  "status": {
+    "connecting": "Connecting...",
+    "leaving": "Leaving meeting...",
+    "ending": "Ending meeting...",
+    "transferringHost": "Transferring host..."
+  },
+  "meetingEnded": {
+    "title": "Meeting ended",
+    "description": "The meeting has ended. This window will close in {{seconds}} seconds. Click Confirm to close now."
+  },
+  "transferHost": {
+    "title": {
+      "leave": "Transfer host",
+      "transfer": "Transfer host"
+    },
+    "notice": {
+      "leave": "Transfer host to another participant before leaving.",
+      "transfer": "Select a participant to become the new host."
+    },
+    "empty": {
+      "noMembers": "No other participants available.",
+      "noMatch": "No matching participants."
+    },
+    "confirm": {
+      "leave": "Transfer and leave",
+      "transfer": "Transfer"
+    }
+  },
+  "network": {
+    "disconnected": "Disconnected",
+    "unstable": "Unstable network"
+  },
+  "members": {
+    "searchPlaceholder": "Search participants",
+    "joinedTab": "Joined ({{count}})",
+    "invitedTab": "Invited ({{count}})",
+    "emptyInvited": "No invited participants",
+    "calling": "Calling...",
+    "call": "Call",
+    "listTitle": "Participants",
+    "muteAll": "Mute all",
+    "unmuteAll": "Unmute all",
+    "selectTitle": "Select participants",
+    "empty": "No participants found",
+    "allowMic": "Allow to unmute",
+    "muteMic": "Mute",
+    "allowCamera": "Allow to turn on camera",
+    "disableCamera": "Turn off camera",
+    "transferHost": "Make host",
+    "tabLabel": "Participants ({{count}})"
+  },
+  "chat": {
+    "empty": "No messages yet",
+    "inputPlaceholder": "Send a message...",
+    "syncing": "Syncing messages...",
+    "syncingShort": "Syncing...",
+    "revoke": "Recall",
+    "revoking": "Recalling...",
+    "youRevoked": "You recalled a message",
+    "otherRevoked": "This message was recalled",
+    "sampleMessages": {
+      "greeting": "Hi everyone!",
+      "received": "Got it!",
+      "clear": "All clear!"
+    }
+  },
+  "toast": {
+    "meetingOverOrNotFound": "Meeting has ended or does not exist",
+    "joinedOtherMeetingOrRtc": "Already in another meeting",
+    "meetingOver": "Meeting has ended"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "contact": {
+    "empty": {
+      "noMoments": "暂无动态",
+      "noMoreMessage": "没有更多消息了"
+    },
+    "message": {
+      "request": {
+        "agree": "同意",
+        "agreed": "已同意",
+        "applyToAdd": "您申请添加",
+        "applyToFriend": "申请添加您为好友",
+        "applyToJoin": "申请加入",
+        "information": "验证信息",
+        "pending": "等待验证",
+        "refuse": "拒绝",
+        "refused": "已拒绝",
+        "youApplyToJoin": "您申请加入"
+      }
+    },
+    "text": {
+      "atYou": "提到了你",
+      "clear": "清空",
+      "comment": "评论",
+      "contact": "通讯录",
+      "groupNotification": "群通知",
+      "hiddenSome": "不给谁看",
+      "hiddenSomeToast": "仅选中的人不可见",
+      "mentioned": "提到了",
+      "moments": "工作圈",
+      "multipleNewMessages": "{{count}} 新消息",
+      "myCreated": "我创建的",
+      "myFriend": "我的好友",
+      "myJoined": "我加入的",
+      "newFriends": "新的好友",
+      "partlyVisible": "部分可见",
+      "partlyVisibleToast": "仅选中的人可见",
+      "privacy": "私密",
+      "privacyToast": "仅自己可见",
+      "public": "公开",
+      "publicToast": "所有人可见",
+      "publishImages": "发布图文",
+      "publishMomentsToast": "这一刻的想法...",
+      "publishVideo": "发布视频",
+      "remindWhoToWatch": "提醒谁看",
+      "replied": "回复了",
+      "somePersonLike": " 等{{num}}人点赞",
+      "toLike": "点赞",
+      "totalNumPhoto": "共{{num}}张",
+      "unfriend": "解除好友",
+      "whoCanWatch": "谁可以看"
+    },
+    "toast": {
+      "confirmUnfriend": "确认解除好友吗？",
+      "inputContent": "请输入内容",
+      "publishFailed": "发布失败！",
+      "unfriendFailed": "解除好友失败！",
+      "unfriendSuccess": "解除好友成功！",
+      "userBlacked": "该用户已被加入黑名单！"
+    }
+  }
+}

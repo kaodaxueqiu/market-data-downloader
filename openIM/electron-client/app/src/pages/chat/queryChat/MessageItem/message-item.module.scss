@@ -1,0 +1,82 @@
+@reference "tailwindcss";
+.message-container {
+  @apply flex min-w-0 flex-1;
+
+  .message-wrap {
+    @apply ml-3 flex min-w-0 flex-1 flex-col items-start;
+
+    .message-profile {
+      @apply mb-1 flex w-full space-x-2 text-xs text-(--sub-text);
+    }
+
+    .bubble {
+      @apply min-w-0 flex-initial rounded-md p-2.5;
+      white-space: normal;
+      overflow-wrap: break-word;
+      word-break: normal;
+      background-color: var(--chat-bubble);
+    }
+  }
+
+  .menu-wrap {
+    @apply flex max-w-full space-x-2;
+  }
+
+  &-sender {
+    @apply flex-row-reverse;
+
+    .message-wrap {
+      @apply mr-3 items-end;
+
+      .message-profile {
+        @apply flex-row-reverse space-x-reverse;
+      }
+
+      .bubble {
+        background-color: var(--chat-bubble-sender);
+      }
+    }
+
+    .menu-wrap {
+      @apply flex-row-reverse space-x-reverse;
+    }
+  }
+}
+
+.animate-container {
+  // background-color: var(--primary-active);
+  animation: animate 2s ease-in-out;
+}
+
+@keyframes animate {
+  from {
+    background-color: var(--primary-active);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}
+
+.card-shadow {
+  @apply w-60 cursor-pointer overflow-hidden rounded-md shadow-md;
+  box-shadow: 3px 3px 8px 1px rgba(81, 94, 112, 0.1);
+}
+
+.bubble {
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: pre-wrap;
+  // Fix text ghosting on Windows
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.edit-wrapper {
+  :global {
+  }
+}
+
+.keyword-highlight {
+  color: var(--primary);
+}

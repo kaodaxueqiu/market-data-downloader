@@ -1,0 +1,69 @@
+{
+  "incoming": {
+    "subtitle": {
+      "audio": "Incoming audio call",
+      "video": "Incoming video call"
+    },
+    "invitation": "{{type}} invitation",
+    "groupMembers": "{{names}} and {{count}} in call",
+    "groupMembersShort": "{{names}} in call"
+  },
+  "outgoing": {
+    "calling": "Calling..."
+  },
+  "common": {
+    "unknown": "Unknown",
+    "you": "You",
+    "group": "Group"
+  },
+  "call": {
+    "call": "Call",
+    "groupCall": "Group call",
+    "inCallCount": "{{count}} in call",
+    "audio": "Audio call",
+    "video": "Video call",
+    "videoOff": "Video off",
+    "muted": "Muted",
+    "swap": "Swap"
+  },
+  "actions": {
+    "accept": "Accept",
+    "decline": "Decline",
+    "cancel": "Cancel"
+  },
+  "device": {
+    "microphone": "Microphone",
+    "speaker": "Speaker"
+  },
+  "controls": {
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "cameraOn": "Turn on camera",
+    "cameraOff": "Turn off camera",
+    "speakerOn": "Speaker on",
+    "speakerOff": "Speaker off",
+    "hangup": "Hang up",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close",
+    "noMicrophone": "No microphone detected",
+    "noSpeaker": "No speaker detected",
+    "noCamera": "No camera detected"
+  },
+  "network": {
+    "connecting": "Connecting...",
+    "reconnecting": "Reconnecting...",
+    "reconnected": "Reconnected",
+    "disconnected": "Disconnected",
+    "quality": {
+      "excellent": "Excellent",
+      "good": "Good",
+      "poor": "Poor",
+      "lost": "Lost"
+    }
+  },
+  "status": {
+    "waiting": "Waiting..."
+  }
+}

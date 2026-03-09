@@ -246,6 +246,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   im: {
     getToken: () => ipcRenderer.invoke('im:getToken'),
     searchUsers: (keyword: string, token: string) => ipcRenderer.invoke('im:searchUsers', keyword, token),
+    openWindow: () => ipcRenderer.invoke('im:openWindow'),
   },
 
   // 数据库权限管理 API

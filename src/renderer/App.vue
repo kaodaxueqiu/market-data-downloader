@@ -536,6 +536,13 @@ const pageTitle = computed(() => {
 
 const handleMenuSelect = (index: string) => {
   console.log('Menu selected:', index)
+  if (index === '#im') {
+    ;(window.electronAPI?.im as any)?.openWindow().then((result: any) => {
+      if (result && !result.success) {
+        ElMessage.error(result.error || '打开IM失败')
+      }
+    })
+  }
 }
 
 // 🆕 WebSocket 状态计算属性

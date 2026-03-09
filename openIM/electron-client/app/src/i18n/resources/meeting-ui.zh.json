@@ -1,0 +1,256 @@
+{
+  "common": {
+    "add": "添加",
+    "back": "返回",
+    "cancel": "取消",
+    "chat": "聊天",
+    "confirm": "确定",
+    "done": "完成",
+    "host": "主持人",
+    "inviteMembers": "邀请成员",
+    "me": "我",
+    "members": "成员",
+    "more": "更多",
+    "moreOptions": "更多选项",
+    "otherMember": "其他成员",
+    "participantsCount": "{{count}} 人",
+    "processing": "处理中...",
+    "selectAll": "全选",
+    "syncing": "同步中..."
+  },
+  "controls": {
+    "noCamera": "未检测到摄像头",
+    "noMicrophone": "未检测到麦克风",
+    "muteDisabledByHost": "主持人已关闭你的麦克风权限",
+    "unmute": "解除静音",
+    "mute": "静音",
+    "selectMicrophone": "选择麦克风",
+    "videoDisabledByHost": "主持人已关闭你的摄像头权限",
+    "videoOff": "关闭摄像头",
+    "videoOn": "开启摄像头",
+    "screenShareDisabledByHost": "主持人已关闭屏幕共享权限",
+    "screenShareStop": "停止共享",
+    "screenShare": "共享屏幕",
+    "videoOffShort": "关闭",
+    "videoOnShort": "开启"
+  },
+  "confirm": {
+    "media": {
+      "microphone": {
+        "title": "打开麦克风？",
+        "description": "主持人请求开启你的麦克风。"
+      },
+      "camera": {
+        "title": "打开摄像头？",
+        "description": "主持人请求开启你的摄像头。"
+      }
+    },
+    "endTitle": "结束会议",
+    "endDescription": "确定要结束会议「{{title}}」吗？"
+  },
+  "recording": {
+    "disabled": {
+      "hostOnly": "仅主持人可发起录制",
+      "inProgress": "{{name}} 于 {{time}} 开始录制",
+      "notEnabled": "会议录制功能未开启",
+      "notInList": "暂无录制权限"
+    },
+    "toast": {
+      "alreadyStarted": "录制已开始"
+    },
+    "status": {
+      "recording": "录制中",
+      "paused": "录制已暂停",
+      "description": "正在录制会议"
+    },
+    "start": {
+      "action": "开始录制",
+      "title": "开始录制",
+      "description": "开始后所有参会者将收到通知",
+      "autoNotice": "会议结束时录制将自动停止",
+      "confirm": "开始"
+    },
+    "end": {
+      "title": "停止录制",
+      "description": "停止后本次录制将保存",
+      "confirm": "停止",
+      "action": "停止录制"
+    },
+    "ended": {
+      "title": "录制已停止",
+      "description": "录制文件已保存"
+    },
+    "permission": {
+      "hostOnly": "仅主持人",
+      "all": "所有成员",
+      "specified": "指定成员"
+    },
+    "settings": {
+      "title": "录制设置",
+      "permissionTitle": "谁可以发起录制",
+      "allowedMembers": "指定成员"
+    }
+  },
+  "settings": {
+    "title": "会议设置",
+    "hostOnlyTip": "仅主持人可修改设置",
+    "syncing": "正在同步...",
+    "groups": {
+      "general": "通用",
+      "meetingControl": "会议管控",
+      "view": "视图"
+    },
+    "options": {
+      "allowSelfUnmute": {
+        "label": "允许成员自行解除静音",
+        "description": "参会者可自行开启麦克风",
+        "microphoneLabel": "允许开启麦克风"
+      },
+      "allowMemberVideo": {
+        "label": "允许成员开启摄像头",
+        "description": "参会者可自行开启摄像头",
+        "cameraLabel": "允许开启摄像头"
+      },
+      "onlyHostCanShare": {
+        "label": "仅主持人可共享屏幕",
+        "description": "其他成员无法发起屏幕共享",
+        "shortLabel": "仅主持人共享"
+      },
+      "onlyHostCanInvite": {
+        "label": "仅主持人可邀请成员",
+        "description": "其他成员无法邀请新成员",
+        "shortLabel": "仅主持人邀请"
+      },
+      "muteOnJoin": {
+        "label": "入会时静音",
+        "description": "成员入会时自动静音"
+      },
+      "showActiveSpeaker": "显示当前发言人"
+    }
+  },
+  "endMeeting": {
+    "button": "离开",
+    "tooltip": "离开或结束会议",
+    "leave": "离开会议",
+    "endForAll": "结束会议"
+  },
+  "screenShare": {
+    "stop": "停止共享",
+    "statusPaused": "共享已暂停",
+    "statusSharing": "正在共享屏幕",
+    "resume": "恢复",
+    "pause": "暂停",
+    "unpin": "取消固定",
+    "pin": "固定",
+    "modal": {
+      "title": "选择共享内容",
+      "tabScreen": "整个屏幕",
+      "tabApp": "应用窗口",
+      "empty": "暂无可共享的内容",
+      "startShare": "开始共享"
+    },
+    "label": "屏幕共享",
+    "title": "屏幕共享",
+    "contentPlaceholder": "等待共享内容...",
+    "sharing": "共享中"
+  },
+  "layout": {
+    "voice": "语音模式",
+    "speaker": "演讲者视图",
+    "grid": "宫格视图",
+    "switch": "切换布局"
+  },
+  "window": {
+    "title": "会议",
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "还原",
+    "close": "关闭"
+  },
+  "meetingInfo": {
+    "inMeeting": "人正在会议中",
+    "title": "会议信息",
+    "subject": "会议主题",
+    "id": "会议号",
+    "copied": "已复制",
+    "copy": "复制",
+    "startTime": "开始时间",
+    "duration": "会议时长"
+  },
+  "sidebar": {
+    "close": "关闭",
+    "popout": "独立窗口",
+    "closeAll": "全部关闭"
+  },
+  "status": {
+    "connecting": "连接中...",
+    "leaving": "正在离开会议...",
+    "ending": "正在结束会议...",
+    "transferringHost": "正在转让主持人..."
+  },
+  "meetingEnded": {
+    "title": "会议已结束",
+    "description": "会议已结束，将在 {{seconds}} 秒后关闭。点击确定可立即关闭。"
+  },
+  "transferHost": {
+    "title": {
+      "leave": "移交主持人",
+      "transfer": "移交主持人"
+    },
+    "notice": {
+      "leave": "离开前请将主持人移交给其他成员",
+      "transfer": "选择一位成员作为新主持人"
+    },
+    "empty": {
+      "noMembers": "暂无其他成员",
+      "noMatch": "未找到匹配成员"
+    },
+    "confirm": {
+      "leave": "移交并离开",
+      "transfer": "确认移交"
+    }
+  },
+  "network": {
+    "disconnected": "网络已断开",
+    "unstable": "网络不稳定"
+  },
+  "members": {
+    "searchPlaceholder": "搜索成员",
+    "joinedTab": "已加入 ({{count}})",
+    "invitedTab": "已邀请 ({{count}})",
+    "emptyInvited": "暂无已邀请成员",
+    "calling": "呼叫中...",
+    "call": "呼叫",
+    "listTitle": "参会成员",
+    "muteAll": "全体静音",
+    "unmuteAll": "解除全体静音",
+    "selectTitle": "选择成员",
+    "empty": "暂无成员",
+    "allowMic": "允许开启麦克风",
+    "muteMic": "关闭麦克风",
+    "allowCamera": "允许开启摄像头",
+    "disableCamera": "关闭摄像头",
+    "transferHost": "移交主持人",
+    "tabLabel": "成员 ({{count}})"
+  },
+  "chat": {
+    "empty": "暂无消息",
+    "inputPlaceholder": "发送消息...",
+    "syncing": "正在同步消息...",
+    "syncingShort": "同步中...",
+    "revoke": "撤回",
+    "revoking": "撤回中...",
+    "youRevoked": "你撤回了一条消息",
+    "otherRevoked": "此消息已被撤回",
+    "sampleMessages": {
+      "greeting": "大家好！",
+      "received": "收到",
+      "clear": "明白了"
+    }
+  },
+  "toast": {
+    "meetingOverOrNotFound": "会议已结束或会议不存在！",
+    "joinedOtherMeetingOrRtc": "当前已在其他会议中！",
+    "meetingOver": "会议已结束！"
+  }
+}

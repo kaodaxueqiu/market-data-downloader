@@ -1,0 +1,146 @@
+{
+  "actions": {
+    "share": "Share",
+    "copyLink": "Copy link",
+    "forward": "Forward",
+    "joinMeeting": "Join meeting",
+    "inviteMembers": "Invite members",
+    "viewRecording": "View recordings",
+    "quickMeeting": "Quick meeting",
+    "scheduleMeeting": "Schedule meeting",
+    "addContacts": "Add invitees"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "host": "Host",
+    "none": "None"
+  },
+  "confirm": {
+    "cancelTitle": "Cancel meeting",
+    "cancelDescription": "Are you sure you want to cancel \"{{title}}\"?",
+    "endTitle": "End meeting",
+    "endDescription": "End \"{{title}}\" for all participants?",
+    "cancel": "Cancel",
+    "removeParticipantTitle": "Remove participant",
+    "removeParticipantDescription": "Remove \"{{name}}\" from this meeting?",
+    "remove": "Remove"
+  },
+  "date": {
+    "today": "Today",
+    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "monthFormat": "MMM yyyy",
+    "shortFormat": "MMM d, yyyy",
+    "placeholder": "Select date and time",
+    "now": "Now"
+  },
+  "detail": {
+    "title": "Meeting details"
+  },
+  "dialogs": {
+    "join": {
+      "title": "Join meeting",
+      "joining": "Joining..."
+    }
+  },
+  "duration": {
+    "hours": "{{count}} h",
+    "hoursMinutes": "{{hours}} h {{minutes}} min",
+    "minutes": "{{count}} min"
+  },
+  "empty": {
+    "pending": "No upcoming meetings",
+    "history": "No meeting history"
+  },
+  "errors": {
+    "cancelMeeting": "Unable to cancel meeting",
+    "clipboardUnsupported": "Unable to access clipboard",
+    "closeCurrentMeetingFirst": "Please leave your current meeting first",
+    "createMeeting": "Unable to create meeting",
+    "endMeeting": "Unable to end meeting",
+    "fetchParticipants": "Unable to load participants",
+    "fetchRecording": "Unable to load recordings",
+    "inviteMembers": "Unable to invite members",
+    "joinMeeting": "Unable to join meeting",
+    "loadHistoryMeetings": "Unable to load meeting history",
+    "loadPendingMeetings": "Unable to load meetings",
+    "missingMeetingId": "Please enter a meeting ID",
+    "removeParticipant": "Unable to remove participant",
+    "scheduleMeeting": "Unable to schedule meeting",
+    "selectInvitees": "Unable to select participants",
+    "shareMeeting": "Unable to share meeting"
+  },
+  "form": {
+    "errors": {
+      "titleRequired": "Please enter a meeting title",
+      "startTimeRequired": "Please select a start time",
+      "durationRequired": "Please select a duration",
+      "timeInPast": "Start time cannot be in the past"
+    },
+    "editTitle": "Edit meeting",
+    "createTitle": "Schedule meeting",
+    "titleLabel": "Meeting title",
+    "titlePlaceholder": "Enter meeting title",
+    "durationLabel": "Duration",
+    "durationPlaceholder": "Select duration",
+    "saving": "Saving...",
+    "submitting": "Scheduling...",
+    "saveChanges": "Save changes",
+    "submit": "Schedule meeting",
+    "startTimeLabel": "Start time",
+    "meetingIdLabel": "Meeting ID",
+    "meetingIdPlaceholder": "Enter meeting ID"
+  },
+  "invitees": {
+    "empty": "No participants added",
+    "none": "None",
+    "separator": ", ",
+    "summary": "{{names}} and {{count}} others"
+  },
+  "loading": {
+    "pending": "Loading upcoming meetings...",
+    "history": "Loading meeting history...",
+    "generic": "Loading..."
+  },
+  "meeting": {
+    "host": "Host",
+    "invitees": "Invitees",
+    "id": "Meeting ID",
+    "duration": "Duration: {{duration}}",
+    "hostWithName": "Host: {{name}}",
+    "inviteesWithCount": "Invitees ({{count}})",
+    "defaultTitle": "Meeting"
+  },
+  "participants": {
+    "title": "Participants",
+    "titleWithCount": "Participants ({{count}})",
+    "joinedSection": "Joined ({{count}})",
+    "absentSection": "Not joined ({{count}})"
+  },
+  "quickMeeting": {
+    "title": "Quick meeting by {{name}}"
+  },
+  "recording": {
+    "inProgress": "Recording",
+    "shareTitle": "Meeting recording: {{title}}",
+    "shareDate": "Date: {{date}}",
+    "shareFile": "Recording file: {{url}}"
+  },
+  "share": {
+    "subjectLine": "Meeting: {{title}}",
+    "idLine": "Meeting ID: {{id}}",
+    "timeLine": "Time: {{time}}"
+  },
+  "status": {
+    "scheduled": "Scheduled",
+    "inProgress": "In progress",
+    "completed": "Completed",
+    "joining": "Joining...",
+    "scheduling": "Scheduling...",
+    "creating": "Creating..."
+  },
+  "tabs": {
+    "pending": "Upcoming",
+    "history": "History"
+  }
+}

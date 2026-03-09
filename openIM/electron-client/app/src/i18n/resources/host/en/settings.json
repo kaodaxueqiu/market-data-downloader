@@ -1,0 +1,51 @@
+{
+  "settings": {
+    "text": {
+      "about": "About us",
+      "accountSetting": "Account settings",
+      "addFriendsSetting": "Friend request settings",
+      "blackList": "Blocked contacts",
+      "cacheDirectory": "Cache directory",
+      "cacheDirectoryDesc": "Select a directory to store logs and chat cache.",
+      "cacheRoot": "Cache root directory",
+      "changeCacheDirectory": "Change cache directory",
+      "changePassword": "Change password",
+      "checkNewVersion": "Check for new version",
+      "chooseLanguage": "Choose language",
+      "closeButtonEvent": "When clicking the close button",
+      "exitApplication": "Quit application",
+      "logOut": "Log out",
+      "logsDirectory": "Log directory",
+      "meetings": "Meetings",
+      "messageAllowBeep": "New message sound",
+      "messageNotNotify": "Do not disturb",
+      "messageToast": "Notifications",
+      "minimize": "Minimize to tray",
+      "myInfo": "My profile",
+      "newPassword": "New password:",
+      "notAvailable": "None",
+      "notVerifyAddFriend": "No verification required for friend requests",
+      "oldPassword": "Current password:",
+      "personalSetting": "Personal settings",
+      "refuseAddFriend": "Block adding me as a friend",
+      "reportLog": "Upload log",
+      "reportSpecificLog": "Upload specific log",
+      "userCacheDirectory": "User cache directory",
+      "viewingLocalLogs": "View local logs"
+    },
+    "toast": {
+      "cachePathUpdateFailed": "Failed to update cache directory",
+      "cachePathUpdated": "Cache directory updated",
+      "confirmDeregisterAccount": "Delete this account?",
+      "confirmlogOut": "Are you sure you want to log out?",
+      "currentPassworWrong": "The current password is incorrect",
+      "deregisterAccount": "Delete account",
+      "deregisterDescription": "This will permanently delete all related data.",
+      "deregisterSuccess": "Your account has been successfully deleted.",
+      "inputOldPassword": "Please enter your current password",
+      "markAllConversationAsReadFailed": "Failed to mark all as read",
+      "samePassword": "New password is the same as the old one",
+      "updateAvatarFailed": "Failed to change avatar"
+    }
+  }
+}

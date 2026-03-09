@@ -1,0 +1,108 @@
+/**
+ * @see https://www.electron.build/configuration/configuration
+ */
+{
+  appId: "com.zizhou.g-snowball-im",
+  productName: "G-Snowball-IM",
+  asar: true,
+  asarUnpack: ["**/*.node", "**/*.dll"],
+  extends: null,
+  directories: {
+    output: "release/prod/${version}",
+  },
+  files: [
+    "dist",
+    "!dist/*.wasm",
+    "dist-electron",
+    "!node_modules/koffi/src/**/*",
+    "!node_modules/koffi/build/**/*",
+    "!node_modules/koffi/vendor/**/*",
+    "!node_modules/@openim/wasm-client-sdk/assets/**/*",
+  ],
+  extraResources: [
+    {
+      from: "extraResources",
+      to: "extraResources",
+    },
+  ],
+  mac: {
+    artifactName: "${productName}_${version}_${arch}.${ext}",
+    target: ["dmg"],
+    icon: "./dist/icons/mac_icon.png",
+    entitlements: "./entitlements.mac.plist",
+    extraResources: [
+      {
+        from: "node_modules/@openim/electron-client-sdk/assets/mac_${arch}/",
+        to: "app.asar.unpacked/node_modules/@openim/electron-client-sdk/assets/mac_${arch}",
+      },
+      {
+        from: "node_modules/koffi/build/koffi/darwin_${arch}/",
+        to: "koffi/darwin_${arch}",
+      },
+    ],
+  },
+  win: {
+    target: [
+      {
+        target: "portable",
+      },
+    ],
+    artifactName: "${productName}_${version}.${ext}",
+    icon: "./dist/icons/icon.ico",
+    extraResources: [
+      {
+        from: "node_modules/@openim/electron-client-sdk/assets/win_${arch}/",
+        to: "app.asar.unpacked/node_modules/@openim/electron-client-sdk/assets/win_${arch}",
+      },
+      {
+        from: "node_modules/koffi/build/koffi/win32_${arch}/",
+        to: "koffi/win32_${arch}",
+      },
+    ],
+  },
+  linux: {
+    icon: "./dist/icons/icon.png",
+    target: "deb",
+    maintainer: "ZiZhou",
+    artifactName: "${productName}_${version}_${arch}.${ext}",
+    category: "Network",
+    executableName: "g-snowball-im",
+    desktop: {
+      Comment: "G-Snowball IM Client.",
+      Categories: "Network;InstantMessaging;Chat;",
+      StartupWMClass: "G-Snowball-IM",
+      MimeType: "x-scheme-handler/openim;",
+    },
+    extraResources: [
+      {
+        from: "node_modules/@openim/electron-client-sdk/assets/linux_${arch}/",
+        to: "app.asar.unpacked/node_modules/@openim/electron-client-sdk/assets/linux_${arch}",
+      },
+      {
+        from: "node_modules/koffi/build/koffi/linux_${arch}/",
+        to: "koffi/linux_${arch}",
+      },
+      {
+        from: "dist/icons",
+        to: "icons",
+      },
+    ],
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: true,
+    allowElevation: true,
+    allowToChangeInstallationDirectory: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    deleteAppDataOnUninstall: true,
+    shortcutName: "G-Snowball-IM",
+    guid: "a8f5e9c4-3b2d-4e1f-9c8a-7d6b5e4a3c2b", // 正式环境唯一 GUID
+    // 修改默认安装路径
+    include: "./packages/build-tooling/windows/installer-prod.nsh",
+  },
+  deb: {
+    afterInstall: "./packages/build-tooling/linux/after-install.sh",
+    afterRemove: "./packages/build-tooling/linux/after-remove.sh",
+  },
+}

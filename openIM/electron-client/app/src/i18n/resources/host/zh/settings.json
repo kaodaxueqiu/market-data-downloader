@@ -1,0 +1,51 @@
+{
+  "settings": {
+    "text": {
+      "about": "关于我们",
+      "accountSetting": "账号设置",
+      "addFriendsSetting": "添加好友设置",
+      "blackList": "通讯录黑名单",
+      "cacheDirectory": "缓存目录",
+      "cacheDirectoryDesc": "统一选择一个目录来存放日志和聊天缓存。",
+      "cacheRoot": "缓存根目录",
+      "changeCacheDirectory": "更改缓存目录",
+      "changePassword": "修改密码",
+      "checkNewVersion": "检查新版本",
+      "chooseLanguage": "选择语言",
+      "closeButtonEvent": "点击关闭按钮时的事件",
+      "exitApplication": "退出应用",
+      "logOut": "退出登录",
+      "logsDirectory": "日志目录",
+      "meetings": "会议",
+      "messageAllowBeep": "新消息提示音",
+      "messageNotNotify": "勿扰模式",
+      "messageToast": "消息提示",
+      "minimize": "最小化托盘",
+      "myInfo": "我的信息",
+      "newPassword": "新密码:",
+      "notAvailable": "暂无",
+      "notVerifyAddFriend": "无需验证好友申请",
+      "oldPassword": "原密码:",
+      "personalSetting": "个人设置",
+      "refuseAddFriend": "禁止加我为好友",
+      "reportLog": "上传日志",
+      "reportSpecificLog": "上传指定日志",
+      "userCacheDirectory": "用户缓存目录",
+      "viewingLocalLogs": "查看本地日志"
+    },
+    "toast": {
+      "cachePathUpdateFailed": "缓存目录更新失败。",
+      "cachePathUpdated": "缓存目录已更新。",
+      "confirmDeregisterAccount": "确认注销该账号？",
+      "confirmlogOut": "您确定要退出登录吗？",
+      "currentPassworWrong": "原密码错误",
+      "deregisterAccount": "注销账号",
+      "deregisterDescription": "注销后会彻底删除相关的所有数据。",
+      "deregisterSuccess": "您已成功注销该账号",
+      "inputOldPassword": "请输入原密码",
+      "markAllConversationAsReadFailed": "全部标记为已读失败！",
+      "samePassword": "原密码和新密码相同",
+      "updateAvatarFailed": "修改头像失败！"
+    }
+  }
+}

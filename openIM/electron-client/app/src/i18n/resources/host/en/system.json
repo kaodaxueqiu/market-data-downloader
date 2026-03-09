@@ -1,0 +1,37 @@
+{
+  "system": {
+    "text": {
+      "close": "Close",
+      "meeting": "Video meeting",
+      "meetingInvitation": "Call invitation",
+      "mentionAll": "Everyone",
+      "open": "Open",
+      "selectUser": "Select users",
+      "somePerson": " and {{othersNum}} others",
+      "you": "You"
+    },
+    "toast": {
+      "accessFailed": "Operation failed",
+      "allInvitedUserBusy": "All invited users are on calls. Please try again later.",
+      "clearConversationMessagesFailed": "Failed to delete conversation messages",
+      "downloadFailed": "Download failed",
+      "getBlackListFailed": "Failed to get blocked contacts",
+      "getConversationFailed": "Failed to load conversations",
+      "getConversationGroupsFailed": "Failed to get conversation groups",
+      "getFriendListFailed": "Failed to get friend list",
+      "getGroupInfoFailed": "Failed to get channel info",
+      "getGroupListFailed": "Failed to get channel list",
+      "getGroupMemberFailed": "Failed to get channel member info",
+      "getSelfInfoFailed": "Failed to get profile",
+      "inMeetingCannotRtcCall": "You are in a meeting. Please end it before calling.",
+      "inviteUserFailed": "Failed to send invitation",
+      "inviteeBusyLine": "The user is on a call. Please try again later.",
+      "joinedOtherMeetingOrRtc": "You are currently in a call or meeting. Please end it first.",
+      "repeatOpenRtc": "You are on a call. Please end it first.",
+      "setConversationRecvMessageOptFailed": "Failed to update conversation receive status",
+      "updateConversationPrivateStateFailed": "Failed to update disappearing messages settings",
+      "uploadFailed": "Upload failed",
+      "uploadSuccess": "Upload successfully"
+    }
+  }
+}

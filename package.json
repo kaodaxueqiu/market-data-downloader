@@ -1,7 +1,7 @@
 {
   "name": "G-Snowball",
   "productName": "ZiZhou G-Snowball",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "description": "资舟量化研究平台 - 专业的量化研究与数据管理工具",
   "author": "ZiZhou Quant Team",
   "license": "Commercial",
@@ -20,7 +20,6 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
-    "@openim/client-sdk": "^3.8.3",
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
     "echarts": "^6.0.0",

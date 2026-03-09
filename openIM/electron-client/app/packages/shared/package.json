@@ -1,0 +1,65 @@
+{
+  "name": "@openim/shared",
+  "version": "0.1.0",
+  "description": "Shared utilities, hooks, components, and types for OpenIM",
+  "author": "ZiZhou",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openimsdk"
+  },
+  "homepage": "https://github.com/openimsdk",
+  "bugs": {
+    "url": "https://github.com/openimsdk"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "react",
+    "hooks",
+    "shared",
+    "utils",
+    "ui",
+    "components",
+    "types",
+    "openim"
+  ],
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lodash.throttle": "^4.1.1",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/lodash.throttle": "^4.1.9",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
+  }
+}

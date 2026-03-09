@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "esModuleInterop": true,
+    "types": ["node", "electron"]
+  },
+  "include": ["src/index.ts", "src/electron/capturer.ts", "src/shared/**/*.ts"],
+  "exclude": ["src/renderer", "dist", "dist-electron", "node_modules"]
+}

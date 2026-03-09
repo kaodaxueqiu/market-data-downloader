@@ -1,0 +1,62 @@
+{
+  "contact": {
+    "empty": {
+      "noMoments": "No posts yet",
+      "noMoreMessage": "No more messages"
+    },
+    "message": {
+      "request": {
+        "agree": "Approve",
+        "agreed": "Accepted",
+        "applyToAdd": "You requested to add",
+        "applyToFriend": "Requested to add you as a friend",
+        "applyToJoin": "Apply to join",
+        "information": "Verification message",
+        "pending": "Pending approval",
+        "refuse": "Reject",
+        "refused": "Rejected",
+        "youApplyToJoin": "You applied to join"
+      }
+    },
+    "text": {
+      "atYou": "Mentioned you",
+      "clear": "Clear",
+      "comment": "Comment",
+      "contact": "Contacts",
+      "groupNotification": "Channel notifications",
+      "hiddenSome": "Hide from selected",
+      "hiddenSomeToast": "Hidden from selected people",
+      "mentioned": "Mentioned",
+      "moments": "Moments",
+      "multipleNewMessages": "{{count}} new messages",
+      "myCreated": "Created",
+      "myFriend": "My friends",
+      "myJoined": "Joined",
+      "newFriends": "New friends",
+      "partlyVisible": "Visible to some",
+      "partlyVisibleToast": "Visible only to selected people",
+      "privacy": "Private",
+      "privacyToast": "Only visible to me",
+      "public": "Public",
+      "publicToast": "Visible to everyone",
+      "publishImages": "Post images",
+      "publishMomentsToast": "What's on your mind...",
+      "publishVideo": "Post videos",
+      "remindWhoToWatch": "Who to notify",
+      "replied": "Replied",
+      "somePersonLike": " and {{othersNum}} others liked this",
+      "toLike": "Like",
+      "totalNumPhoto": "{{num}} items in total",
+      "unfriend": "Unfriend",
+      "whoCanWatch": "Who can see"
+    },
+    "toast": {
+      "confirmUnfriend": "Unfriend this contact?",
+      "inputContent": "Please enter content",
+      "publishFailed": "Publish failed",
+      "unfriendFailed": "Unfriend failed",
+      "unfriendSuccess": "Unfriend successfully",
+      "userBlacked": "This user has been added to the blocked contacts."
+    }
+  }
+}

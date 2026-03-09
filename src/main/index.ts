@@ -91,7 +91,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true
     },
-    icon: join(__dirname, '../../public/icon.png'),
+    icon: join(__dirname, '../../../public/icon.ico'),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     show: false
   })
@@ -123,7 +123,7 @@ function createWindow() {
 
   // 开发环境
   if (process.env.NODE_ENV === 'development') {
-    console.log('正在加载开发服务器: http://localhost:3010')
+    console.log('正在加载开发服务器: http://localhost:3100')
     
     // 延迟加载，确保Vite服务器准备就绪
     let retryCount = 0
@@ -133,7 +133,7 @@ function createWindow() {
       try {
         retryCount++
         console.log(`🔄 尝试加载页面... (第${retryCount}次)`)
-        await mainWindow!.loadURL('http://localhost:3010')
+        await mainWindow!.loadURL('http://localhost:3100')
         console.log('✅ 页面加载成功！')
         // 开发模式下启用DevTools
         mainWindow!.webContents.openDevTools()
@@ -5828,4 +5828,38 @@ ipcMain.handle('dbPerm:revokeAllPrivileges', async (_e, username: string, body: 
 
 ipcMain.handle('dbPerm:batchGrant', async (_e, username: string, body: any) => {
   return wrapDbPerm(() => dbPermPost(`/users/${username}/grants/batch`, body))()
+})
+
+// ── IM 独立进程 ──
+ipcMain.handle('im:openWindow', async () => {
+  try {
+    const imExePath =
+      process.env.NODE_ENV === 'development'
+        ? join(__dirname, '../../../openIM/electron-client/app/release/prod/1.0.0/win-unpacked/G-Snowball-IM.exe')
+        : join(process.resourcesPath, 'im', 'G-Snowball-IM.exe')
+
+    const cleanEnv: Record<string, string> = {
+      PATH: process.env.PATH || '',
+      SystemRoot: process.env.SystemRoot || 'C:\\Windows',
+      TEMP: process.env.TEMP || '',
+      TMP: process.env.TMP || '',
+      APPDATA: process.env.APPDATA || '',
+      LOCALAPPDATA: process.env.LOCALAPPDATA || '',
+      USERPROFILE: process.env.USERPROFILE || '',
+      ProgramFiles: process.env.ProgramFiles || '',
+      CommonProgramFiles: process.env.CommonProgramFiles || '',
+    }
+
+    require('child_process').spawn(imExePath, [], {
+      detached: true,
+      stdio: 'ignore',
+      env: cleanEnv,
+      cwd: require('path').dirname(imExePath),
+    }).unref()
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('❌ 启动IM失败:', error)
+    return { success: false, error: error.message || '启动失败' }
+  }
 })

@@ -20,12 +20,16 @@ files:
   - "!*.png"
   - "!public"
   - "!index.html"
+  - "!openIM"
   - "!dist/builder-*.yml"
   - "!dist/builder-*.yaml"
   - "!dist/*.exe"
   - "!dist/win-unpacked"
   - "!dist/mac"
   - "!dist/linux-unpacked"
+extraResources:
+  - from: resources/im
+    to: im
 asarUnpack:
   - "**/*.{node,dll}"
 extraMetadata:

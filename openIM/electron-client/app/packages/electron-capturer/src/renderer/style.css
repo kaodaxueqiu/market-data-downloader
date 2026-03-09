@@ -1,0 +1,230 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+:root {
+  --ec-background: #ffffff;
+  --ec-foreground: #0f172a;
+  --ec-card: #ffffff;
+  --ec-card-foreground: #0f172a;
+  --ec-popover: #ffffff;
+  --ec-popover-foreground: #0f172a;
+  --ec-primary: #111827;
+  --ec-primary-foreground: #e2e8f0;
+  --ec-secondary: #f8fafc;
+  --ec-secondary-foreground: #1f2937;
+  --ec-muted: #e2e8f0;
+  --ec-muted-foreground: #64748b;
+  --ec-accent: #e2e8f0;
+  --ec-accent-foreground: #0f172a;
+  --ec-destructive: #ef4444;
+  --ec-destructive-foreground: #fee2e2;
+  --ec-border: #e5e7eb;
+  --ec-input: #e5e7eb;
+  --ec-ring: #cbd5f5;
+  --ec-chart-1: #0ea5e9;
+  --ec-chart-2: #6366f1;
+  --ec-chart-3: #22c55e;
+  --ec-chart-4: #f59e0b;
+  --ec-chart-5: #f472b6;
+  --ec-radius: 0.625rem;
+  --ec-sidebar: #f8fafc;
+  --ec-sidebar-foreground: #0f172a;
+  --ec-sidebar-primary: #111827;
+  --ec-sidebar-primary-foreground: #e2e8f0;
+  --ec-sidebar-accent: #e2e8f0;
+  --ec-sidebar-accent-foreground: #0f172a;
+  --ec-sidebar-border: #e5e7eb;
+  --ec-sidebar-ring: #cbd5f5;
+  --ec-toolbar-bg: #f8fafc;
+  --ec-toolbar-hover: #e2e8f0;
+  --ec-toolbar-active: #4f46e5;
+  --ec-toolbar-border: #e2e8f0;
+  --ec-toolbar-text: #1f2937;
+  --ec-toolbar-text-muted: #4b5563;
+
+  --background: var(--ec-background, #ffffff);
+  --foreground: var(--ec-foreground, #0f172a);
+  --card: var(--ec-card, #ffffff);
+  --card-foreground: var(--ec-card-foreground, #0f172a);
+  --popover: var(--ec-popover, #ffffff);
+  --popover-foreground: var(--ec-popover-foreground, #0f172a);
+  --primary: var(--ec-primary, #111827);
+  --primary-foreground: var(--ec-primary-foreground, #e2e8f0);
+  --secondary: var(--ec-secondary, #f8fafc);
+  --secondary-foreground: var(--ec-secondary-foreground, #1f2937);
+  --muted: var(--ec-muted, #e2e8f0);
+  --muted-foreground: var(--ec-muted-foreground, #64748b);
+  --accent: var(--ec-accent, #e2e8f0);
+  --accent-foreground: var(--ec-accent-foreground, #0f172a);
+  --destructive: var(--ec-destructive, #ef4444);
+  --destructive-foreground: var(--ec-destructive-foreground, #fee2e2);
+  --border: var(--ec-border, #e5e7eb);
+  --input: var(--ec-input, #e5e7eb);
+  --ring: var(--ec-ring, #cbd5f5);
+  --chart-1: var(--ec-chart-1, #0ea5e9);
+  --chart-2: var(--ec-chart-2, #6366f1);
+  --chart-3: var(--ec-chart-3, #22c55e);
+  --chart-4: var(--ec-chart-4, #f59e0b);
+  --chart-5: var(--ec-chart-5, #f472b6);
+  --radius: var(--ec-radius, 0.625rem);
+  --sidebar: var(--ec-sidebar, #f8fafc);
+  --sidebar-foreground: var(--ec-sidebar-foreground, #0f172a);
+  --sidebar-primary: var(--ec-sidebar-primary, #111827);
+  --sidebar-primary-foreground: var(--ec-sidebar-primary-foreground, #e2e8f0);
+  --sidebar-accent: var(--ec-sidebar-accent, #e2e8f0);
+  --sidebar-accent-foreground: var(--ec-sidebar-accent-foreground, #0f172a);
+  --sidebar-border: var(--ec-sidebar-border, #e5e7eb);
+  --sidebar-ring: var(--ec-sidebar-ring, #cbd5f5);
+  /* 亮色工具栏主题 */
+  --toolbar-bg: var(--ec-toolbar-bg, #f8fafc);
+  --toolbar-hover: var(--ec-toolbar-hover, #e2e8f0);
+  --toolbar-active: var(--ec-toolbar-active, #4f46e5);
+  --toolbar-border: var(--ec-toolbar-border, #e2e8f0);
+  --toolbar-text: var(--ec-toolbar-text, #1f2937);
+  --toolbar-text-muted: var(--ec-toolbar-text-muted, #4b5563);
+}
+
+.dark {
+  --ec-background: #0f172a;
+  --ec-foreground: #e2e8f0;
+  --ec-card: #0f172a;
+  --ec-card-foreground: #e2e8f0;
+  --ec-popover: #0f172a;
+  --ec-popover-foreground: #e2e8f0;
+  --ec-primary: #e2e8f0;
+  --ec-primary-foreground: #0f172a;
+  --ec-secondary: #1f2937;
+  --ec-secondary-foreground: #e2e8f0;
+  --ec-muted: #1f2937;
+  --ec-muted-foreground: #94a3b8;
+  --ec-accent: #1f2937;
+  --ec-accent-foreground: #e2e8f0;
+  --ec-destructive: #ef4444;
+  --ec-destructive-foreground: #fee2e2;
+  --ec-border: #1f2937;
+  --ec-input: #1f2937;
+  --ec-ring: #334155;
+  --ec-chart-1: #22c55e;
+  --ec-chart-2: #0ea5e9;
+  --ec-chart-3: #a855f7;
+  --ec-chart-4: #f97316;
+  --ec-chart-5: #f43f5e;
+  --ec-sidebar: #111827;
+  --ec-sidebar-foreground: #e2e8f0;
+  --ec-sidebar-primary: #334155;
+  --ec-sidebar-primary-foreground: #e2e8f0;
+  --ec-sidebar-accent: #1f2937;
+  --ec-sidebar-accent-foreground: #e2e8f0;
+  --ec-sidebar-border: #1f2937;
+  --ec-sidebar-ring: #334155;
+  --ec-toolbar-bg: #f8fafc;
+  --ec-toolbar-hover: #e2e8f0;
+  --ec-toolbar-active: #4f46e5;
+  --ec-toolbar-border: #e2e8f0;
+  --ec-toolbar-text: #1f2937;
+  --ec-toolbar-text-muted: #4b5563;
+
+  --background: var(--ec-background, #0f172a);
+  --foreground: var(--ec-foreground, #e2e8f0);
+  --card: var(--ec-card, #0f172a);
+  --card-foreground: var(--ec-card-foreground, #e2e8f0);
+  --popover: var(--ec-popover, #0f172a);
+  --popover-foreground: var(--ec-popover-foreground, #e2e8f0);
+  --primary: var(--ec-primary, #e2e8f0);
+  --primary-foreground: var(--ec-primary-foreground, #0f172a);
+  --secondary: var(--ec-secondary, #1f2937);
+  --secondary-foreground: var(--ec-secondary-foreground, #e2e8f0);
+  --muted: var(--ec-muted, #1f2937);
+  --muted-foreground: var(--ec-muted-foreground, #94a3b8);
+  --accent: var(--ec-accent, #1f2937);
+  --accent-foreground: var(--ec-accent-foreground, #e2e8f0);
+  --destructive: var(--ec-destructive, #ef4444);
+  --destructive-foreground: var(--ec-destructive-foreground, #fee2e2);
+  --border: var(--ec-border, #1f2937);
+  --input: var(--ec-input, #1f2937);
+  --ring: var(--ec-ring, #334155);
+  --chart-1: var(--ec-chart-1, #22c55e);
+  --chart-2: var(--ec-chart-2, #0ea5e9);
+  --chart-3: var(--ec-chart-3, #a855f7);
+  --chart-4: var(--ec-chart-4, #f97316);
+  --chart-5: var(--ec-chart-5, #f43f5e);
+  --sidebar: var(--ec-sidebar, #111827);
+  --sidebar-foreground: var(--ec-sidebar-foreground, #e2e8f0);
+  --sidebar-primary: var(--ec-sidebar-primary, #334155);
+  --sidebar-primary-foreground: var(--ec-sidebar-primary-foreground, #e2e8f0);
+  --sidebar-accent: var(--ec-sidebar-accent, #1f2937);
+  --sidebar-accent-foreground: var(--ec-sidebar-accent-foreground, #e2e8f0);
+  --sidebar-border: var(--ec-sidebar-border, #1f2937);
+  --sidebar-ring: var(--ec-sidebar-ring, #334155);
+  /* 暗色模式下保持亮色工具栏 */
+  --toolbar-bg: var(--ec-toolbar-bg, #f8fafc);
+  --toolbar-hover: var(--ec-toolbar-hover, #e2e8f0);
+  --toolbar-active: var(--ec-toolbar-active, #4f46e5);
+  --toolbar-border: var(--ec-toolbar-border, #e2e8f0);
+  --toolbar-text: var(--ec-toolbar-text, #1f2937);
+  --toolbar-text-muted: var(--ec-toolbar-text-muted, #4b5563);
+}
+
+@theme inline {
+  --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  /* 添加新的工具栏颜色 token */
+  --color-toolbar-bg: var(--toolbar-bg);
+  --color-toolbar-hover: var(--toolbar-hover);
+  --color-toolbar-active: var(--toolbar-active);
+  --color-toolbar-border: var(--toolbar-border);
+  --color-toolbar-text: var(--toolbar-text);
+  --color-toolbar-text-muted: var(--toolbar-text-muted);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

@@ -37,3 +37,19 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# ── openIM 构建产物 ──
+openIM/electron-client/app/dist/
+openIM/electron-client/app/dist-electron/
+openIM/electron-client/app/release/
+openIM/electron-client/app/node_modules/
+openIM/electron-client/app/packages/*/node_modules/
+openIM/electron-client/app/packages/*/dist/
+openIM/electron-client/app/packages/electron-capturer/dist-electron/
+openIM/electron-client/app/*.db
+openIM/electron-client/app/open-im-sdk-core*
+openIM/electron-client/app/package.json.backup
+openIM/ffi-assets/
+
+# ── 集成打包资源（CI 构建时生成）──
+resources/im/

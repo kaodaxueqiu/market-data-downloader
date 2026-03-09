@@ -1,0 +1,146 @@
+{
+  "actions": {
+    "share": "分享",
+    "copyLink": "复制链接",
+    "forward": "转发",
+    "joinMeeting": "加入会议",
+    "inviteMembers": "邀请成员",
+    "viewRecording": "查看录制",
+    "quickMeeting": "快速会议",
+    "scheduleMeeting": "预约会议",
+    "addContacts": "添加参会人"
+  },
+  "common": {
+    "cancel": "取消",
+    "confirm": "确定",
+    "host": "主持人",
+    "none": "无"
+  },
+  "confirm": {
+    "cancelTitle": "取消会议",
+    "cancelDescription": "确定要取消会议「{{title}}」吗？",
+    "endTitle": "结束会议",
+    "endDescription": "确定要结束会议「{{title}}」吗？",
+    "cancel": "取消",
+    "removeParticipantTitle": "移除参会人",
+    "removeParticipantDescription": "确定要将「{{name}}」移出会议吗？",
+    "remove": "移除"
+  },
+  "date": {
+    "today": "今天",
+    "weekdays": ["一", "二", "三", "四", "五", "六", "日"],
+    "monthFormat": "yyyy年M月",
+    "shortFormat": "yyyy年M月d日",
+    "placeholder": "选择日期和时间",
+    "now": "现在"
+  },
+  "detail": {
+    "title": "会议详情"
+  },
+  "dialogs": {
+    "join": {
+      "title": "加入会议",
+      "joining": "加入中..."
+    }
+  },
+  "duration": {
+    "hours": "{{count}}小时",
+    "hoursMinutes": "{{hours}}小时{{minutes}}分钟",
+    "minutes": "{{count}}分钟"
+  },
+  "empty": {
+    "pending": "暂无即将开始或进行中的会议",
+    "history": "暂无会议记录"
+  },
+  "errors": {
+    "cancelMeeting": "取消会议失败",
+    "clipboardUnsupported": "无法访问剪贴板",
+    "closeCurrentMeetingFirst": "请先退出当前会议",
+    "createMeeting": "创建会议失败",
+    "endMeeting": "结束会议失败",
+    "fetchParticipants": "加载参会人失败",
+    "fetchRecording": "加载录制文件失败",
+    "inviteMembers": "邀请成员失败",
+    "joinMeeting": "加入会议失败",
+    "loadHistoryMeetings": "加载会议记录失败",
+    "loadPendingMeetings": "加载会议列表失败",
+    "missingMeetingId": "请输入会议号",
+    "removeParticipant": "移除成员失败",
+    "scheduleMeeting": "预约会议失败",
+    "selectInvitees": "选择参会人失败",
+    "shareMeeting": "分享会议失败"
+  },
+  "form": {
+    "errors": {
+      "titleRequired": "请输入会议标题",
+      "startTimeRequired": "请选择开始时间",
+      "durationRequired": "请选择会议时长",
+      "timeInPast": "开始时间不能早于当前时间"
+    },
+    "editTitle": "编辑会议",
+    "createTitle": "预约会议",
+    "titleLabel": "会议标题",
+    "titlePlaceholder": "请输入会议标题",
+    "durationLabel": "会议时长",
+    "durationPlaceholder": "请选择时长",
+    "saving": "保存中...",
+    "submitting": "预约中...",
+    "saveChanges": "保存修改",
+    "submit": "预约会议",
+    "startTimeLabel": "开始时间",
+    "meetingIdLabel": "会议号",
+    "meetingIdPlaceholder": "请输入会议号"
+  },
+  "invitees": {
+    "empty": "暂未添加参会人",
+    "none": "无",
+    "separator": "、",
+    "summary": "{{names}} 等{{count}}人"
+  },
+  "loading": {
+    "pending": "正在加载...",
+    "history": "正在加载...",
+    "generic": "加载中..."
+  },
+  "meeting": {
+    "host": "主持人",
+    "invitees": "参会人",
+    "id": "会议号",
+    "duration": "时长：{{duration}}",
+    "hostWithName": "主持人：{{name}}",
+    "inviteesWithCount": "参会人（{{count}}）",
+    "defaultTitle": "会议"
+  },
+  "participants": {
+    "title": "参会人",
+    "titleWithCount": "参会人（{{count}}）",
+    "joinedSection": "已参会（{{count}}）",
+    "absentSection": "未参会（{{count}}）"
+  },
+  "quickMeeting": {
+    "title": "{{name}} 发起的快速会议"
+  },
+  "recording": {
+    "inProgress": "录制中",
+    "shareTitle": "会议录制：{{title}}",
+    "shareDate": "日期：{{date}}",
+    "shareFile": "录制文件：{{url}}"
+  },
+  "share": {
+    "subjectLine": "会议：{{title}}",
+    "idLine": "会议号：{{id}}",
+    "timeLine": "时间：{{time}}"
+  },
+  "status": {
+    "scheduled": "未开始",
+    "inProgress": "进行中",
+    "completed": "已结束",
+    "joining": "加入中...",
+    "scheduling": "预约中...",
+    "creating": "创建中..."
+  },
+  "tabs": {
+    "pending": "待办会议",
+    "history": "会议记录"
+  }
+}

@@ -1,0 +1,52 @@
+.global-search-content {
+  height: 100%;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-bottom: 16px;
+}
+
+.search-tab {
+  flex: 1;
+  overflow: hidden;
+  :global {
+    .ant-tabs-nav {
+      margin-bottom: 0;
+    }
+    .ant-tabs-nav-wrap {
+      padding: 0 24px;
+    }
+    .ant-tabs-content,
+    .ant-tabs-tabpane {
+      height: 100%;
+    }
+  }
+}
+
+@mixin virtuoso-wrapper-base {
+  height: 100%;
+  overflow-x: hidden;
+
+  & > div {
+    padding-left: 6px;
+    padding-right: 4px;
+    padding-top: 12px;
+  }
+}
+
+.virtuoso-wrapper {
+  margin-left: 6px;
+  margin-right: 6px;
+
+  @include virtuoso-wrapper-base();
+}
+
+.virtuoso-side-wrapper {
+  flex: 1;
+  @include virtuoso-wrapper-base();
+}
+
+.keyword-highlight {
+  color: var(--primary);
+}

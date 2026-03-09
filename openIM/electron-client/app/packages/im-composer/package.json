@@ -1,0 +1,132 @@
+{
+  "name": "@openim/im-composer",
+  "version": "1.0.7",
+  "description": "IM dual-mode input editor based on Tiptap - supports plain text with @mentions and rich text with Markdown",
+  "author": "ZiZhou",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openimsdk"
+  },
+  "homepage": "https://github.com/openimsdk",
+  "bugs": {
+    "url": "https://github.com/openimsdk"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css",
+    "**/*.scss"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./styles.css": "./dist/index.css"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm run build && pnpm run test"
+  },
+  "keywords": [
+    "tiptap",
+    "editor",
+    "im",
+    "instant-messaging",
+    "composer",
+    "mention",
+    "markdown",
+    "react",
+    "rich-text",
+    "chat",
+    "input"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "dependencies": {
+    "@floating-ui/react": "^0.27.0",
+    "@radix-ui/react-dropdown-menu": "^2.0.0",
+    "@radix-ui/react-popover": "^1.0.0",
+    "@tiptap/core": "^3.0.0",
+    "@tiptap/extension-document": "^3.0.0",
+    "@tiptap/extension-hard-break": "^3.0.0",
+    "@tiptap/extension-highlight": "^3.0.0",
+    "@tiptap/extension-history": "^3.0.0",
+    "@tiptap/extension-horizontal-rule": "^3.0.0",
+    "@tiptap/extension-image": "^3.0.0",
+    "@tiptap/extension-link": "^3.0.0",
+    "@tiptap/extension-list": "^3.0.0",
+    "@tiptap/extension-mention": "^3.0.0",
+    "@tiptap/extension-paragraph": "^3.0.0",
+    "@tiptap/extension-placeholder": "^3.0.0",
+    "@tiptap/extension-subscript": "^3.0.0",
+    "@tiptap/extension-superscript": "^3.0.0",
+    "@tiptap/extension-text": "^3.0.0",
+    "@tiptap/extension-text-align": "^3.0.0",
+    "@tiptap/extension-typography": "^3.0.0",
+    "@tiptap/extension-underline": "^3.0.0",
+    "@tiptap/extensions": "^3.0.0",
+    "@tiptap/pm": "^3.0.0",
+    "@tiptap/react": "^3.0.0",
+    "@tiptap/starter-kit": "^3.0.0",
+    "@tiptap/suggestion": "^3.0.0",
+    "@openim/shared": "workspace:*",
+    "lodash.throttle": "^4.1.1",
+    "react-hotkeys-hook": "^5.2.1"
+  },
+  "devDependencies": {
+    "@floating-ui/react": "^0.27.16",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^14.1.0",
+    "@tiptap/core": "^3.14.0",
+    "@tiptap/extension-document": "^3.14.0",
+    "@tiptap/extension-hard-break": "^3.14.0",
+    "@tiptap/extension-highlight": "^3.14.0",
+    "@tiptap/extension-history": "^3.14.0",
+    "@tiptap/extension-horizontal-rule": "^3.14.0",
+    "@tiptap/extension-image": "^3.14.0",
+    "@tiptap/extension-link": "^3.14.0",
+    "@tiptap/extension-list": "^3.14.0",
+    "@tiptap/extension-mention": "^3.14.0",
+    "@tiptap/extension-paragraph": "^3.14.0",
+    "@tiptap/extension-placeholder": "^3.14.0",
+    "@tiptap/extension-subscript": "^3.14.0",
+    "@tiptap/extension-superscript": "^3.14.0",
+    "@tiptap/extension-text": "^3.14.0",
+    "@tiptap/extension-text-align": "^3.14.0",
+    "@tiptap/extension-typography": "^3.14.0",
+    "@tiptap/extension-underline": "^3.14.0",
+    "@tiptap/extensions": "^3.14.0",
+    "@tiptap/pm": "^3.14.0",
+    "@tiptap/react": "^3.14.0",
+    "@tiptap/starter-kit": "^3.14.0",
+    "@tiptap/suggestion": "^3.14.0",
+    "@types/lodash.throttle": "^4.1.9",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "esbuild-sass-plugin": "^3.3.1",
+    "jsdom": "^24.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sass": "^1.97.1",
+    "sass-embedded": "^1.97.1",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
+  }
+}

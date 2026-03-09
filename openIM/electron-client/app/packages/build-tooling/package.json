@@ -1,0 +1,14 @@
+{
+  "name": "@openim/build-tooling",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenIM desktop build and release tooling",
+  "scripts": {
+    "electron-build": "node electron-build.js",
+    "install-ffi-assets": "node install-ffi-assets.js",
+    "prepare-package": "node prepare-package.js",
+    "restore-package": "node restore-package.js",
+    "set-version": "node set-version.js",
+    "release-all": "node release/release-all.js"
+  }
+}

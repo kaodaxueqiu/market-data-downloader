@@ -35,6 +35,20 @@ export default defineConfig({
             }
           }
         }
+      },
+      {
+        entry: 'src/imPreload.ts',
+        onstart(options) {
+          options.reload()
+        },
+        vite: {
+          build: {
+            outDir: 'dist/electron/imPreload',
+            rollupOptions: {
+              external: Object.keys(require('./package.json').dependencies || {})
+            }
+          }
+        }
       }
     ]),
     renderer()
@@ -47,7 +61,7 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 3010,
+    port: 3100,
     strictPort: true
   },
   define: {

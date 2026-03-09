@@ -324,12 +324,6 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/im',
-    name: 'IM',
-    component: () => import('../views/IM/index.vue'),
-    meta: { menuId: 'im_assistant' }
-  },
-  {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue'),
