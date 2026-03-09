@@ -4,6 +4,7 @@
 {
   appId: "com.zizhou.g-snowball-im",
   productName: "G-Snowball-IM",
+  publish: null,
   asar: true,
   asarUnpack: ["**/*.node", "**/*.dll"],
   extends: null,
