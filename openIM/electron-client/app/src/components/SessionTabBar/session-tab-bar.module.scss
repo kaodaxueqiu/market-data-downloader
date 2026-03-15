@@ -1,0 +1,136 @@
+.tabBar {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  height: 38px;
+  background: #fafafa;
+  border-bottom: 1px solid var(--gap-text);
+  overflow: hidden;
+  user-select: none;
+}
+
+.tabList {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 2px;
+
+  &::-webkit-scrollbar {
+    height: 0;
+  }
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #666;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  position: relative;
+  max-width: 160px;
+
+  &:hover {
+    background: #e8e8e8;
+    color: #333;
+  }
+}
+
+.tabActive {
+  background: #fff;
+  color: #1677ff;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  &:hover {
+    background: #fff;
+    color: #1677ff;
+  }
+}
+
+.tabTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #666;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #e8e8e8;
+    color: #333;
+  }
+}
+
+.closeBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 2px;
+
+  &:hover {
+    background: #d4d4d4;
+    color: #333;
+  }
+}
+
+.tab:hover .closeBtn {
+  display: flex;
+}
+
+.renameInput {
+  width: 100px;
+  font-size: 13px;
+  padding: 2px 6px;
+  border: 1px solid #1677ff;
+  border-radius: 4px;
+  outline: none;
+}

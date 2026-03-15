@@ -41,6 +41,7 @@ import {
   ExMessageItem,
   useConversationStore,
   useMessageStore,
+  useSessionStore,
   useUserStore,
 } from "@/store";
 import { useContactStore } from "@/store/contact";
@@ -184,7 +185,24 @@ export function useGlobalEvent() {
     };
   }, []);
 
+  const checkVersionUpgrade = async () => {
+    const currentVersion = import.meta.env.VITE_APP_VERSION || "";
+    const lastVersion = localStorage.getItem("im_last_version") || "";
+    if (currentVersion && lastVersion && currentVersion !== lastVersion) {
+      console.log(`[Version] 检测到版本升级: ${lastVersion} → ${currentVersion}，清理 SDK 缓存`);
+      const databases = await window.indexedDB?.databases?.();
+      if (databases) {
+        for (const db of databases) {
+          if (db.name) window.indexedDB.deleteDatabase(db.name);
+        }
+      }
+      clearIMProfile();
+    }
+    localStorage.setItem("im_last_version", currentVersion);
+  };
+
   const loginCheck = async () => {
+    await checkVersionUpgrade();
     const IMToken = (await getIMToken()) as string;
     const IMUserID = (await getIMUserID()) as string;
     if (!IMToken || !IMUserID) {
@@ -496,6 +514,23 @@ export function useGlobalEvent() {
 
   const notPushType = [MessageType.TypingMessage, MessageType.RevokeMessage];
 
+  const parseSessionId = (msg: ExMessageItem): string | null => {
+    if (!msg.ex) return null;
+    try {
+      const exData = JSON.parse(msg.ex);
+      return exData.sessionId ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  const isAgentMessage = (msg: ExMessageItem): boolean => {
+    const agents = useContactStore.getState().agents;
+    const currentConv = useConversationStore.getState().currentConversation;
+    if (!currentConv?.userID) return false;
+    return agents.some((a) => a.userID === currentConv.userID);
+  };
+
   const handleNewMessage = (newServerMsg: ExMessageItem) => {
     const needNotification =
       !notPushType.includes(newServerMsg.contentType) &&
@@ -513,6 +548,16 @@ export function useGlobalEvent() {
     if (!inCurrentConversation(newServerMsg)) return;
 
     if (!notPushType.includes(newServerMsg.contentType)) {
+      if (isAgentMessage(newServerMsg)) {
+        const msgSessionId = parseSessionId(newServerMsg);
+        const activeSessionId = useSessionStore.getState().activeSessionId;
+
+        if (msgSessionId && activeSessionId && msgSessionId !== activeSessionId) {
+          useSessionStore.getState().incrementUnread(msgSessionId);
+          return;
+        }
+      }
+
       const isSearchMode = Boolean(useMessageStore.getState().jumpClientMsgID);
       pushNewMessage(newServerMsg);
 

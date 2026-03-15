@@ -6,6 +6,8 @@ import { Group, Panel } from "react-resizable-panels";
 
 import AgentStatusPanel from "@/components/AgentStatusPanel";
 import { useAgentPolling } from "@/components/AgentStatusPanel/useAgentPolling";
+import SessionHistoryPanel from "@/components/SessionHistoryPanel";
+import SessionTabBar from "@/components/SessionTabBar";
 import { IMSDK } from "@/layout/MainContentWrap";
 import { useConversationStore, useMessageStore, useUserStore } from "@/store";
 
@@ -96,6 +98,7 @@ export const QueryChat = () => {
       orientation="vertical"
     >
       <ChatHeader agent={agent} isBlackUser={isBlackUser} />
+      {agent && <SessionTabBar agentId={agent.userID} />}
       <Panel id="chat-main">
         <div className="flex h-full flex-col overflow-hidden">
           {agent && selfUserID && (
@@ -115,6 +118,8 @@ export const QueryChat = () => {
           </div>
         </div>
       )}
+
+      {agent && <SessionHistoryPanel />}
     </Group>
   );
 };

@@ -10,8 +10,10 @@ import {
   ExMessageItem,
   useConversationStore,
   useMessageStore,
+  useSessionStore,
   useUserStore,
 } from "@/store";
+import { useContactStore } from "@/store/contact";
 import emitter, {
   emit,
   GetMessageContextParams,
@@ -20,6 +22,31 @@ import emitter, {
 
 const START_INDEX = 10000;
 const SPLIT_COUNT = 20;
+
+function getMessageSessionId(msg: ExMessageItem): string | null {
+  if (!msg.ex) return null;
+  try {
+    const exData = JSON.parse(msg.ex);
+    return exData.sessionId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isCurrentConversationAgent(): boolean {
+  const currentConv = useConversationStore.getState().currentConversation;
+  if (!currentConv?.userID) return false;
+  return useContactStore.getState().agents.some((a) => a.userID === currentConv.userID);
+}
+
+function filterBySession(messages: ExMessageItem[]): ExMessageItem[] {
+  if (!isCurrentConversationAgent()) return messages;
+
+  const activeSessionId = useSessionStore.getState().activeSessionId;
+  if (!activeSessionId) return messages;
+
+  return messages.filter((msg) => getMessageSessionId(msg) === activeSessionId);
+}
 
 export function useHistoryMessageList({
   scrollToIndex,
@@ -49,6 +76,7 @@ export function useHistoryMessageList({
   const selfUserID = useUserStore((state) => state.selfInfo.userID);
   const clearPreviewList = useMessageStore((state) => state.clearPreviewList);
   const updateQuoteMessage = useConversationStore((state) => state.updateQuoteMessage);
+  const activeSessionId = useSessionStore((state) => state.activeSessionId);
 
   const isActiveConversation = (requestConversationID: string) =>
     requestConversationID !== "" &&
@@ -73,6 +101,23 @@ export function useHistoryMessageList({
       }));
     };
   }, [conversationID]);
+
+  useEffect(() => {
+    if (!activeSessionId || !isCurrentConversationAgent()) return;
+    useSessionStore.getState().clearUnread(activeSessionId);
+    setLoadState({
+      initLoading: true,
+      hasMoreOld: true,
+      hasMoreNew: true,
+      messageList: [],
+      firstItemIndex: START_INDEX,
+    });
+    messageReqIdRef.current += 1;
+    pendingClientMsgIDs.current = [];
+    loadHistoryMessages().then(() => {
+      setTimeout(scrollToBottom, 100);
+    });
+  }, [activeSessionId]);
 
   useEffect(() => {
     const pushNewMessage = (message: ExMessageItem) => {
@@ -243,56 +288,70 @@ export function useHistoryMessageList({
   const loadHistoryMessages = () =>
     getMoreOldMessages(false).then(() => getConversationPreviewImgList());
 
+  const isAgent = isCurrentConversationAgent();
+  const FETCH_BATCH = isAgent ? 50 : SPLIT_COUNT;
+
   const { isPending: moreOldLoading, mutateAsync: getMoreOldMessagesMutation } =
     useMutation<void, unknown, boolean>({
       mutationFn: async (loadMore: boolean = true) => {
         const requestConversationID = conversationID ?? "";
         const requestId = ++messageReqIdRef.current;
-        const { data } = await IMSDK.getAdvancedHistoryMessageList({
-          count: SPLIT_COUNT,
-          startClientMsgID: loadMore
-            ? latestLoadState.current.messageList[0]?.clientMsgID
-            : "",
-          conversationID: conversationID ?? "",
-          viewType: useMessageStore.getState().jumpClientMsgID
-            ? ViewType.Search
-            : ViewType.History,
-        });
 
-        if (requestId !== messageReqIdRef.current) {
-          console.warn(
-            "getAdvancedHistoryMessageList: requestId mismatch, ignore this response",
-          );
-          return;
+        let allFiltered: ExMessageItem[] = [];
+        let startMsgID = loadMore
+          ? latestLoadState.current.messageList[0]?.clientMsgID ?? ""
+          : "";
+        let isEnd = false;
+
+        while (allFiltered.length < SPLIT_COUNT && !isEnd) {
+          const { data } = await IMSDK.getAdvancedHistoryMessageList({
+            count: FETCH_BATCH,
+            startClientMsgID: startMsgID,
+            conversationID: conversationID ?? "",
+            viewType: useMessageStore.getState().jumpClientMsgID
+              ? ViewType.Search
+              : ViewType.History,
+          });
+
+          if (requestId !== messageReqIdRef.current) return;
+          if (!isActiveConversation(requestConversationID)) return;
+
+          isEnd = data.isEnd;
+          const batch = filterBySession(data.messageList as ExMessageItem[]);
+          allFiltered = [...batch, ...allFiltered];
+
+          if (data.messageList.length > 0) {
+            startMsgID = data.messageList[0].clientMsgID;
+          }
+
+          if (!isAgent) break;
         }
-        if (!isActiveConversation(requestConversationID)) {
-          return;
-        }
-        console.warn(data.messageList);
-        (data.messageList as ExMessageItem[]).map((message, idx) => {
+
+        allFiltered.forEach((message, idx) => {
           if (!idx) {
             message.gapTime = true;
             return;
           }
-          const prevTime = data.messageList[idx - 1]?.sendTime ?? 0;
+          const prevTime = allFiltered[idx - 1]?.sendTime ?? 0;
           if (message.sessionType === SessionType.Notification) {
-            (data.messageList[idx - 1] as ExMessageItem).gapTime =
+            (allFiltered[idx - 1] as ExMessageItem).gapTime =
               message.sendTime - prevTime > 300000;
           } else {
             message.gapTime = message.sendTime - prevTime > 300000;
           }
         });
+
         setTimeout(() => {
           if (!isActiveConversation(requestConversationID)) return;
           setLoadState((preState) => ({
             ...preState,
             initLoading: false,
-            hasMoreOld: !data.isEnd,
+            hasMoreOld: !isEnd,
             messageList: removeRepeatedMessages([
-              ...data.messageList,
+              ...allFiltered,
               ...(loadMore ? preState.messageList : []),
             ]),
-            firstItemIndex: preState.firstItemIndex - data.messageList.length,
+            firstItemIndex: preState.firstItemIndex - allFiltered.length,
           }));
         });
       },
@@ -317,7 +376,8 @@ export function useHistoryMessageList({
       if (!isActiveConversation(requestConversationID)) {
         return;
       }
-      (data.messageList as ExMessageItem[]).map((message, idx) => {
+      const filteredNew = filterBySession(data.messageList as ExMessageItem[]);
+      filteredNew.map((message, idx) => {
         if (pendingClientMsgIDs.current.includes(message.clientMsgID)) {
           message.isAppend = true;
         }
@@ -325,9 +385,9 @@ export function useHistoryMessageList({
           message.gapTime = true;
           return;
         }
-        const prevTime = data.messageList[idx - 1]?.sendTime ?? 0;
+        const prevTime = filteredNew[idx - 1]?.sendTime ?? 0;
         if (message.sessionType === SessionType.Notification) {
-          (data.messageList[idx - 1] as ExMessageItem).gapTime =
+          (filteredNew[idx - 1] as ExMessageItem).gapTime =
             message.sendTime - prevTime > 300000;
         } else {
           message.gapTime = message.sendTime - prevTime > 300000;
@@ -338,7 +398,7 @@ export function useHistoryMessageList({
         hasMoreNew: !data.isEnd,
         messageList: removeRepeatedMessages([
           ...preState.messageList,
-          ...data.messageList,
+          ...filteredNew,
         ]),
       }));
     },

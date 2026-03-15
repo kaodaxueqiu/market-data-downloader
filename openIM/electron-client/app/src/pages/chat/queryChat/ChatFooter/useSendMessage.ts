@@ -2,7 +2,13 @@ import { MessageStatus, SendMsgParams, WsResponse } from "@openim/wasm-client-sd
 import { useCallback } from "react";
 
 import { IMSDK } from "@/layout/MainContentWrap";
-import { ExMessageItem, useConversationStore, useMessageStore } from "@/store";
+import {
+  ExMessageItem,
+  useConversationStore,
+  useMessageStore,
+  useSessionStore,
+} from "@/store";
+import { useContactStore } from "@/store/contact";
 
 import {
   deleteAndPushOneMessage,
@@ -28,6 +34,24 @@ export function useSendMessage() {
         currentConversation?.groupID === sourceID ||
         !sourceID;
       needPush = needPush ?? inCurrentConversation;
+
+      const isAgentConversation = useContactStore
+        .getState()
+        .agents.some((a) => a.userID === currentConversation?.userID);
+      if (isAgentConversation) {
+        const sessionId = useSessionStore.getState().activeSessionId;
+        if (sessionId) {
+          let existingEx: Record<string, unknown> = {};
+          if (message.ex) {
+            try {
+              existingEx = JSON.parse(message.ex);
+            } catch {
+              /* keep empty */
+            }
+          }
+          message.ex = JSON.stringify({ ...existingEx, sessionId });
+        }
+      }
 
       if (needPush) {
         pushNewMessage(message);

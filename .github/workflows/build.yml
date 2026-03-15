@@ -42,14 +42,9 @@ jobs:
         env:
           HUSKY: "0"
 
-      - name: Build IM workspace packages
-        working-directory: openIM/electron-client/app
-        run: pnpm build:packages
-        continue-on-error: true
-
       - name: Build IM frontend (production)
         working-directory: openIM/electron-client/app
-        run: pnpm build:prod
+        run: pnpm build:packages && pnpm build:prod
 
       - name: Setup FFI assets (Windows)
         if: matrix.os == 'windows-latest'
@@ -78,21 +73,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      - name: Get IM version
+        id: im-version
+        working-directory: openIM/electron-client/app
+        run: echo "version=$(node -p \"require('./version.json').prod\")" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Copy IM to resources (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           mkdir -p resources/im
-          cp -r openIM/electron-client/app/release/prod/1.0.0/win-unpacked/* resources/im/
+          cp -r openIM/electron-client/app/release/prod/${{ steps.im-version.outputs.version }}/win-unpacked/* resources/im/
         shell: bash
 
       - name: Copy IM to resources (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           mkdir -p resources/im
-          if [ -d "openIM/electron-client/app/release/prod/1.0.0/mac-arm64" ]; then
-            cp -r openIM/electron-client/app/release/prod/1.0.0/mac-arm64/G-Snowball-IM.app resources/im/
-          elif [ -d "openIM/electron-client/app/release/prod/1.0.0/mac" ]; then
-            cp -r openIM/electron-client/app/release/prod/1.0.0/mac/G-Snowball-IM.app resources/im/
+          IM_VER="${{ steps.im-version.outputs.version }}"
+          if [ -d "openIM/electron-client/app/release/prod/${IM_VER}/mac-arm64" ]; then
+            cp -r openIM/electron-client/app/release/prod/${IM_VER}/mac-arm64/G-Snowball-IM.app resources/im/
+          elif [ -d "openIM/electron-client/app/release/prod/${IM_VER}/mac" ]; then
+            cp -r openIM/electron-client/app/release/prod/${IM_VER}/mac/G-Snowball-IM.app resources/im/
           fi
         shell: bash
 
