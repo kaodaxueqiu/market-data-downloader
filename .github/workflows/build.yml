@@ -76,7 +76,7 @@ jobs:
       - name: Get IM version
         id: im-version
         working-directory: openIM/electron-client/app
-        run: echo "version=$(node -p \"require('./version.json').prod\")" >> $GITHUB_OUTPUT
+        run: echo "version=$(node -p "require('./version.json').prod")" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Copy IM to resources (Windows)
