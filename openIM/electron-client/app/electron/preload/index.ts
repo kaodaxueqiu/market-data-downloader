@@ -237,6 +237,27 @@ const deleteFile = async (filePath: string) => {
   }
 };
 
+const getIMDataRoot = () => {
+  const sdkPath = ipcRenderer.sendSync(IpcRenderToMain.getDataPath, "sdkResources");
+  if (sdkPath) return path.dirname(sdkPath);
+  return "";
+};
+
+const writeVersionFile = (version: string) => {
+  try {
+    const imDataRoot = getIMDataRoot();
+    if (!imDataRoot) return false;
+    const versionFile = path.join(imDataRoot, "im-version.json");
+    ensureDirSync(imDataRoot);
+    fs.writeFileSync(versionFile, JSON.stringify({ version, updatedAt: Date.now() }));
+    console.log(`[IM] 版本文件已写入: ${versionFile} (${version})`);
+    return true;
+  } catch (error) {
+    console.error("[writeVersionFile] failed", error);
+    return false;
+  }
+};
+
 const Api: IElectronAPI = {
   ...eventListeners,
   ...buildInvokeApi(invokeChannels),
@@ -254,6 +275,7 @@ const Api: IElectronAPI = {
   saveFileToPath,
   getFileByPath,
   deleteFile,
+  writeVersionFile,
   enableCLib,
 };
 

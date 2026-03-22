@@ -1,5 +1,5 @@
 import { Image, ImageProps } from "antd";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { useUserStore } from "@/store";
 import { buildImageCacheDownloadData, downloadFile } from "@/utils/download";
@@ -18,14 +18,19 @@ const CacheImage = (props: ImageProps) => {
     if (cachePath && window.electronAPI?.fileExists(cachePath)) {
       return `file://${cachePath}`;
     }
-    if (props.src) {
-      downloadFile(
-        props.src,
-        buildImageCacheDownloadData({ url: props.src, randomName: true }),
-      );
-    }
     return props.src;
   }, [props.src]);
+
+  useEffect(() => {
+    if (!window.electronAPI || !props.src?.match(/^https?:\/\//)) return;
+    const cachePath = useUserStore.getState().imageCache[props.src];
+    if (cachePath && window.electronAPI.fileExists(cachePath)) return;
+    downloadFile(
+      props.src,
+      buildImageCacheDownloadData({ url: props.src, randomName: true }),
+    );
+  }, [props.src]);
+
   return <Image fallback={fallbackBase64} {...props} src={getSourceUrl} />;
 };
 

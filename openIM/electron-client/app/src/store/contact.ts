@@ -171,6 +171,25 @@ export const useContactStore = create<ContactStore>()((set, get) => ({
 
       const filteredList = tmpList.filter((a) => boundAgentIDs.has(a.userID));
       console.log("[Agents] 过滤后:", filteredList.length, "个智能体");
+
+      if (filteredList.length > 0) {
+        try {
+          const { data: imUsers } = await IMSDK.getUsersInfo(
+            filteredList.map((a) => a.userID),
+          );
+          const imUserMap = new Map(imUsers.map((u) => [u.userID, u]));
+          for (const agent of filteredList) {
+            const imUser = imUserMap.get(agent.userID);
+            if (imUser) {
+              if (imUser.faceURL) agent.faceURL = imUser.faceURL;
+              if (imUser.nickname) agent.nickname = imUser.nickname;
+            }
+          }
+        } catch (e) {
+          console.warn("[Agents] IM SDK getUsersInfo 失败，使用 agent API 数据:", e);
+        }
+      }
+
       set(() => ({ agents: filteredList }));
     } catch (error) {
       console.error("[Agents] 加载失败:", error);

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
 import { join, basename } from 'path'
+import { existsSync, readFileSync, rmSync } from 'fs'
 import Store from 'electron-store'
 import axios from 'axios'
 import downloadManager from './download'
@@ -71,6 +72,46 @@ let mainWindow: BrowserWindow | null = null
 
 // 更新检查定时器
 let updateCheckTimer: NodeJS.Timeout | null = null
+
+function checkIMCacheVersion() {
+  const bundledVersionFile = join(process.resourcesPath, 'im', 'im-version.json')
+  const imAppData = join(app.getPath('appData'), 'G-Snowball-IM')
+  const localVersionFile = join(imAppData, 'OpenIMData', 'im-version.json')
+
+  let bundledVersion = ''
+  try {
+    if (existsSync(bundledVersionFile)) {
+      bundledVersion = JSON.parse(readFileSync(bundledVersionFile, 'utf-8')).version || ''
+    }
+  } catch { /* ignore */ }
+
+  if (!bundledVersion) {
+    console.log('[IM Cache] 未找到打包的 IM 版本文件，跳过检查')
+    return
+  }
+
+  let localVersion = ''
+  try {
+    if (existsSync(localVersionFile)) {
+      localVersion = JSON.parse(readFileSync(localVersionFile, 'utf-8')).version || ''
+    }
+  } catch { /* ignore */ }
+
+  if (localVersion === bundledVersion) {
+    console.log(`[IM Cache] 版本一致 (${bundledVersion})，无需清理`)
+    return
+  }
+
+  console.log(`[IM Cache] 版本不一致: 本地=${localVersion || '无'} → 打包=${bundledVersion}，清理整个 IM 目录`)
+  try {
+    if (existsSync(imAppData)) {
+      rmSync(imAppData, { recursive: true, force: true })
+      console.log(`[IM Cache] 已删除: ${imAppData}`)
+    }
+  } catch (error) {
+    console.error('[IM Cache] 清理失败:', error)
+  }
+}
 
 // 初始化函数
 function initializeServices() {
@@ -319,6 +360,13 @@ app.whenReady().then(() => {
     console.error('❌ 服务初始化失败:', error)
   }
   
+  // 检查 IM 缓存版本，不一致则清理
+  try {
+    checkIMCacheVersion()
+  } catch (error) {
+    console.error('⚠️ IM 缓存版本检查失败:', error)
+  }
+
   // 再创建窗口
   try {
     createWindow()

@@ -5,8 +5,8 @@ import { useMemo } from "react";
 
 import default_group from "@/assets/images/contact/my_groups.png";
 import organization_icon from "@/assets/images/contact/organization_icon.png";
-import { useUserStore } from "@/store";
-import { buildImageCacheDownloadData, downloadFile } from "@/utils/download";
+
+const AVATAR_CACHE_BUSTER = Date.now();
 
 interface IOIMAvatarProps extends AvatarProps {
   text?: string;
@@ -33,21 +33,10 @@ const OIMAvatar: React.FC<IOIMAvatarProps> = (props) => {
 
   const getAvatarUrl = useMemo(() => {
     if (src) {
-      if (!window.electronAPI) return src;
-
-      const cachePath = useUserStore.getState().imageCache[src as string];
-      if (cachePath && window.electronAPI?.fileExists(cachePath)) {
-        return `file://${cachePath}`;
-      }
-      downloadFile(
-        src as string,
-        buildImageCacheDownloadData({ url: src as string, saveType: "avatar" }),
-      );
-
-      return src;
+      const sep = (src as string).includes("?") ? "&" : "?";
+      return `${src}${sep}_v=${AVATAR_CACHE_BUSTER}`;
     }
     if (isdepartment) return organization_icon;
-
     return isgroup ? default_group : undefined;
   }, [src, isgroup, isnotification]);
 
@@ -59,18 +48,19 @@ const OIMAvatar: React.FC<IOIMAvatarProps> = (props) => {
   };
 
   React.useEffect(() => {
-    if (!isgroup || !isdepartment) {
-      setErrorHolder(undefined);
-    }
-  }, [isgroup, isdepartment]);
+    setErrorHolder(undefined);
+  }, [src, isgroup, isdepartment]);
 
-  const errorHandler = () => {
+  const errorHandler = (): boolean => {
     if (isdepartment) {
       setErrorHolder(organization_icon);
+      return false;
     }
     if (isgroup) {
       setErrorHolder(default_group);
+      return false;
     }
+    return true;
   };
 
   return (
@@ -91,7 +81,7 @@ const OIMAvatar: React.FC<IOIMAvatarProps> = (props) => {
         props.className,
       )}
       src={errorHolder ?? getAvatarUrl}
-      onError={errorHandler as any}
+      onError={errorHandler}
     >
       {text}
     </AntdAvatar>

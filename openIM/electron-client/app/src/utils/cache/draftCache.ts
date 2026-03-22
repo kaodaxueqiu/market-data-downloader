@@ -19,8 +19,8 @@ type PersistedDraftData = {
   quote?: MessageItem;
 };
 
-// Storage key prefix
 const DRAFT_STORAGE_KEY = "IM_DRAFT_CACHE";
+const MAX_DRAFT_ENTRIES = 30;
 
 // In-memory cache for attachments (not persisted)
 const attachmentsCache = new Map<string, Attachment[]>();
@@ -37,16 +37,19 @@ const getPersistedDrafts = (): Record<string, PersistedDraftData> => {
   }
 };
 
-/**
- * Save persisted draft data to localStorage
- */
 const savePersistedDrafts = (drafts: Record<string, PersistedDraftData>): void => {
   try {
-    if (Object.keys(drafts).length === 0) {
+    const keys = Object.keys(drafts);
+    if (keys.length === 0) {
       localStorage.removeItem(DRAFT_STORAGE_KEY);
-    } else {
-      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+      return;
     }
+    if (keys.length > MAX_DRAFT_ENTRIES) {
+      for (const k of keys.slice(0, keys.length - MAX_DRAFT_ENTRIES)) {
+        delete drafts[k];
+      }
+    }
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts));
   } catch (e) {
     console.error("Failed to save draft cache:", e);
   }

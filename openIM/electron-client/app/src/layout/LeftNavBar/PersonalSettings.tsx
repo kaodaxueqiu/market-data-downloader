@@ -349,38 +349,6 @@ export const PersonalSettingsContent = ({
                 </div>
               </div>
             )}
-            {Boolean(window.electronAPI) && (
-              <div className="pb-8 pl-1">
-                <div className="pb-3 font-medium">
-                  {t("settings.text.cacheDirectory")}
-                </div>
-                <div className="space-y-2">
-                  <div className="text-xs text-(--sub-text)">
-                    {t("settings.text.cacheDirectoryDesc")}
-                  </div>
-                  <div className="rounded-md bg-(--gap-text) px-3 py-2 text-xs leading-6 break-all text-(--sub-text)">
-                    <div>
-                      <span className="font-medium">
-                        {t("settings.text.cacheRoot")}:
-                      </span>{" "}
-                      {cachePaths?.cacheBasePath || t("settings.text.notAvailable")}
-                    </div>
-                    <div className="text-[11px] text-(--sub-text)">
-                      ({t("settings.text.logsDirectory")} &{" "}
-                      {t("settings.text.userCacheDirectory")})
-                    </div>
-                  </div>
-                  <Button
-                    type="primary"
-                    className="w-fit"
-                    onClick={changeCacheDirectory}
-                    loading={cachePathUpdating}
-                  >
-                    {t("settings.text.changeCacheDirectory")}
-                  </Button>
-                </div>
-              </div>
-            )}
             <div className="pb-8 pl-1">
               <div className="pb-3 font-medium">{t("settings.text.messageToast")}</div>
               <Spin spinning={businessSettingUpdating}>

@@ -167,6 +167,7 @@ export interface IElectronAPI {
   }) => Promise<string>;
   getFileByPath: (filePath: string) => Promise<File | null>;
   deleteFile: (filePath: string) => Promise<boolean>;
+  writeVersionFile: (version: string) => boolean;
   enableCLib: boolean;
 }
 

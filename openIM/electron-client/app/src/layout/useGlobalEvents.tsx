@@ -154,6 +154,7 @@ export function useGlobalEvent() {
     await getCurrentMemberInGroupByReq(groupID);
   };
 
+  const MAX_CACHED_CONVERSATIONS = 50;
   let cacheConversationList = [] as ConversationItem[];
   let audioEl: HTMLAudioElement | null = null;
 
@@ -190,15 +191,21 @@ export function useGlobalEvent() {
     const lastVersion = localStorage.getItem("im_last_version") || "";
     if (currentVersion && lastVersion && currentVersion !== lastVersion) {
       console.log(`[Version] 检测到版本升级: ${lastVersion} → ${currentVersion}，清理 SDK 缓存`);
+      const preserveDBs = new Set(["G-Snowball-IM-Config"]);
       const databases = await window.indexedDB?.databases?.();
       if (databases) {
         for (const db of databases) {
-          if (db.name) window.indexedDB.deleteDatabase(db.name);
+          if (db.name && !preserveDBs.has(db.name)) {
+            window.indexedDB.deleteDatabase(db.name);
+          }
         }
       }
       clearIMProfile();
     }
     localStorage.setItem("im_last_version", currentVersion);
+    if (currentVersion) {
+      window.electronAPI?.writeVersionFile(currentVersion);
+    }
   };
 
   const loginCheck = async () => {
@@ -470,6 +477,9 @@ export function useGlobalEvent() {
         });
         cveItem = data;
         cacheConversationList = [...cacheConversationList, { ...cveItem }];
+        if (cacheConversationList.length > MAX_CACHED_CONVERSATIONS) {
+          cacheConversationList = cacheConversationList.slice(-MAX_CACHED_CONVERSATIONS);
+        }
       } catch (e) {
         return;
       }

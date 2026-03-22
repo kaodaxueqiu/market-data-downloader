@@ -22,6 +22,7 @@ import emitter, {
 
 const START_INDEX = 10000;
 const SPLIT_COUNT = 20;
+const MAX_FETCH_ROUNDS = 10;
 
 function getMessageSessionId(msg: ExMessageItem): string | null {
   if (!msg.ex) return null;
@@ -297,63 +298,78 @@ export function useHistoryMessageList({
         const requestConversationID = conversationID ?? "";
         const requestId = ++messageReqIdRef.current;
 
-        let allFiltered: ExMessageItem[] = [];
-        let startMsgID = loadMore
-          ? latestLoadState.current.messageList[0]?.clientMsgID ?? ""
-          : "";
-        let isEnd = false;
+        try {
+          let allFiltered: ExMessageItem[] = [];
+          let startMsgID = loadMore
+            ? latestLoadState.current.messageList[0]?.clientMsgID ?? ""
+            : "";
+          let isEnd = false;
+          let fetchRound = 0;
+          let consecutiveEmpty = 0;
 
-        while (allFiltered.length < SPLIT_COUNT && !isEnd) {
-          const { data } = await IMSDK.getAdvancedHistoryMessageList({
-            count: FETCH_BATCH,
-            startClientMsgID: startMsgID,
-            conversationID: conversationID ?? "",
-            viewType: useMessageStore.getState().jumpClientMsgID
-              ? ViewType.Search
-              : ViewType.History,
+          while (allFiltered.length < SPLIT_COUNT && !isEnd && fetchRound < MAX_FETCH_ROUNDS) {
+            fetchRound++;
+            const { data } = await IMSDK.getAdvancedHistoryMessageList({
+              count: FETCH_BATCH,
+              startClientMsgID: startMsgID,
+              conversationID: conversationID ?? "",
+              viewType: useMessageStore.getState().jumpClientMsgID
+                ? ViewType.Search
+                : ViewType.History,
+            });
+
+            if (requestId !== messageReqIdRef.current) return;
+            if (!isActiveConversation(requestConversationID)) return;
+
+            isEnd = data.isEnd;
+            const batch = filterBySession(data.messageList as ExMessageItem[]);
+            allFiltered = [...batch, ...allFiltered];
+
+            if (data.messageList.length > 0) {
+              startMsgID = data.messageList[0].clientMsgID;
+            }
+
+            if (!isAgent) break;
+
+            if (batch.length === 0) {
+              consecutiveEmpty++;
+              if (consecutiveEmpty >= 3) break;
+            } else {
+              consecutiveEmpty = 0;
+            }
+          }
+
+          allFiltered.forEach((message, idx) => {
+            if (!idx) {
+              message.gapTime = true;
+              return;
+            }
+            const prevTime = allFiltered[idx - 1]?.sendTime ?? 0;
+            if (message.sessionType === SessionType.Notification) {
+              (allFiltered[idx - 1] as ExMessageItem).gapTime =
+                message.sendTime - prevTime > 300000;
+            } else {
+              message.gapTime = message.sendTime - prevTime > 300000;
+            }
           });
 
-          if (requestId !== messageReqIdRef.current) return;
-          if (!isActiveConversation(requestConversationID)) return;
-
-          isEnd = data.isEnd;
-          const batch = filterBySession(data.messageList as ExMessageItem[]);
-          allFiltered = [...batch, ...allFiltered];
-
-          if (data.messageList.length > 0) {
-            startMsgID = data.messageList[0].clientMsgID;
-          }
-
-          if (!isAgent) break;
+          setTimeout(() => {
+            if (!isActiveConversation(requestConversationID)) return;
+            setLoadState((preState) => ({
+              ...preState,
+              initLoading: false,
+              hasMoreOld: !isEnd,
+              messageList: removeRepeatedMessages([
+                ...allFiltered,
+                ...(loadMore ? preState.messageList : []),
+              ]),
+              firstItemIndex: preState.firstItemIndex - allFiltered.length,
+            }));
+          });
+        } catch (error) {
+          console.error("[HistoryMessage] Failed to load messages:", error);
+          setLoadState((preState) => ({ ...preState, initLoading: false }));
         }
-
-        allFiltered.forEach((message, idx) => {
-          if (!idx) {
-            message.gapTime = true;
-            return;
-          }
-          const prevTime = allFiltered[idx - 1]?.sendTime ?? 0;
-          if (message.sessionType === SessionType.Notification) {
-            (allFiltered[idx - 1] as ExMessageItem).gapTime =
-              message.sendTime - prevTime > 300000;
-          } else {
-            message.gapTime = message.sendTime - prevTime > 300000;
-          }
-        });
-
-        setTimeout(() => {
-          if (!isActiveConversation(requestConversationID)) return;
-          setLoadState((preState) => ({
-            ...preState,
-            initLoading: false,
-            hasMoreOld: !isEnd,
-            messageList: removeRepeatedMessages([
-              ...allFiltered,
-              ...(loadMore ? preState.messageList : []),
-            ]),
-            firstItemIndex: preState.firstItemIndex - allFiltered.length,
-          }));
-        });
       },
     });
 

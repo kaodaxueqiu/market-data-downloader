@@ -1,6 +1,6 @@
 {
   "name": "G-Snowball-IM",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "main": "dist-electron/main/index.js",
   "description": "G-Snowball IM Client.",
   "author": "ZiZhou",

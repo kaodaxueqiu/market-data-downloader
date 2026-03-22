@@ -175,8 +175,8 @@ const ChatHeader = ({
         <div className="flex w-full items-center">
           <div className="flex flex-1 items-center overflow-hidden">
             <OIMAvatar
-              src={currentConversation?.faceURL}
-              text={currentConversation?.showName}
+              src={agent?.faceURL || currentConversation?.faceURL}
+              text={agent?.nickname || currentConversation?.showName}
               isgroup={Boolean(currentConversation?.groupID)}
               isnotification={isNotificationSession}
               onClick={showCard}

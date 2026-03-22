@@ -12,23 +12,6 @@ import type {
   SessionMessage,
 } from "@/api/types/session";
 
-const TAB_STATE_KEY = (agentId: string) => `session_tabs:${agentId}`;
-
-function loadTabState(agentId: string): { tabIds: string[]; activeId: string } | null {
-  try {
-    const raw = localStorage.getItem(TAB_STATE_KEY(agentId));
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveTabState(agentId: string, tabIds: string[], activeId: string) {
-  try {
-    localStorage.setItem(TAB_STATE_KEY(agentId), JSON.stringify({ tabIds, activeId }));
-  } catch { /* best effort */ }
-}
-
 function sortSessions(sessions: SessionItem[]): SessionItem[] {
   return [...sessions].sort((a, b) => {
     if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
@@ -95,30 +78,13 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
         sessions = [first];
       }
 
-      const saved = loadTabState(agentId);
-      let tabIds: string[];
-      let activeId: string;
-
-      if (saved && saved.tabIds.length) {
-        tabIds = saved.tabIds.filter((id) => sessions.some((s) => s.sessionId === id));
-        activeId = tabIds.includes(saved.activeId)
-          ? saved.activeId
-          : tabIds[0] || sessions[sessions.length - 1]?.sessionId || "";
-        if (!tabIds.length) {
-          tabIds = [sessions[sessions.length - 1]?.sessionId].filter(Boolean);
-          activeId = tabIds[0] || "";
-        }
-      } else {
-        tabIds = [sessions[sessions.length - 1]?.sessionId].filter(Boolean);
-        activeId = tabIds[0] || "";
-      }
+      const latestSessionId = sessions[sessions.length - 1]?.sessionId ?? "";
 
       set({
         sessions,
-        tabSessionIds: tabIds,
-        activeSessionId: activeId,
+        tabSessionIds: latestSessionId ? [latestSessionId] : [],
+        activeSessionId: latestSessionId,
       });
-      saveTabState(agentId, tabIds, activeId);
     } catch (error) {
       console.error("[Session] 获取 session 列表失败:", error);
     }
@@ -140,17 +106,11 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
         messageCount: 0,
       };
 
-      const currentAgentId = get().agentId;
-      set((state) => {
-        const sessions = sortSessions([...state.sessions, newSession]);
-        const tabSessionIds = [...state.tabSessionIds, newSession.sessionId];
-        saveTabState(currentAgentId, tabSessionIds, newSession.sessionId);
-        return {
-          sessions,
-          tabSessionIds,
-          activeSessionId: newSession.sessionId,
-        };
-      });
+      set((state) => ({
+        sessions: sortSessions([...state.sessions, newSession]),
+        tabSessionIds: [...state.tabSessionIds, newSession.sessionId],
+        activeSessionId: newSession.sessionId,
+      }));
       return created.sessionId;
     } catch (error) {
       console.error("[Session] 创建 session 失败:", error);
@@ -159,9 +119,9 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   switchSession: (sessionId: string) => {
-    const { activeSessionId, tabSessionIds, agentId } = get();
-    if (sessionId === activeSessionId) return;
+    if (sessionId === get().activeSessionId) return;
 
+    const { tabSessionIds } = get();
     const nextTabs = tabSessionIds.includes(sessionId)
       ? tabSessionIds
       : [...tabSessionIds, sessionId];
@@ -171,7 +131,6 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       tabSessionIds: nextTabs,
       unreadCounts: { ...get().unreadCounts, [sessionId]: 0 },
     });
-    saveTabState(agentId, nextTabs, sessionId);
   },
 
   addToTabs: (sessionId: string) => {
@@ -182,13 +141,11 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   removeFromTabs: (sessionId: string) => {
-    const { agentId } = get();
     set((state) => {
       const nextTabs = state.tabSessionIds.filter((id) => id !== sessionId);
       const nextActive = state.activeSessionId === sessionId
         ? nextTabs[0] || ""
         : state.activeSessionId;
-      saveTabState(agentId, nextTabs, nextActive);
       return { tabSessionIds: nextTabs, activeSessionId: nextActive };
     });
   },
