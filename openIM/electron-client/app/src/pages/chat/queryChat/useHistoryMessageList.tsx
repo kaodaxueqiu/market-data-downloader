@@ -46,7 +46,10 @@ function filterBySession(messages: ExMessageItem[]): ExMessageItem[] {
   const activeSessionId = useSessionStore.getState().activeSessionId;
   if (!activeSessionId) return messages;
 
-  return messages.filter((msg) => getMessageSessionId(msg) === activeSessionId);
+  return messages.filter((msg) => {
+    const msgSessionId = getMessageSessionId(msg);
+    return msgSessionId === null || msgSessionId === activeSessionId;
+  });
 }
 
 export function useHistoryMessageList({

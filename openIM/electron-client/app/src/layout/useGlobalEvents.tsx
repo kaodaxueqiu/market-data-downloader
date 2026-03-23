@@ -229,6 +229,16 @@ export function useGlobalEvent() {
       initStore();
       emit("CHECK_APP_UPDATE", { source: "login" });
     };
+    const clearLocalMessages = async () => {
+      try {
+        await IMSDK.deleteAllMsgFromLocal();
+        updateSyncState("loading");
+        updateReinstallState(true);
+      } catch (e) {
+        console.warn("[Login] Failed to clear local message cache:", e);
+      }
+    };
+
     try {
       if (window.electronAPI?.enableCLib) {
         await IMSDK.initSDK({
@@ -255,12 +265,14 @@ export function useGlobalEvent() {
           logLevel: getLogLevel(),
         });
       }
+      await clearLocalMessages();
       handleLoginSuccess();
     } catch (error) {
       if ((error as WsResponse).errCode !== 10102) {
         clearIMProfile();
         navigate("/login");
       } else {
+        await clearLocalMessages();
         handleLoginSuccess();
       }
     }

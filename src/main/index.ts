@@ -103,13 +103,32 @@ function checkIMCacheVersion() {
   }
 
   console.log(`[IM Cache] 版本不一致: 本地=${localVersion || '无'} → 打包=${bundledVersion}，清理整个 IM 目录`)
-  try {
-    if (existsSync(imAppData)) {
+
+  while (existsSync(imAppData)) {
+    try {
       rmSync(imAppData, { recursive: true, force: true })
-      console.log(`[IM Cache] 已删除: ${imAppData}`)
+    } catch (error) {
+      console.error('[IM Cache] rmSync 异常:', error)
     }
-  } catch (error) {
-    console.error('[IM Cache] 清理失败:', error)
+
+    if (!existsSync(imAppData)) {
+      console.log(`[IM Cache] 已删除: ${imAppData}`)
+      break
+    }
+
+    console.warn('[IM Cache] 删除后目录仍然存在，可能被占用')
+    const response = dialog.showMessageBoxSync({
+      type: 'warning',
+      title: 'IM 缓存清理失败',
+      message: `IM 版本已升级（${localVersion || '无'} → ${bundledVersion}），需要清理旧缓存，但目录被占用。\n\n请关闭以下文件夹后点击"重试"：\n${imAppData}`,
+      buttons: ['重试', '退出应用'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (response === 1) {
+      app.exit(0)
+      return
+    }
   }
 }
 

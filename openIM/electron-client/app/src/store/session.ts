@@ -54,7 +54,12 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   historyPanel: false,
 
   initSessions: async (agentId: string) => {
-    set({ agentId });
+    set({
+      agentId,
+      activeSessionId: "",
+      sessions: [],
+      tabSessionIds: [],
+    });
 
     try {
       const resp = await apiGetSessions(agentId);
@@ -87,6 +92,11 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       });
     } catch (error) {
       console.error("[Session] 获取 session 列表失败:", error);
+      set({
+        activeSessionId: "",
+        sessions: [],
+        tabSessionIds: [],
+      });
     }
   },
 
