@@ -177,6 +177,7 @@ export function useGlobalEvent() {
     window.addEventListener("offline", handleOffline);
 
     return () => {
+      clearSyncTimeout();
       disposeIMListener();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
@@ -186,20 +187,34 @@ export function useGlobalEvent() {
     };
   }, []);
 
+  const SYNC_TIMEOUT_MS = 120_000;
+  let syncTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const clearSyncTimeout = () => {
+    if (syncTimeoutId) {
+      clearTimeout(syncTimeoutId);
+      syncTimeoutId = null;
+    }
+  };
+
+  const startSyncTimeout = () => {
+    clearSyncTimeout();
+    syncTimeoutId = setTimeout(() => {
+      console.error(`[Sync] 超时 (${SYNC_TIMEOUT_MS / 1000}s)，强制结束等待`);
+      syncTimeoutId = null;
+      updateSyncState("failed");
+      feedbackToast({
+        msg: t("common.toast.syncFailed"),
+        error: "Sync timed out",
+      });
+    }, SYNC_TIMEOUT_MS);
+  };
+
   const checkVersionUpgrade = async () => {
     const currentVersion = import.meta.env.VITE_APP_VERSION || "";
     const lastVersion = localStorage.getItem("im_last_version") || "";
     if (currentVersion && lastVersion && currentVersion !== lastVersion) {
       console.log(`[Version] 检测到版本升级: ${lastVersion} → ${currentVersion}，清理 SDK 缓存`);
-      const preserveDBs = new Set(["G-Snowball-IM-Config"]);
-      const databases = await window.indexedDB?.databases?.();
-      if (databases) {
-        for (const db of databases) {
-          if (db.name && !preserveDBs.has(db.name)) {
-            window.indexedDB.deleteDatabase(db.name);
-          }
-        }
-      }
       clearIMProfile();
     }
     localStorage.setItem("im_last_version", currentVersion);
@@ -208,8 +223,49 @@ export function useGlobalEvent() {
     }
   };
 
+  const clearAllLocalIMData = async () => {
+    console.log("[Cleanup] 开始清理本地 IM 数据…");
+
+    if (window.electronAPI?.enableCLib) {
+      try {
+        const result = await window.electronAPI.clearSdkData();
+        if (result?.success) {
+          console.log("[Cleanup] CLib: sdkResources 目录已清空");
+        } else {
+          console.warn("[Cleanup] CLib: clearSdkData 失败:", result?.message);
+        }
+      } catch (e) {
+        console.warn("[Cleanup] CLib: clearSdkData 异常:", e);
+      }
+    }
+
+    try {
+      const databases = await window.indexedDB?.databases?.();
+      if (databases) {
+        const preserveDBs = new Set(["G-Snowball-IM-Config"]);
+        let cleared = 0;
+        for (const db of databases) {
+          if (db.name && !preserveDBs.has(db.name)) {
+            window.indexedDB.deleteDatabase(db.name);
+            cleared++;
+          }
+        }
+        if (cleared > 0) {
+          console.log(`[Cleanup] IndexedDB: 已删除 ${cleared} 个数据库`);
+        }
+      }
+    } catch (e) {
+      console.warn("[Cleanup] IndexedDB 清理异常:", e);
+    }
+
+    console.log("[Cleanup] 清理完成");
+  };
+
   const loginCheck = async () => {
     await checkVersionUpgrade();
+
+    await clearAllLocalIMData();
+
     const IMToken = (await getIMToken()) as string;
     const IMUserID = (await getIMUserID()) as string;
     if (!IMToken || !IMUserID) {
@@ -218,6 +274,37 @@ export function useGlobalEvent() {
       return;
     }
     tryLogin();
+  };
+
+  const doLogin = async (
+    IMUserID: string,
+    IMToken: string,
+    isCLib: boolean,
+  ): Promise<void> => {
+    const loginParams = isCLib
+      ? { userID: IMUserID, token: IMToken }
+      : {
+          userID: IMUserID,
+          token: IMToken,
+          platformID: window.electronAPI?.getPlatform() ?? 5,
+          apiAddr: getApiUrl(),
+          wsAddr: getWsUrl(),
+          logLevel: getLogLevel(),
+        };
+
+    try {
+      await IMSDK.login(loginParams);
+      console.log("[Login] 登录成功，等待全量同步…");
+    } catch (err) {
+      if ((err as WsResponse).errCode === 10102) {
+        console.log("[Login] 10102 会话残留，logout → re-login 确保全量同步");
+        try { await IMSDK.logout(); } catch (_) { /* ignore */ }
+        await IMSDK.login(loginParams);
+        console.log("[Login] 重新登录成功，等待全量同步…");
+      } else {
+        throw err;
+      }
+    }
   };
 
   const tryLogin = async () => {
@@ -229,52 +316,30 @@ export function useGlobalEvent() {
       initStore();
       emit("CHECK_APP_UPDATE", { source: "login" });
     };
-    const clearLocalMessages = async () => {
-      try {
-        await IMSDK.deleteAllMsgFromLocal();
-        updateSyncState("loading");
-        updateReinstallState(true);
-      } catch (e) {
-        console.warn("[Login] Failed to clear local message cache:", e);
-      }
-    };
 
     try {
-      if (window.electronAPI?.enableCLib) {
+      const isCLib = Boolean(window.electronAPI?.enableCLib);
+
+      if (isCLib) {
         await IMSDK.initSDK({
           platformID: window.electronAPI?.getPlatform() ?? 5,
           apiAddr: getApiUrl(),
           wsAddr: getWsUrl(),
-          dataDir: window.electronAPI.getDataPath("sdkResources") || "./",
-          logFilePath: window.electronAPI.getDataPath("logsPath") || "./",
+          dataDir: window.electronAPI!.getDataPath("sdkResources") || "./",
+          logFilePath: window.electronAPI!.getDataPath("logsPath") || "./",
           logLevel: getLogLevel(),
           isLogStandardOutput: false,
           systemType: "electron",
         });
-        await IMSDK.login({
-          userID: IMUserID,
-          token: IMToken,
-        });
-      } else {
-        await IMSDK.login({
-          userID: IMUserID,
-          token: IMToken,
-          platformID: window.electronAPI?.getPlatform() ?? 5,
-          apiAddr: getApiUrl(),
-          wsAddr: getWsUrl(),
-          logLevel: getLogLevel(),
-        });
+        console.log("[Login] CLib: SDK 初始化完成");
       }
-      await clearLocalMessages();
+
+      await doLogin(IMUserID, IMToken, isCLib);
       handleLoginSuccess();
     } catch (error) {
-      if ((error as WsResponse).errCode !== 10102) {
-        clearIMProfile();
-        navigate("/login");
-      } else {
-        await clearLocalMessages();
-        handleLoginSuccess();
-      }
+      console.error("[Login] 登录失败:", error);
+      clearIMProfile();
+      navigate("/login");
     }
     updateIsLogining(false);
   };
@@ -381,13 +446,17 @@ export function useGlobalEvent() {
 
   // sync
   const syncStartHandler = ({ data }: WSEvent<boolean>) => {
+    console.log("[Sync] 同步开始, reinstall =", data);
     updateSyncState("loading");
     updateReinstallState(data);
+    startSyncTimeout();
   };
   const syncProgressHandler = ({ data }: WSEvent<number>) => {
     updateProgressState(data);
   };
   const syncFinishHandler = () => {
+    clearSyncTimeout();
+    console.log("[Sync] 同步完成");
     updateSyncState("success");
     getFriendListByReq();
     getGroupListByReq();
@@ -396,6 +465,8 @@ export function useGlobalEvent() {
     resume.current = false;
   };
   const syncFailedHandler = () => {
+    clearSyncTimeout();
+    console.error("[Sync] 同步失败");
     updateSyncState("failed");
     resume.current = false;
     feedbackToast({

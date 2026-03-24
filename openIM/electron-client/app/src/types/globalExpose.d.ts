@@ -83,6 +83,7 @@ export interface IElectronAPI {
   showMainWindow: () => Promise<void>;
   openChildWindow: (props: any) => Promise<void>;
   clearSession: () => Promise<void>;
+  clearSdkData: () => Promise<{ success: boolean; message?: string }>;
   minimizeWindow: (key?: string) => Promise<void>;
   maxmizeWindow: (key?: string) => Promise<void>;
   closeWindow: (key?: string) => Promise<void>;

@@ -77,6 +77,7 @@ const invokeChannels: Record<string, string> = {
   checkChildWindowStatus: IpcRenderToMain.checkChildWindowStatus,
   checkMediaAccess: IpcRenderToMain.checkMediaAccess,
   oauthLogin: IpcRenderToMain.oauthLogin,
+  clearSdkData: IpcRenderToMain.clearSdkData,
   checkForUpdate: IpcRenderToMain.checkForUpdate,
   downloadUpdate: IpcRenderToMain.downloadUpdate,
   quitAndUpdate: IpcRenderToMain.quitAndUpdate,

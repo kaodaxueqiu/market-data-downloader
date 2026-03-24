@@ -1,3 +1,6 @@
+import fs from "fs";
+import path from "path";
+
 import { appManager } from "./appManage";
 import { cacheManager } from "./cacheManage";
 import { trayManager } from "./trayManage";
@@ -399,7 +402,7 @@ class IpcHandlerManager {
       zip.addLocalFolder(logsPath);
       const date = new Date();
       const dateStr = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-      const zipPath = join(global.pathConfig.logsPath, `${dateStr}electronlog.zip`);
+      const zipPath = path.join(global.pathConfig.logsPath, `${dateStr}electronlog.zip`);
       await zip.writeZipPromise(zipPath);
       return zipPath;
     });
@@ -409,8 +412,35 @@ class IpcHandlerManager {
     ipcMain.handle(IpcRenderToMain.clearSession, windowManager.clearCache);
   }
 
+  private registerSdkDataHandlers() {
+    ipcMain.handle(IpcRenderToMain.clearSdkData, async () => {
+      const sdkPath = global.pathConfig.sdkResourcesPath;
+      if (!sdkPath) {
+        logger.warn("clearSdkData: sdkResourcesPath not configured");
+        return { success: false, message: "sdkResources path not configured" };
+      }
+      try {
+        if (fs.existsSync(sdkPath)) {
+          const entries = await fs.promises.readdir(sdkPath, { withFileTypes: true });
+          for (const entry of entries) {
+            const entryPath = path.join(sdkPath, entry.name);
+            await fs.promises.rm(entryPath, { recursive: true, force: true });
+          }
+        } else {
+          await fs.promises.mkdir(sdkPath, { recursive: true });
+        }
+        logger.debug("clearSdkData: SDK data cleared successfully");
+        return { success: true };
+      } catch (error) {
+        logger.error("clearSdkData failed", error);
+        return { success: false, message: (error as Error).message || "clearSdkData failed" };
+      }
+    });
+  }
+
   setIpcMainListener = () => {
     this.registerSessionHandlers();
+    this.registerSdkDataHandlers();
     this.registerWindowHandlers();
     this.registerDialogsHandlers();
     this.registerStoreHandlers();

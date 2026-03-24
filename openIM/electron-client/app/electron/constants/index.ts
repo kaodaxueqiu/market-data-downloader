@@ -57,4 +57,5 @@ export const IpcRenderToMain = {
   checkMediaAccess: "checkMediaAccess",
   oauthLogin: "oauthLogin",
   showSaveDialog: "showSaveDialog",
+  clearSdkData: "clearSdkData",
 };
