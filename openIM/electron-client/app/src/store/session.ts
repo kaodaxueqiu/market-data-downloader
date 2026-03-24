@@ -27,7 +27,7 @@ export interface SessionStore {
   unreadCounts: Record<string, number>;
   historyPanel: boolean;
 
-  initSessions: (agentId: string) => Promise<void>;
+  initSessions: (agentId: string, activeId?: string) => Promise<void>;
   createNewSession: (agentId: string) => Promise<string | undefined>;
   switchSession: (sessionId: string) => void;
   addToTabs: (sessionId: string) => void;
@@ -53,7 +53,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   unreadCounts: {},
   historyPanel: false,
 
-  initSessions: async (agentId: string) => {
+  initSessions: async (agentId: string, activeId?: string) => {
     set({
       agentId,
       activeSessionId: "",
@@ -83,17 +83,20 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
         sessions = [first];
       }
 
-      const latestSessionId = sessions[sessions.length - 1]?.sessionId ?? "";
+      // 优先用调用方指定的 activeId，否则取最后一个
+      const targetId = activeId && sessions.some((s) => s.sessionId === activeId)
+        ? activeId
+        : sessions[sessions.length - 1]?.sessionId ?? "";
 
       set({
         sessions,
-        tabSessionIds: latestSessionId ? [latestSessionId] : [],
-        activeSessionId: latestSessionId,
+        tabSessionIds: targetId ? [targetId] : [],
+        activeSessionId: targetId,
       });
     } catch (error) {
       console.error("[Session] 获取 session 列表失败:", error);
       set({
-        activeSessionId: "",
+        activeSessionId: activeId ?? "",
         sessions: [],
         tabSessionIds: [],
       });

@@ -333,13 +333,6 @@ export function useHistoryMessageList({
             }
 
             if (!isAgent) break;
-
-            if (batch.length === 0) {
-              consecutiveEmpty++;
-              if (consecutiveEmpty >= 3) break;
-            } else {
-              consecutiveEmpty = 0;
-            }
           }
 
           allFiltered.forEach((message, idx) => {

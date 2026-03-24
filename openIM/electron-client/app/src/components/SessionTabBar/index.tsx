@@ -12,9 +12,20 @@ import {
 } from "react";
 
 import type { SessionItem } from "@/api/types/session";
-import { useSessionStore } from "@/store";
+import { IMSDK } from "@/layout/MainContentWrap";
+import { useConversationStore, useSessionStore } from "@/store";
 
 import styles from "./session-tab-bar.module.scss";
+
+function getMessageSessionId(msg: { ex?: string }): string | null {
+  if (!msg.ex) return null;
+  try {
+    const exData = JSON.parse(msg.ex);
+    return exData.sessionId ?? null;
+  } catch {
+    return null;
+  }
+}
 
 interface SessionTabBarProps {
   agentId: string;
@@ -31,7 +42,31 @@ const SessionTabBar: FC<SessionTabBarProps> = ({ agentId }) => {
   const setHistoryPanel = useSessionStore((s) => s.setHistoryPanel);
 
   useEffect(() => {
-    initSessions(agentId);
+    const init = async () => {
+      // 1. 从最后一条消息找目标 sessionId
+      let targetSessionId = "";
+      try {
+        const convID = useConversationStore.getState().currentConversation?.conversationID;
+        if (convID) {
+          const { data } = await IMSDK.getAdvancedHistoryMessageList({
+            conversationID: convID,
+            count: 1,
+            startClientMsgID: "",
+          });
+          const msg = data.messageList?.[0];
+          if (msg) {
+            targetSessionId = getMessageSessionId(msg) ?? "";
+          }
+        }
+      } catch (e) {
+        console.error("[Session] get latest message error:", e);
+      }
+      console.log("[Session] target sessionId from latest message:", targetSessionId);
+
+      // 2. 用目标 sessionId 初始化
+      await initSessions(agentId, targetSessionId || undefined);
+    };
+    init();
   }, [agentId]);
 
   const tabSessions = sessions.filter((s) =>
