@@ -13,13 +13,26 @@ permissions:
   
 jobs:
   build:
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - name: Windows
+            os: windows-latest
+            platform: win
+          - name: macOS-arm64
+            os: macos-latest
+            platform: mac
+            arch: arm64
+            ffi_dir: mac_arm64
+          - name: macOS-x64
+            os: macos-13
+            platform: mac
+            arch: x64
+            ffi_dir: mac_x64
         
     steps:
       - name: Checkout code
@@ -47,7 +60,7 @@ jobs:
         run: pnpm build:packages && pnpm build:prod
 
       - name: Setup FFI assets (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'win'
         working-directory: openIM/electron-client/app
         run: |
           mkdir -p node_modules/@openim/electron-client-sdk/assets/win_x64
@@ -57,13 +70,13 @@ jobs:
         shell: bash
 
       - name: Setup FFI assets (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.platform == 'mac'
         working-directory: openIM/electron-client/app
         run: |
-          mkdir -p node_modules/@openim/electron-client-sdk/assets/mac_arm64
-          cp -f extraResources/mac_arm64/libopenimsdk.dylib node_modules/@openim/electron-client-sdk/assets/mac_arm64/
-          cp -f extraResources/mac_arm64/libopenimsdk.h node_modules/@openim/electron-client-sdk/assets/mac_arm64/
-          echo "macOS FFI assets copied"
+          mkdir -p node_modules/@openim/electron-client-sdk/assets/${{ matrix.ffi_dir }}
+          cp -f extraResources/${{ matrix.ffi_dir }}/libopenimsdk.dylib node_modules/@openim/electron-client-sdk/assets/${{ matrix.ffi_dir }}/
+          cp -f extraResources/${{ matrix.ffi_dir }}/libopenimsdk.h node_modules/@openim/electron-client-sdk/assets/${{ matrix.ffi_dir }}/
+          echo "macOS ${{ matrix.arch }} FFI assets copied"
         shell: bash
 
       - name: Build IM Electron
@@ -80,14 +93,14 @@ jobs:
         shell: bash
 
       - name: Copy IM to resources (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'win'
         run: |
           mkdir -p resources/im
           cp -r openIM/electron-client/app/release/prod/${{ steps.im-version.outputs.version }}/win-unpacked/* resources/im/
         shell: bash
 
       - name: Copy IM to resources (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.platform == 'mac'
         run: |
           mkdir -p resources/im
           IM_VER="${{ steps.im-version.outputs.version }}"
@@ -103,30 +116,30 @@ jobs:
         run: npm install
         
       - name: Build Windows
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'win'
         run: npm run build:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
       - name: Build macOS
-        if: matrix.os == 'macos-latest'
-        run: npm run build:mac
+        if: matrix.platform == 'mac'
+        run: npx electron-builder --mac --${{ matrix.arch }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           
       - name: Upload Windows artifacts
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'win'
         uses: actions/upload-artifact@v4
         with:
           name: windows-setup
           path: dist/*.exe
           
       - name: Upload macOS artifacts
-        if: matrix.os == 'macos-latest'
+        if: matrix.platform == 'mac'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-dmg
+          name: macos-dmg-${{ matrix.arch }}
           path: dist/*.dmg
           
       - name: Get version from package.json
@@ -136,7 +149,7 @@ jobs:
         shell: bash
           
       - name: Release (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'win'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.package-version.outputs.version }}
@@ -150,7 +163,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Release (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.platform == 'mac'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.package-version.outputs.version }}

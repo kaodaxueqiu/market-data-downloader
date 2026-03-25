@@ -1,6 +1,7 @@
 import { MessageStatus, SendMsgParams, WsResponse } from "@openim/wasm-client-sdk";
 import { useCallback } from "react";
 
+import { LEGACY_SESSION_ID } from "@/api/types/session";
 import { IMSDK } from "@/layout/MainContentWrap";
 import {
   ExMessageItem,
@@ -40,7 +41,7 @@ export function useSendMessage() {
         .agents.some((a) => a.userID === currentConversation?.userID);
       if (isAgentConversation) {
         const sessionId = useSessionStore.getState().activeSessionId;
-        if (sessionId) {
+        if (sessionId && sessionId !== LEGACY_SESSION_ID) {
           let existingEx: Record<string, unknown> = {};
           if (message.ex) {
             try {

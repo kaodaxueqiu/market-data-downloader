@@ -7,9 +7,11 @@ import {
   getSessionHistory as apiGetSessionHistory,
   updateSession as apiUpdateSession,
 } from "@/api/services/session";
-import type {
-  SessionItem,
-  SessionMessage,
+import {
+  LEGACY_SESSION_ID,
+  LEGACY_SESSION_TITLE,
+  type SessionItem,
+  type SessionMessage,
 } from "@/api/types/session";
 
 function sortSessions(sessions: SessionItem[]): SessionItem[] {
@@ -61,32 +63,44 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       tabSessionIds: [],
     });
 
+    const legacySession: SessionItem = {
+      sessionId: LEGACY_SESSION_ID,
+      sessionKey: "",
+      title: LEGACY_SESSION_TITLE,
+      remark: "包含未分组的早期消息",
+      createdAt: 0,
+      lastActiveAt: 0,
+      isDefault: false,
+      isPinned: true,
+      messageCount: 0,
+    };
+
     try {
       const resp = await apiGetSessions(agentId);
       const data = resp.data as unknown as { sessions: SessionItem[] };
       let sessions = sortSessions(data?.sessions ?? []);
 
-      if (!sessions.length) {
-        const newResp = await apiCreateSession({ agentId, title: "新对话" });
-        const created = newResp.data as unknown as SessionItem;
-        const first: SessionItem = {
-          sessionId: created.sessionId,
-          sessionKey: created.sessionKey ?? "",
-          title: created.title || "新对话",
-          remark: created.remark ?? "",
-          createdAt: created.createdAt,
-          lastActiveAt: created.lastActiveAt ?? created.createdAt,
+      sessions = [legacySession, ...sessions.filter((s) => s.sessionId !== LEGACY_SESSION_ID)];
+
+      if (activeId && activeId !== LEGACY_SESSION_ID && !sessions.some((s) => s.sessionId === activeId)) {
+        sessions.push({
+          sessionId: activeId,
+          sessionKey: "",
+          title: "对话",
+          remark: "",
+          createdAt: Date.now(),
+          lastActiveAt: Date.now(),
           isDefault: false,
           isPinned: false,
           messageCount: 0,
-        };
-        sessions = [first];
+        });
       }
 
-      // 优先用调用方指定的 activeId，否则取最后一个
       const targetId = activeId && sessions.some((s) => s.sessionId === activeId)
         ? activeId
-        : sessions[sessions.length - 1]?.sessionId ?? "";
+        : !activeId
+          ? LEGACY_SESSION_ID
+          : sessions[sessions.length - 1]?.sessionId ?? "";
 
       set({
         sessions,
@@ -164,6 +178,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   renameSession: async (sessionId: string, title: string) => {
+    if (sessionId === LEGACY_SESSION_ID) return;
     try {
       await apiUpdateSession(get().agentId, sessionId, { title });
       set((state) => ({
@@ -190,6 +205,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   pinSession: async (sessionId: string, isPinned: boolean) => {
+    if (sessionId === LEGACY_SESSION_ID) return;
     try {
       await apiUpdateSession(get().agentId, sessionId, { isPinned });
       set((state) => ({
@@ -205,6 +221,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   removeSession: async (sessionId: string) => {
+    if (sessionId === LEGACY_SESSION_ID) return;
     try {
       await apiDeleteSession(get().agentId, sessionId);
       set((state) => {
@@ -252,6 +269,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   loadSessionHistory: async (sessionId: string) => {
+    if (sessionId === LEGACY_SESSION_ID) return [];
     try {
       const resp = await apiGetSessionHistory(get().agentId, sessionId);
       const data = resp.data as unknown as { messages: SessionMessage[]; hasMore: boolean };

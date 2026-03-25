@@ -1,3 +1,6 @@
+export const LEGACY_SESSION_ID = "__legacy__";
+export const LEGACY_SESSION_TITLE = "未分组对话";
+
 export interface SessionItem {
   sessionId: string;
   sessionKey: string;

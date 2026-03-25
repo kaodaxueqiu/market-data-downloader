@@ -37,6 +37,7 @@ const SessionHistoryPanel: FC = () => {
       open={open}
       onClose={() => setHistoryPanel(false)}
       closeIcon={<CloseOutlined />}
+      zIndex={1999999999}
       styles={{ body: { padding: 0 } }}
     >
       {loading ? (
@@ -99,6 +100,11 @@ const SessionRow: FC<{
           <span className="truncate text-sm font-medium text-gray-800">
             {session.title || "新对话"}
           </span>
+          {session.messageCount > 0 && (
+            <span className="ml-1 shrink-0 text-xs text-gray-400">
+              {session.messageCount}条
+            </span>
+          )}
         </div>
         {(session.remark || session.sessionKey) && (
           <span className="truncate text-xs text-gray-400">
