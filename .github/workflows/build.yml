@@ -123,7 +123,7 @@ jobs:
         
       - name: Build macOS
         if: matrix.platform == 'mac'
-        run: vue-tsc --noEmit && vite build && npx electron-builder --mac --${{ matrix.arch }}
+        run: npx vue-tsc --noEmit && npx vite build && npx electron-builder --mac --${{ matrix.arch }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
