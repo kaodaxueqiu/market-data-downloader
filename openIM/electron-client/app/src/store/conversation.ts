@@ -195,9 +195,18 @@ export const useConversationStore = create<ConversationStore>()((set, get) => ({
       }
 
       set((state) => {
+        let deduplicatedItems = tmpConversationList;
+        if (isOffset && state.conversationList.length > 0) {
+          const existingIDs = new Set(
+            state.conversationList.map((c) => c.conversationID),
+          );
+          deduplicatedItems = tmpConversationList.filter(
+            (c) => !existingIDs.has(c.conversationID),
+          );
+        }
         const nextAllList = [
           ...(isOffset ? state.conversationList : []),
-          ...tmpConversationList,
+          ...deduplicatedItems,
         ];
         const nextActiveGroupID =
           state.activeConversationGroup === ConversationGroupAllKey
@@ -237,8 +246,17 @@ export const useConversationStore = create<ConversationStore>()((set, get) => ({
       return true;
     }
 
+    let displayNewItems = data.conversationElems;
+    if (isOffset && get().displayConversationList.length > 0) {
+      const existingDisplayIDs = new Set(
+        get().displayConversationList.map((c) => c.conversationID),
+      );
+      displayNewItems = data.conversationElems.filter(
+        (c) => !existingDisplayIDs.has(c.conversationID),
+      );
+    }
     const nextDisplayList = isOffset
-      ? [...get().displayConversationList, ...data.conversationElems]
+      ? [...get().displayConversationList, ...displayNewItems]
       : [...data.conversationElems];
     const nextHasMore = computeGroupHasMore(
       nextPageNumber,
