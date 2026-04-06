@@ -27,11 +27,13 @@ jobs:
             os: macos-latest
             platform: mac
             arch: arm64
+            goarch: arm64
             ffi_dir: mac_arm64
           - name: macOS-x64
             os: macos-15-intel
             platform: mac
             arch: x64
+            goarch: amd64
             ffi_dir: mac_x64
         
     steps:
@@ -48,6 +50,35 @@ jobs:
         with:
           version: 10
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: openIM/sdk-cpp/go/go.sum
+
+      # ── 编译 SDK 原生库 ──
+      - name: Build SDK dylib (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: openIM/sdk-cpp/go
+        run: |
+          echo "Go: $(go version)"
+          echo "Building libopenimsdk.dylib for ${{ matrix.arch }} (GOARCH=${{ matrix.goarch }})..."
+          CGO_ENABLED=1 GOARCH=${{ matrix.goarch }} \
+            go build -buildmode=c-shared -trimpath -ldflags "-s -w" \
+            -o _output/libopenimsdk.dylib .
+          echo "Build SUCCESS: $(du -h _output/libopenimsdk.dylib | cut -f1)"
+
+      - name: Build SDK DLL (Windows)
+        if: matrix.platform == 'win'
+        working-directory: openIM/sdk-cpp/go
+        shell: bash
+        run: |
+          echo "Go: $(go version)"
+          echo "GCC: $(gcc --version | head -1)"
+          CGO_ENABLED=1 go build -buildmode=c-shared -trimpath -ldflags "-s -w" \
+            -o _output/libopenimsdk.dll .
+          echo "Build SUCCESS: $(du -h _output/libopenimsdk.dll | cut -f1)"
+
       # ── 构建 IM ──
       - name: Install IM dependencies
         working-directory: openIM/electron-client/app
@@ -63,20 +94,26 @@ jobs:
         if: matrix.platform == 'win'
         working-directory: openIM/electron-client/app
         run: |
-          mkdir -p node_modules/@openim/electron-client-sdk/assets/win_x64
-          cp -f extraResources/libopenimsdk.dll node_modules/@openim/electron-client-sdk/assets/win_x64/
-          cp -f extraResources/libopenimsdk.h node_modules/@openim/electron-client-sdk/assets/win_x64/
-          echo "Windows FFI assets copied"
+          SDK_OUTPUT="../../sdk-cpp/go/_output"
+          TARGET="node_modules/@openim/electron-client-sdk/assets/win_x64"
+          mkdir -p "$TARGET"
+          cp -f "$SDK_OUTPUT/libopenimsdk.dll" "$TARGET/"
+          cp -f "$SDK_OUTPUT/libopenimsdk.h" "$TARGET/"
+          ls -lh "$TARGET/"
+          echo "Windows FFI assets copied from source build"
         shell: bash
 
       - name: Setup FFI assets (macOS)
         if: matrix.platform == 'mac'
         working-directory: openIM/electron-client/app
         run: |
-          mkdir -p node_modules/@openim/electron-client-sdk/assets/${{ matrix.ffi_dir }}
-          cp -f extraResources/${{ matrix.ffi_dir }}/libopenimsdk.dylib node_modules/@openim/electron-client-sdk/assets/${{ matrix.ffi_dir }}/
-          cp -f extraResources/${{ matrix.ffi_dir }}/libopenimsdk.h node_modules/@openim/electron-client-sdk/assets/${{ matrix.ffi_dir }}/
-          echo "macOS ${{ matrix.arch }} FFI assets copied"
+          SDK_OUTPUT="../../sdk-cpp/go/_output"
+          TARGET="node_modules/@openim/electron-client-sdk/assets/${{ matrix.ffi_dir }}"
+          mkdir -p "$TARGET"
+          cp -f "$SDK_OUTPUT/libopenimsdk.dylib" "$TARGET/"
+          cp -f "$SDK_OUTPUT/libopenimsdk.h" "$TARGET/"
+          ls -lh "$TARGET/"
+          echo "macOS ${{ matrix.arch }} FFI assets copied from source build"
         shell: bash
 
       - name: Build IM Electron

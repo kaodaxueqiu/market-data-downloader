@@ -84,7 +84,7 @@ const ELECTRON_PATCHES = [
   },
   {
     find: "this.libOpenIMSDK.set_conversation_draft",
-    inject: "this.libOpenIMSDK.unhide_conversation = this.lib.func('__stdcall', 'unhide_conversation', 'void', ['baseCallback *', 'str', 'str']);\n            this.libOpenIMSDK.set_conversation_draft",
+    inject: "try { this.libOpenIMSDK.unhide_conversation = this.lib.func('__stdcall', 'unhide_conversation', 'void', ['baseCallback *', 'str', 'str']); } catch(e) {}\n            this.libOpenIMSDK.set_conversation_draft",
   },
 ];
 
@@ -117,17 +117,29 @@ for (const file of ELECTRON_SDK_FILES) {
   }
 }
 
-// Replace DLL with enterprise build if available
-const dllBuilt = path.join(__dirname, '..', '..', '..', 'sdk-cpp', 'go', '_output', 'libopenimsdk.dll');
-const dllTarget = path.join(ELECTRON_SDK_DIR, '..', 'assets', 'win_x64', 'libopenimsdk.dll');
+// Replace native library with enterprise build if available
+const SDK_OUTPUT = path.join(__dirname, '..', '..', '..', 'sdk-cpp', 'go', '_output');
+const NATIVE_LIB_MAP = {
+  win32:  { file: 'libopenimsdk.dll',   dirs: ['win_x64', 'win_ia32'] },
+  darwin: { file: 'libopenimsdk.dylib', dirs: ['mac_arm64', 'mac_x64'] },
+  linux:  { file: 'libopenimsdk.so',    dirs: ['linux_arm64', 'linux_x64'] },
+};
 
-if (fs.existsSync(dllBuilt) && fs.existsSync(path.dirname(dllTarget))) {
-  const builtSize = fs.statSync(dllBuilt).size;
-  const targetSize = fs.existsSync(dllTarget) ? fs.statSync(dllTarget).size : 0;
-  if (builtSize !== targetSize) {
-    fs.copyFileSync(dllBuilt, dllTarget);
-    console.log(`[patch-electron-sdk] Replaced DLL (${(builtSize / 1024 / 1024).toFixed(1)} MB)`);
-  } else {
-    console.log(`[patch-electron-sdk] DLL OK (already enterprise build)`);
+const libInfo = NATIVE_LIB_MAP[process.platform];
+if (libInfo) {
+  const builtLib = path.join(SDK_OUTPUT, libInfo.file);
+  if (fs.existsSync(builtLib)) {
+    const builtSize = fs.statSync(builtLib).size;
+    for (const dir of libInfo.dirs) {
+      const target = path.join(ELECTRON_SDK_DIR, '..', 'assets', dir, libInfo.file);
+      if (!fs.existsSync(path.dirname(target))) continue;
+      const targetSize = fs.existsSync(target) ? fs.statSync(target).size : 0;
+      if (builtSize !== targetSize) {
+        fs.copyFileSync(builtLib, target);
+        console.log(`[patch-electron-sdk] Replaced ${dir}/${libInfo.file} (${(builtSize / 1024 / 1024).toFixed(1)} MB)`);
+      } else {
+        console.log(`[patch-electron-sdk] ${dir}/${libInfo.file} OK (already enterprise build)`);
+      }
+    }
   }
 }
