@@ -10,6 +10,7 @@ export interface SessionItem {
   lastActiveAt: number;
   isDefault: boolean;
   isPinned: boolean;
+  isOpen: boolean;
   messageCount: number;
 }
 
@@ -34,6 +35,7 @@ export interface UpdateSessionParams {
   title?: string;
   remark?: string;
   isPinned?: boolean;
+  isOpen?: boolean;
 }
 
 export interface SessionHistoryResp {

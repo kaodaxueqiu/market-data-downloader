@@ -428,6 +428,7 @@ const CommonLeft: ForwardRefRenderFunction<CommonLeftHandle, ICommonLeftProps> =
         setCheckList(
           await checkInGroup(
             useConversationStore.getState().conversationList.filter((conversation) => {
+              if (conversation.isHidden) return false;
               const isNotificationConversation =
                 conversation.conversationType === SessionType.Notification;
               if (filterBlack) {

@@ -39,19 +39,15 @@ export function useSendMessage() {
       const isAgentConversation = useContactStore
         .getState()
         .agents.some((a) => a.userID === currentConversation?.userID);
+      const allAgents = useContactStore.getState().agents;
+      console.log("[DEBUG-SEND] isAgent:", isAgentConversation, "convUserID:", currentConversation?.userID, "agentUserIDs:", allAgents.map(a => a.userID));
       if (isAgentConversation) {
         const sessionId = useSessionStore.getState().activeSessionId;
+        console.log("[DEBUG-SEND] activeSessionId:", sessionId, "LEGACY:", LEGACY_SESSION_ID);
         if (sessionId && sessionId !== LEGACY_SESSION_ID) {
-          let existingEx: Record<string, unknown> = {};
-          if (message.ex) {
-            try {
-              existingEx = JSON.parse(message.ex);
-            } catch {
-              /* keep empty */
-            }
-          }
-          message.ex = JSON.stringify({ ...existingEx, sessionId });
+          (message as any).sessionId = sessionId;
         }
+        console.log("[DEBUG-SEND] message.sessionId after set:", (message as any).sessionId);
       }
 
       if (needPush) {
@@ -70,7 +66,7 @@ export function useSendMessage() {
           deleteAndPushOneMessage(successMessage as ExMessageItem);
           return;
         }
-        updateOneMessage(successMessage as ExMessageItem);
+        updateOneMessage({ ...successMessage, isRead: true } as ExMessageItem);
         tryAddPreviewImg([successMessage as ExMessageItem]);
       } catch (error) {
         updateOneMessage({

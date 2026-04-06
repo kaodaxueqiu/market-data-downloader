@@ -43,6 +43,10 @@ export interface UserStore {
   userLogout: (force?: boolean) => Promise<void>;
   getWorkMomentsUnreadCount: () => Promise<void>;
   updateWorkMomentsUnreadCount: (count?: number) => void;
+  preloadState: "idle" | "loading" | "done";
+  preloadProgress: string;
+  updatePreloadState: (state: "idle" | "loading" | "done") => void;
+  updatePreloadProgress: (progress: string) => void;
   initImageCache: () => void;
   addImageCache: (url: string, path: string) => void;
   clearImageCache: () => void;

@@ -98,7 +98,7 @@ export const getBusinessUserInfoWithDepartment = async (userIDs: string[]) => {
   ]);
   const userInfos = userResp.data;
   const departmentInfos = departmentResp.data;
-  return userInfos.users.map((user) => ({
+  return (userInfos?.users ?? []).map((user) => ({
     ...user,
     members: departmentInfos.users.find((item) =>
       item.members.some((member) => member.userID === user.userID),

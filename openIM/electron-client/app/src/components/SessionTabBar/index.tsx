@@ -17,14 +17,8 @@ import { useConversationStore, useSessionStore } from "@/store";
 
 import styles from "./session-tab-bar.module.scss";
 
-function getMessageSessionId(msg: { ex?: string }): string | null {
-  if (!msg.ex) return null;
-  try {
-    const exData = JSON.parse(msg.ex);
-    return exData.sessionId ?? null;
-  } catch {
-    return null;
-  }
+function getMessageSessionId(msg: { sessionId?: string }): string | null {
+  return msg.sessionId || null;
 }
 
 interface SessionTabBarProps {

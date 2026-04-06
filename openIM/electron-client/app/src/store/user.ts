@@ -36,6 +36,14 @@ export const useUserStore = create<UserStore>()((set, get) => ({
   },
   imageCache: {} as Record<string, string>,
   workMomentsUnreadCount: 0,
+  preloadState: "idle",
+  preloadProgress: "",
+  updatePreloadState: (preloadState: "idle" | "loading" | "done") => {
+    set({ preloadState });
+  },
+  updatePreloadProgress: (preloadProgress: string) => {
+    set({ preloadProgress });
+  },
   updateSyncState: (syncState: IMConnectState) => {
     set({ syncState });
   },

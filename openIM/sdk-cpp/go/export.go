@@ -1,0 +1,1832 @@
+package main
+
+/*
+#include <stdio.h>
+typedef void (*CB_S)(char *);
+typedef void (*CB_I_S)(int,char *);
+typedef void (*CB_S_I_S_S)(char *,int,char *,char *);
+typedef void (*CB_S_I_S_S_I)(char *,int,char *,char *,int);
+extern void Call_CB_S(CB_S func,char* data);
+extern void Call_CB_I_S(CB_I_S func,int event,char* data);
+extern void Call_CB_S_I_S_S(CB_S_I_S_S func,char *,int errCode,char* errMsg,char* data);
+extern void Call_CB_S_I_S_S_I(CB_S_I_S_S_I func,char *,int errCode,char* errMsg,char* data,int progress);
+extern CB_S DebugPrint;
+
+*/
+import "C"
+
+import (
+	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk"
+	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
+)
+
+//export set_print
+func set_print(print C.CB_S) {
+	C.DebugPrint = print
+}
+
+func DebugPrint(info string) {
+	C.Call_CB_S(C.DebugPrint, C.CString("DLL:"+info))
+}
+
+type Base struct {
+	ErrCode int32  `json:"errCode"`
+	ErrMsg  string `json:"errMsg"`
+}
+
+// =====================================================listener===============================================
+
+type ConnCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewConnCallback(cCallback C.CB_I_S) *ConnCallback {
+	return &ConnCallback{cCallback: cCallback}
+}
+
+func (c ConnCallback) OnConnecting() {
+	C.Call_CB_I_S(c.cCallback, CONNECTING, NO_DATA)
+}
+
+func (c ConnCallback) OnConnectSuccess() {
+	C.Call_CB_I_S(c.cCallback, CONNECT_SUCCESS, NO_DATA)
+}
+
+func (c ConnCallback) OnConnectFailed(errCode int32, errMsg string) {
+
+	C.Call_CB_I_S(c.cCallback, CONNECT_FAILED, C.CString(StructToJsonString(Base{ErrCode: errCode, ErrMsg: errMsg})))
+
+}
+
+func (c ConnCallback) OnKickedOffline(msg string) {
+	C.Call_CB_I_S(c.cCallback, KICKED_OFFLINE, C.CString(msg))
+}
+
+func (c ConnCallback) OnUserTokenExpired() {
+	C.Call_CB_I_S(c.cCallback, USER_TOKEN_EXPIRED, NO_DATA)
+}
+
+func (c ConnCallback) OnUserTokenInvalid(errMsg string) {
+	C.Call_CB_I_S(c.cCallback, USER_TOKEN_INVALID, C.CString(errMsg))
+}
+
+type ConversationCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewConversationCallback(cCallback C.CB_I_S) *ConversationCallback {
+	return &ConversationCallback{cCallback: cCallback}
+}
+
+func (c ConversationCallback) OnSyncServerStart(reinstalled bool) {
+	m := make(map[string]any)
+	m["reinstalled"] = reinstalled
+	C.Call_CB_I_S(c.cCallback, SYNC_SERVER_START, C.CString(StructToJsonString(m)))
+}
+
+func (c ConversationCallback) OnSyncServerProgress(progress int) {
+	m := make(map[string]any)
+	m["progress"] = progress
+	C.Call_CB_I_S(c.cCallback, SYNC_SERVER_PROGRESS, C.CString(StructToJsonString(m)))
+}
+
+func (c ConversationCallback) OnSyncServerFinish(reinstalled bool) {
+	m := make(map[string]any)
+	m["reinstalled"] = reinstalled
+	C.Call_CB_I_S(c.cCallback, SYNC_SERVER_FINISH, C.CString(StructToJsonString(m)))
+}
+
+func (c ConversationCallback) OnSyncServerFailed(reinstalled bool) {
+	m := make(map[string]any)
+	m["reinstalled"] = reinstalled
+	C.Call_CB_I_S(c.cCallback, SYNC_SERVER_FAILED, C.CString(StructToJsonString(m)))
+}
+
+func (c ConversationCallback) OnNewConversation(conversationList string) {
+	C.Call_CB_I_S(c.cCallback, NEW_CONVERSATION, C.CString(conversationList))
+}
+
+func (c ConversationCallback) OnConversationChanged(conversationList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_CHANGED, C.CString(conversationList))
+}
+
+func (c ConversationCallback) OnTotalUnreadMessageCountChanged(totalUnreadCount int32) {
+	C.Call_CB_I_S(c.cCallback, TOTAL_UNREAD_MESSAGE_COUNT_CHANGED, C.CString(IntToString(totalUnreadCount)))
+}
+
+func (c ConversationCallback) OnConversationUserInputStatusChanged(change string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_USER_INPUT_STATUS_CHANGED, C.CString(change))
+}
+
+func (c ConversationCallback) OnConversationGroupAdded(conversationGroupList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_ADDED, C.CString(conversationGroupList))
+}
+
+func (c ConversationCallback) OnConversationGroupDeleted(conversationGroupList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_DELETED, C.CString(conversationGroupList))
+}
+
+func (c ConversationCallback) OnConversationGroupChanged(conversationGroupList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_CHANGED, C.CString(conversationGroupList))
+}
+
+func (c ConversationCallback) OnConversationGroupMemberAdded(conversationList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_MEMBER_ADDED, C.CString(conversationList))
+}
+
+func (c ConversationCallback) OnConversationGroupMemberDeleted(conversationList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_MEMBER_DELETED, C.CString(conversationList))
+}
+
+type AdvancedMsgCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewAdvancedMsgCallback(cCallback C.CB_I_S) *AdvancedMsgCallback {
+	return &AdvancedMsgCallback{cCallback: cCallback}
+}
+
+func (a AdvancedMsgCallback) OnRecvNewMessage(message string) {
+	C.Call_CB_I_S(a.cCallback, RECV_NEW_MESSAGE, C.CString(message))
+}
+
+func (a AdvancedMsgCallback) OnRecvC2CReadReceipt(msgReceiptList string) {
+	C.Call_CB_I_S(a.cCallback, RECV_C2C_READ_RECEIPT, C.CString(msgReceiptList))
+}
+
+func (a AdvancedMsgCallback) OnRecvGroupReadReceipt(groupMsgReceiptList string) {
+	C.Call_CB_I_S(a.cCallback, RECV_GROUP_READ_RECEIPT, C.CString(groupMsgReceiptList))
+}
+
+func (a AdvancedMsgCallback) OnNewRecvMessageRevoked(messageRevoked string) {
+	C.Call_CB_I_S(a.cCallback, NEW_RECV_MESSAGE_REVOKED, C.CString(messageRevoked))
+}
+
+func (a AdvancedMsgCallback) OnRecvMessageExtensionsChanged(msgID string, reactionExtensionList string) {
+	m := make(map[string]any)
+	m["msgID"] = msgID
+	m["reactionExtensionList"] = reactionExtensionList
+	C.Call_CB_I_S(a.cCallback, RECV_MESSAGE_EXTENSIONS_CHANGED, C.CString(StructToJsonString(m)))
+}
+
+func (a AdvancedMsgCallback) OnRecvMessageExtensionsDeleted(msgID string, reactionExtensionKeyList string) {
+	m := make(map[string]any)
+	m["msgID"] = msgID
+	m["reactionExtensionKeyList"] = reactionExtensionKeyList
+	C.Call_CB_I_S(a.cCallback, RECV_MESSAGE_EXTENSIONS_DELETED, C.CString(StructToJsonString(m)))
+}
+
+func (a AdvancedMsgCallback) OnRecvMessageExtensionsAdded(msgID string, reactionExtensionList string) {
+	m := make(map[string]any)
+	m["msgID"] = msgID
+	m["reactionExtensionList"] = reactionExtensionList
+	C.Call_CB_I_S(a.cCallback, RECV_MESSAGE_EXTENSIONS_ADDED, C.CString(StructToJsonString(m)))
+}
+
+func (a AdvancedMsgCallback) OnRecvOfflineNewMessage(message string) {
+	C.Call_CB_I_S(a.cCallback, RECV_OFFLINE_NEW_MESSAGE, C.CString(message))
+}
+
+func (a AdvancedMsgCallback) OnMsgDeleted(message string) {
+	C.Call_CB_I_S(a.cCallback, MSG_DELETED, C.CString(message))
+}
+
+func (a AdvancedMsgCallback) OnRecvOnlineOnlyMessage(message string) {
+	C.Call_CB_I_S(a.cCallback, RECV_ONLINE_ONLY_MESSAGE, C.CString(message))
+}
+
+func (a AdvancedMsgCallback) OnChangedPinnedMsg(message string) {
+	C.Call_CB_I_S(a.cCallback, CHANGED_PINNED_MESSAGE, C.CString(message))
+}
+
+func (a AdvancedMsgCallback) OnDeleteUserAllMsgsInConv(conversationID string) {
+	C.Call_CB_I_S(a.cCallback, DELETE_USER_ALL_MSGS_IN_CONV, C.CString(conversationID))
+}
+
+func (a AdvancedMsgCallback) OnMessageModified(message string) {
+	C.Call_CB_I_S(a.cCallback, MESSAGE_MODIFIED, C.CString(message))
+}
+
+type BatchMessageCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewBatchMessageCallback(cCallback C.CB_I_S) *BatchMessageCallback {
+	return &BatchMessageCallback{cCallback: cCallback}
+}
+
+func (b BatchMessageCallback) OnRecvNewMessages(messageList string) {
+	C.Call_CB_I_S(b.cCallback, RECV_NEW_MESSAGES, C.CString(messageList))
+}
+
+func (b BatchMessageCallback) OnRecvOfflineNewMessages(messageList string) {
+	C.Call_CB_I_S(b.cCallback, RECV_OFFLINE_NEW_MESSAGES, C.CString(messageList))
+}
+
+type FriendCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewFriendCallback(cCallback C.CB_I_S) *FriendCallback {
+	return &FriendCallback{cCallback: cCallback}
+}
+
+func (f FriendCallback) OnFriendApplicationAdded(friendApplication string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_APPLICATION_ADDED, C.CString(friendApplication))
+}
+
+func (f FriendCallback) OnFriendApplicationDeleted(friendApplication string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_APPLICATION_DELETED, C.CString(friendApplication))
+}
+
+func (f FriendCallback) OnFriendApplicationAccepted(friendApplication string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_APPLICATION_ACCEPTED, C.CString(friendApplication))
+}
+
+func (f FriendCallback) OnFriendApplicationRejected(friendApplication string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_APPLICATION_REJECTED, C.CString(friendApplication))
+}
+
+func (f FriendCallback) OnFriendAdded(friendInfo string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_ADDED, C.CString(friendInfo))
+}
+
+func (f FriendCallback) OnFriendDeleted(friendInfo string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_DELETED, C.CString(friendInfo))
+}
+
+func (f FriendCallback) OnFriendInfoChanged(friendInfo string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_INFO_CHANGED, C.CString(friendInfo))
+}
+
+func (f FriendCallback) OnBlackAdded(blackInfo string) {
+	C.Call_CB_I_S(f.cCallback, BLACK_ADDED, C.CString(blackInfo))
+}
+
+func (f FriendCallback) OnBlackDeleted(blackInfo string) {
+	C.Call_CB_I_S(f.cCallback, BLACK_DELETED, C.CString(blackInfo))
+}
+
+type GroupCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewGroupCallback(cCallback C.CB_I_S) *GroupCallback {
+	return &GroupCallback{cCallback: cCallback}
+}
+
+func (g GroupCallback) OnJoinedGroupAdded(groupInfo string) {
+	C.Call_CB_I_S(g.cCallback, JOINED_GROUP_ADDED, C.CString(groupInfo))
+}
+
+func (g GroupCallback) OnJoinedGroupDeleted(groupInfo string) {
+	C.Call_CB_I_S(g.cCallback, JOINED_GROUP_DELETED, C.CString(groupInfo))
+}
+
+func (g GroupCallback) OnGroupMemberAdded(groupMemberInfo string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_MEMBER_ADDED, C.CString(groupMemberInfo))
+}
+
+func (g GroupCallback) OnGroupMemberDeleted(groupMemberInfo string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_MEMBER_DELETED, C.CString(groupMemberInfo))
+}
+
+func (g GroupCallback) OnGroupApplicationAdded(groupApplication string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_APPLICATION_ADDED, C.CString(groupApplication))
+}
+
+func (g GroupCallback) OnGroupApplicationDeleted(groupApplication string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_APPLICATION_DELETED, C.CString(groupApplication))
+}
+
+func (g GroupCallback) OnGroupInfoChanged(groupInfo string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_INFO_CHANGED, C.CString(groupInfo))
+}
+
+func (g GroupCallback) OnGroupDismissed(groupInfo string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_DISMISSED, C.CString(groupInfo))
+}
+
+func (g GroupCallback) OnGroupMemberInfoChanged(groupMemberInfo string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_MEMBER_INFO_CHANGED, C.CString(groupMemberInfo))
+}
+
+func (g GroupCallback) OnGroupApplicationAccepted(groupApplication string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_APPLICATION_ACCEPTED, C.CString(groupApplication))
+}
+
+func (g GroupCallback) OnGroupApplicationRejected(groupApplication string) {
+	C.Call_CB_I_S(g.cCallback, GROUP_APPLICATION_REJECTED, C.CString(groupApplication))
+}
+
+type CustomBusinessCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewCustomBusinessCallback(cCallback C.CB_I_S) *CustomBusinessCallback {
+	return &CustomBusinessCallback{cCallback: cCallback}
+}
+
+func (c CustomBusinessCallback) OnRecvCustomBusinessMessage(businessMessage string) {
+	C.Call_CB_I_S(c.cCallback, RECV_CUSTOM_BUSINESS_MESSAGE, C.CString(businessMessage))
+}
+
+type MessageKVCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewMessageKVCallback(cCallback C.CB_I_S) *MessageKVCallback {
+	return &MessageKVCallback{cCallback: cCallback}
+}
+
+func (m MessageKVCallback) OnMessageKvInfoChanged(messageChangedList string) {
+	C.Call_CB_I_S(m.cCallback, MESSAGE_KV_INFO_CHANGED, C.CString(messageChangedList))
+}
+
+type UserCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewUserCallback(cCallback C.CB_I_S) *UserCallback {
+	return &UserCallback{cCallback: cCallback}
+}
+
+func (u UserCallback) OnSelfInfoUpdated(userInfo string) {
+	C.Call_CB_I_S(u.cCallback, SELF_INFO_UPDATED, C.CString(userInfo))
+}
+
+func (u UserCallback) OnUserStatusChanged(statusMap string) {
+	C.Call_CB_I_S(u.cCallback, USER_STATUS_CHANGED, C.CString(statusMap))
+}
+
+func (u UserCallback) OnUserCommandAdd(userCommand string)    {}
+func (u UserCallback) OnUserCommandDelete(userCommand string) {}
+func (u UserCallback) OnUserCommandUpdate(userCommand string) {}
+
+type SendMessageCallback struct {
+	cCallback   C.CB_S_I_S_S_I
+	operationID string
+}
+
+func NewSendMessageCallback(cCallback C.CB_S_I_S_S_I, operationID *C.char) *SendMessageCallback {
+	return &SendMessageCallback{cCallback: cCallback, operationID: C.GoString(operationID)}
+}
+
+func (s SendMessageCallback) OnError(errCode int32, errMsg string) {
+	C.Call_CB_S_I_S_S_I(s.cCallback, C.CString(s.operationID), C.int(errCode), C.CString(errMsg), NO_DATA, NO_PROGRESS)
+}
+
+func (s SendMessageCallback) OnSuccess(data string) {
+	C.Call_CB_S_I_S_S_I(s.cCallback, C.CString(s.operationID), NO_ERR, NO_ERR_MSG, C.CString(data), NO_PROGRESS)
+}
+
+func (s SendMessageCallback) OnProgress(progress int) {
+	C.Call_CB_S_I_S_S_I(s.cCallback, C.CString(s.operationID), NO_ERR, NO_ERR_MSG, NO_DATA, C.int(progress))
+}
+
+type BaseCallback struct {
+	cCallback   C.CB_S_I_S_S
+	operationID string
+}
+
+func NewBaseCallback(cCallback C.CB_S_I_S_S, operationID *C.char) *BaseCallback {
+	return &BaseCallback{cCallback: cCallback, operationID: C.GoString(operationID)}
+}
+
+func (b BaseCallback) OnError(errCode int32, errMsg string) {
+	C.Call_CB_S_I_S_S(b.cCallback, C.CString(b.operationID), C.int(errCode), C.CString(errMsg), NO_DATA)
+}
+
+func (b BaseCallback) OnSuccess(data string) {
+	C.Call_CB_S_I_S_S(b.cCallback, C.CString(b.operationID), NO_ERR, NO_ERR_MSG, C.CString(data))
+}
+
+type UploadFileCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewUploadFileCallback(cCallback C.CB_I_S) *UploadFileCallback {
+	return &UploadFileCallback{cCallback: cCallback}
+}
+
+func (u UploadFileCallback) Open(size int64) {
+	C.Call_CB_I_S(u.cCallback, OPEN, C.CString(IntToString(size)))
+}
+
+func (u UploadFileCallback) PartSize(partSize int64, num int) {
+	m := make(map[string]any)
+	m["partSize"] = partSize
+	m["num"] = num
+	C.Call_CB_I_S(u.cCallback, PART_SIZE, C.CString(StructToJsonString(m)))
+}
+
+func (u UploadFileCallback) HashPartProgress(index int, size int64, partHash string) {
+	m := make(map[string]any)
+	m["index"] = index
+	m["size"] = size
+	m["partHash"] = partHash
+	C.Call_CB_I_S(u.cCallback, HASH_PART_PROGRESS, C.CString(StructToJsonString(m)))
+}
+
+func (u UploadFileCallback) HashPartComplete(partsHash string, fileHash string) {
+	m := make(map[string]any)
+	m["partsHash"] = partsHash
+	m["fileHash"] = fileHash
+	C.Call_CB_I_S(u.cCallback, HASH_PART_COMPLETE, C.CString(StructToJsonString(m)))
+}
+
+func (u UploadFileCallback) UploadID(uploadID string) {
+	C.Call_CB_I_S(u.cCallback, UPLOAD_ID, C.CString(uploadID))
+}
+
+func (u UploadFileCallback) UploadPartComplete(index int, partSize int64, partHash string) {
+	m := make(map[string]any)
+	m["index"] = index
+	m["partSize"] = partSize
+	m["partHash"] = partHash
+	C.Call_CB_I_S(u.cCallback, UPLOAD_PART_COMPLETE, C.CString(StructToJsonString(m)))
+}
+
+func (u UploadFileCallback) UploadComplete(fileSize int64, streamSize int64, storageSize int64) {
+	m := make(map[string]any)
+	m["fileSize"] = fileSize
+	m["streamSize"] = streamSize
+	m["storageSize"] = storageSize
+	C.Call_CB_I_S(u.cCallback, UPLOAD_COMPLETE, C.CString(StructToJsonString(m)))
+}
+
+func (u UploadFileCallback) Complete(size int64, url string, typ int) {
+	m := make(map[string]any)
+	m["size"] = size
+	m["url"] = url
+	m["typ"] = typ
+	C.Call_CB_I_S(u.cCallback, COMPLETE, C.CString(StructToJsonString(m)))
+}
+
+type UploadLogProgressCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewUploadLogProgressCallback(cCallback C.CB_I_S) *UploadLogProgressCallback {
+	return &UploadLogProgressCallback{cCallback: cCallback}
+}
+
+func (l UploadLogProgressCallback) OnProgress(current, size int64) {
+	m := make(map[string]any)
+	m["current"] = current
+	m["size"] = size
+	C.Call_CB_I_S(l.cCallback, ON_PROGRESS, C.CString(StructToJsonString(m)))
+}
+
+type ConversationGroupCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewConversationGroupCallback(cCallback C.CB_I_S) *ConversationGroupCallback {
+	return &ConversationGroupCallback{cCallback: cCallback}
+}
+
+func (c ConversationGroupCallback) OnConversationGroupAdded(conversationGroupList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_ADDED, C.CString(conversationGroupList))
+}
+
+func (c ConversationGroupCallback) OnConversationGroupDeleted(conversationGroupList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_DELETED, C.CString(conversationGroupList))
+}
+
+func (c ConversationGroupCallback) OnConversationGroupChanged(conversationGroupList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_CHANGED, C.CString(conversationGroupList))
+}
+
+func (c ConversationGroupCallback) OnConversationGroupMemberAdded(conversationList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_MEMBER_ADDED, C.CString(conversationList))
+}
+
+func (c ConversationGroupCallback) OnConversationGroupMemberDeleted(conversationList string) {
+	C.Call_CB_I_S(c.cCallback, CONVERSATION_GROUP_MEMBER_DELETED, C.CString(conversationList))
+}
+
+type SignalingCallback struct {
+	cCallback C.CB_I_S
+}
+
+func NewSignalingCallback(cCallback C.CB_I_S) *SignalingCallback {
+	return &SignalingCallback{cCallback: cCallback}
+}
+
+func (s SignalingCallback) OnReceiveNewInvitation(receiveNewInvitationCallback string) {
+	C.Call_CB_I_S(s.cCallback, RECV_NEW_INVITATION, C.CString(receiveNewInvitationCallback))
+}
+
+func (s SignalingCallback) OnInviteeAccepted(inviteeAcceptedCallback string) {
+	C.Call_CB_I_S(s.cCallback, INVITEE_ACCEPTED, C.CString(inviteeAcceptedCallback))
+}
+
+func (s SignalingCallback) OnInviteeAcceptedByOtherDevice(inviteeAcceptedCallback string) {
+	C.Call_CB_I_S(s.cCallback, INVITEE_ACCEPTED_BY_OTHER_DEVICE, C.CString(inviteeAcceptedCallback))
+}
+
+func (s SignalingCallback) OnInviteeRejected(inviteeRejectedCallback string) {
+	C.Call_CB_I_S(s.cCallback, INVITEE_REJECTED, C.CString(inviteeRejectedCallback))
+}
+
+func (s SignalingCallback) OnInviteeRejectedByOtherDevice(inviteeRejectedCallback string) {
+	C.Call_CB_I_S(s.cCallback, INVITEE_REJECTED_BY_OTHER_DEVICE, C.CString(inviteeRejectedCallback))
+}
+
+func (s SignalingCallback) OnInvitationCancelled(invitationCancelledCallback string) {
+	C.Call_CB_I_S(s.cCallback, INVITATION_CANCELLED, C.CString(invitationCancelledCallback))
+}
+
+func (s SignalingCallback) OnInvitationTimeout(invitationTimeoutCallback string) {
+	C.Call_CB_I_S(s.cCallback, INVITATION_TIMEOUT, C.CString(invitationTimeoutCallback))
+}
+
+func (s SignalingCallback) OnHangUp(hangUpCallback string) {
+	C.Call_CB_I_S(s.cCallback, HANG_UP, C.CString(hangUpCallback))
+}
+
+func (s SignalingCallback) OnRoomParticipantConnected(onRoomParticipantConnectedCallback string) {
+	C.Call_CB_I_S(s.cCallback, ROOM_PARTICIPANT_CONNECTED, C.CString(onRoomParticipantConnectedCallback))
+}
+
+func (s SignalingCallback) OnRoomParticipantDisconnected(onRoomParticipantDisconnectedCallback string) {
+	C.Call_CB_I_S(s.cCallback, ROOM_PARTICIPANT_DISCONNECTED, C.CString(onRoomParticipantDisconnectedCallback))
+}
+
+func (s SignalingCallback) OnStreamChange(OnStreamChangeCallback string) {
+	C.Call_CB_I_S(s.cCallback, STREAM_CHANGE, C.CString(OnStreamChangeCallback))
+}
+
+func (s SignalingCallback) OnReceiveCustomSignal(CustomSignalCallback string) {
+	C.Call_CB_I_S(s.cCallback, RECEIVE_CUSTOM_SIGNAL, C.CString(CustomSignalCallback))
+}
+
+type ForServiceCallback struct {
+	SignalingCallback
+}
+
+func NewForServiceCallback(cCallback C.CB_I_S) *ForServiceCallback {
+	return &ForServiceCallback{SignalingCallback: SignalingCallback{cCallback: cCallback}}
+}
+
+func (f ForServiceCallback) OnGroupApplicationAdded(groupApplication string) {
+	C.Call_CB_I_S(f.cCallback, GROUP_APPLICATION_ADDED, C.CString(groupApplication))
+}
+
+func (f ForServiceCallback) OnGroupApplicationAccepted(groupApplication string) {
+	C.Call_CB_I_S(f.cCallback, GROUP_APPLICATION_ACCEPTED, C.CString(groupApplication))
+}
+
+func (f ForServiceCallback) OnFriendApplicationAdded(friendApplication string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_APPLICATION_ADDED, C.CString(friendApplication))
+}
+
+func (f ForServiceCallback) OnFriendApplicationAccepted(friendApplication string) {
+	C.Call_CB_I_S(f.cCallback, FRIEND_APPLICATION_ACCEPTED, C.CString(friendApplication))
+}
+
+// =====================================================global_callback===============================================
+
+//export set_group_listener
+func set_group_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetGroupListener(NewGroupCallback(cCallback))
+}
+
+//export set_conversation_listener
+func set_conversation_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetConversationListener(NewConversationCallback(cCallback))
+}
+
+//export set_advanced_msg_listener
+func set_advanced_msg_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetAdvancedMsgListener(NewAdvancedMsgCallback(cCallback))
+}
+
+//export set_batch_msg_listener
+func set_batch_msg_listener(cCallback C.CB_I_S) {
+	if open_im_sdk.IMUserContext == nil || open_im_sdk.IMUserContext.Conversation() == nil {
+		return
+	}
+	open_im_sdk.IMUserContext.Conversation().SetBatchMsgListener(func() open_im_sdk_callback.OnBatchMsgListener {
+		return NewBatchMessageCallback(cCallback)
+	})
+}
+
+//export set_user_listener
+func set_user_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetUserListener(NewUserCallback(cCallback))
+}
+
+//export set_friend_listener
+func set_friend_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetFriendListener(NewFriendCallback(cCallback))
+}
+
+//export set_custom_business_listener
+func set_custom_business_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetCustomBusinessListener(NewCustomBusinessCallback(cCallback))
+}
+
+//export set_message_kv_listener
+func set_message_kv_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetMessageKvInfoListener(NewMessageKVCallback(cCallback))
+}
+
+//export set_signaling_listener
+func set_signaling_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetSignalingListener(NewSignalingCallback(cCallback))
+}
+
+//export set_for_service_listener
+func set_for_service_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetForServiceListener(NewForServiceCallback(cCallback))
+}
+
+//export  set_conversation_group_listener
+func set_conversation_group_listener(cCallback C.CB_I_S) {
+	open_im_sdk.SetConversationGroupListener(NewConversationGroupCallback(cCallback))
+}
+
+// =====================================================init_login===============================================
+
+//export  init_sdk
+func init_sdk(
+	cCallback C.CB_I_S,
+	operationID *C.char, config *C.char) bool {
+	callback := NewConnCallback(cCallback)
+	return open_im_sdk.InitSDK(callback, C.GoString(operationID), C.GoString(config))
+}
+
+//export un_init_sdk
+func un_init_sdk(operationID *C.char) {
+	open_im_sdk.UnInitSDK(C.GoString(operationID))
+}
+
+//export  login
+func login(cCallback C.CB_S_I_S_S, operationID, uid, token *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.Login(baseCallback, C.GoString(operationID), C.GoString(uid), C.GoString(token))
+}
+
+//export  logout
+func logout(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.Logout(baseCallback, C.GoString(operationID))
+}
+
+/*
+ 	`im_login` and `im_logout` is used only when there is a conflict with system functions on macOS,
+	 as the Dart compiler may conflict with the system functions `login` and `logout`.
+	 You can use `im_login` and `im_logout` to avoid conflicts when conflict happen.
+*/
+
+//export im_login
+func im_login(cCallback C.CB_S_I_S_S, operationID, uid, token *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.Login(baseCallback, C.GoString(operationID), C.GoString(uid), C.GoString(token))
+}
+
+//export im_logout
+func im_logout(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.Logout(baseCallback, C.GoString(operationID))
+}
+
+//export set_app_background_status
+func set_app_background_status(cCallback C.CB_S_I_S_S, operationID *C.char, isBackground C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetAppBackgroundStatus(baseCallback, C.GoString(operationID), parseBool(int(isBackground)))
+}
+
+//export  network_status_changed
+func network_status_changed(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.NetworkStatusChanged(baseCallback, C.GoString(operationID))
+}
+
+//export  get_login_status
+func get_login_status(operationID *C.char) int {
+	return open_im_sdk.GetLoginStatus(C.GoString(operationID))
+}
+
+//export  get_login_user
+func get_login_user() *C.char {
+	return C.CString(open_im_sdk.GetLoginUserID())
+}
+
+// =====================================================conversation_msg===============================================
+
+//export  create_text_message
+func create_text_message(operationID, text *C.char) *C.char {
+	message := C.CString(open_im_sdk.CreateTextMessage(C.GoString(operationID), C.GoString(text)))
+	return message
+}
+
+//export create_advanced_text_message
+func create_advanced_text_message(operationID, text, messageEntityList *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateAdvancedTextMessage(C.GoString(operationID), C.GoString(text),
+		C.GoString(messageEntityList)))
+}
+
+//export create_text_at_message
+func create_text_at_message(operationID, text, atUserList, atUsersInfo, message *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateTextAtMessage(C.GoString(operationID), C.GoString(text), C.GoString(atUserList),
+		C.GoString(atUsersInfo), C.GoString(message)))
+}
+
+//export create_location_message
+func create_location_message(operationID, description *C.char, longitude, latitude C.double) *C.char {
+	return C.CString(open_im_sdk.CreateLocationMessage(C.GoString(operationID), C.GoString(description),
+		float64(longitude), float64(latitude)))
+}
+
+//export create_custom_message
+func create_custom_message(operationID, data, extension, description *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateCustomMessage(C.GoString(operationID), C.GoString(data), C.GoString(extension),
+		C.GoString(description)))
+}
+
+//export create_quote_message
+func create_quote_message(operationID, text, message *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateQuoteMessage(C.GoString(operationID), C.GoString(text), C.GoString(message)))
+}
+
+//export create_advanced_quote_message
+func create_advanced_quote_message(operationID, text, message, messageEntityList *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateAdvancedQuoteMessage(C.GoString(operationID), C.GoString(text),
+		C.GoString(message), C.GoString(messageEntityList)))
+}
+
+//export create_card_message
+func create_card_message(operationID, cardInfo *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateCardMessage(C.GoString(operationID), C.GoString(cardInfo)))
+}
+
+//export create_video_message_from_full_path
+func create_video_message_from_full_path(operationID, videoFullPath, videoType *C.char, duration C.longlong,
+	snapshotFullPath *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateVideoMessageFromFullPath(C.GoString(operationID), C.GoString(videoFullPath),
+		C.GoString(videoType), int64(duration), C.GoString(snapshotFullPath)))
+}
+
+//export create_image_message_from_full_path
+func create_image_message_from_full_path(operationID, imageFullPath *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateImageMessageFromFullPath(C.GoString(operationID), C.GoString(imageFullPath)))
+}
+
+//export create_sound_message_from_full_path
+func create_sound_message_from_full_path(operationID, soundPath *C.char, duration C.longlong) *C.char {
+	return C.CString(open_im_sdk.CreateSoundMessageFromFullPath(C.GoString(operationID), C.GoString(soundPath),
+		int64(duration)))
+}
+
+//export create_file_message_from_full_path
+func create_file_message_from_full_path(operationID, fileFullPath, fileName *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateFileMessageFromFullPath(C.GoString(operationID), C.GoString(fileFullPath),
+		C.GoString(fileName)))
+}
+
+//export create_image_message
+func create_image_message(operationID, imagePath *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateImageMessage(C.GoString(operationID), C.GoString(imagePath)))
+}
+
+//export create_image_message_by_url
+func create_image_message_by_url(operationID, sourcePath, sourcePicture, bigPicture, snapshotPicture *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateImageMessageByURL(C.GoString(operationID), C.GoString(sourcePath),
+		C.GoString(sourcePicture), C.GoString(bigPicture), C.GoString(snapshotPicture)))
+}
+
+//export create_sound_message_by_url
+func create_sound_message_by_url(operationID, soundBaseInfo *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateSoundMessageByURL(C.GoString(operationID), C.GoString(soundBaseInfo)))
+}
+
+//export create_sound_message
+func create_sound_message(operationID, soundPath *C.char, duration C.longlong) *C.char {
+	return C.CString(open_im_sdk.CreateSoundMessage(C.GoString(operationID), C.GoString(soundPath), int64(duration)))
+}
+
+//export create_video_message_by_url
+func create_video_message_by_url(operationID, videoBaseInfo *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateVideoMessageByURL(C.GoString(operationID), C.GoString(videoBaseInfo)))
+}
+
+//export create_video_message
+func create_video_message(operationID, videoPath *C.char, videoType *C.char, duration C.longlong,
+	snapshotPath *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateVideoMessage(C.GoString(operationID), C.GoString(videoPath),
+		C.GoString(videoType), int64(duration), C.GoString(snapshotPath)))
+}
+
+//export create_file_message_by_url
+func create_file_message_by_url(operationID, fileBaseInfo *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateFileMessageByURL(C.GoString(operationID), C.GoString(fileBaseInfo)))
+}
+
+//export create_file_message
+func create_file_message(operationID, filePath, fileName *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateFileMessage(C.GoString(operationID), C.GoString(filePath), C.GoString(fileName)))
+}
+
+//export create_merger_message
+func create_merger_message(operationID, messageList, title, summaryList *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateMergerMessage(C.GoString(operationID), C.GoString(messageList),
+		C.GoString(title), C.GoString(summaryList)))
+}
+
+//export create_face_message
+func create_face_message(operationID *C.char, index C.int, data *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateFaceMessage(C.GoString(operationID), int(index), C.GoString(data)))
+}
+
+//export create_forward_message
+func create_forward_message(operationID, m *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateForwardMessage(C.GoString(operationID), C.GoString(m)))
+}
+
+//export create_markdown_message
+func create_markdown_message(operationID, text *C.char) *C.char {
+	return C.CString(open_im_sdk.CreateMarkdownMessage(C.GoString(operationID), C.GoString(text)))
+}
+
+//export get_all_conversation_list
+func get_all_conversation_list(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetAllConversationList(baseCallback, C.GoString(operationID))
+}
+
+//export get_conversation_list_split
+func get_conversation_list_split(cCallback C.CB_S_I_S_S, operationID *C.char, offset C.int, count C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetConversationListSplit(baseCallback, C.GoString(operationID), int(offset), int(count))
+}
+
+//export get_one_conversation
+func get_one_conversation(cCallback C.CB_S_I_S_S, operationID *C.char, sessionType C.int, sourceID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetOneConversation(baseCallback, C.GoString(operationID), int32(sessionType), C.GoString(sourceID))
+}
+
+//export get_multiple_conversation
+func get_multiple_conversation(cCallback C.CB_S_I_S_S, operationID *C.char, conversationIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetMultipleConversation(baseCallback, C.GoString(operationID), C.GoString(conversationIDList))
+}
+
+//export set_conversation
+func set_conversation(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetConversation(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(req))
+}
+
+//export hide_conversation
+func hide_conversation(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.HideConversation(baseCallback, C.GoString(operationID), C.GoString(conversationID))
+}
+
+//export unhide_conversation
+func unhide_conversation(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UnhideConversation(baseCallback, C.GoString(operationID), C.GoString(conversationID))
+}
+
+//export set_conversation_draft
+func set_conversation_draft(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, draftText *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetConversationDraft(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(draftText))
+}
+
+//export get_total_unread_msg_count
+func get_total_unread_msg_count(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetTotalUnreadMsgCount(baseCallback, C.GoString(operationID))
+}
+
+//export create_conversation_group
+func create_conversation_group(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CreateConversationGroup(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export update_conversation_group
+func update_conversation_group(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdateConversationGroup(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export delete_conversation_group
+func delete_conversation_group(cCallback C.CB_S_I_S_S, operationID *C.char, conversationGroupID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteConversationGroup(baseCallback, C.GoString(operationID), C.GoString(conversationGroupID))
+}
+
+//export get_conversation_groups
+func get_conversation_groups(cCallback C.CB_S_I_S_S, operationID *C.char, conversationGroupType C.longlong) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetConversationGroups(baseCallback, C.GoString(operationID), int64(conversationGroupType))
+}
+
+//export set_conversation_group_order
+func set_conversation_group_order(cCallback C.CB_S_I_S_S, operationID *C.char, orders *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetConversationGroupOrder(baseCallback, C.GoString(operationID), C.GoString(orders))
+}
+
+//export add_conversations_to_groups
+func add_conversations_to_groups(cCallback C.CB_S_I_S_S, operationID *C.char, conversationIDs *C.char, conversationGroupIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.AddConversationsToGroups(baseCallback, C.GoString(operationID), C.GoString(conversationIDs), C.GoString(conversationGroupIDs))
+}
+
+//export remove_conversations_from_groups
+func remove_conversations_from_groups(cCallback C.CB_S_I_S_S, operationID *C.char, conversationIDs *C.char, conversationGroupIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.RemoveConversationsFromGroups(baseCallback, C.GoString(operationID), C.GoString(conversationIDs), C.GoString(conversationGroupIDs))
+}
+
+//export get_conversation_group_by_conversation_id
+func get_conversation_group_by_conversation_id(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetConversationGroupByConversationID(baseCallback, C.GoString(operationID), C.GoString(conversationID))
+}
+
+//export get_conversation_group_info_with_conversations
+func get_conversation_group_info_with_conversations(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetConversationGroupInfoWithConversations(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export get_at_all_tag
+func get_at_all_tag(operationID *C.char) *C.char {
+	return C.CString(open_im_sdk.GetAtAllTag(C.GoString(operationID)))
+}
+
+//export get_conversation_id_by_session_type
+func get_conversation_id_by_session_type(operationID *C.char, sourceID *C.char, sessionType C.int) *C.char {
+	return C.CString(open_im_sdk.GetConversationIDBySessionType(C.GoString(operationID), C.GoString(sourceID), int(sessionType)))
+}
+
+//export send_message
+func send_message(cCallback C.CB_S_I_S_S_I, operationID, message, recvID, groupID, offlinePushInfo *C.char, isOnlineOnly C.int) {
+	sendMsgCallback := NewSendMessageCallback(cCallback, operationID)
+	open_im_sdk.SendMessage(sendMsgCallback, C.GoString(operationID), C.GoString(message), C.GoString(recvID),
+		C.GoString(groupID), C.GoString(offlinePushInfo), parseBool(int(isOnlineOnly)))
+}
+
+//export send_message_not_oss
+func send_message_not_oss(cCallback C.CB_S_I_S_S_I, operationID, message, recvID, groupID, offlinePushInfo *C.char, isOnlineOnly C.int) {
+	sendMsgCallback := NewSendMessageCallback(cCallback, operationID)
+	open_im_sdk.SendMessageNotOss(sendMsgCallback, C.GoString(operationID), C.GoString(message), C.GoString(recvID),
+		C.GoString(groupID), C.GoString(offlinePushInfo), parseBool(int(isOnlineOnly)))
+}
+
+//export find_message_list
+func find_message_list(cCallback C.CB_S_I_S_S, operationID *C.char, findMessageOptions *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.FindMessageList(baseCallback, C.GoString(operationID), C.GoString(findMessageOptions))
+}
+
+//export get_advanced_history_message_list
+func get_advanced_history_message_list(cCallback C.CB_S_I_S_S, operationID, getMessageOptions *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetAdvancedHistoryMessageList(baseCallback, C.GoString(operationID), C.GoString(getMessageOptions))
+}
+
+//export get_advanced_history_message_list_reverse
+func get_advanced_history_message_list_reverse(cCallback C.CB_S_I_S_S, operationID *C.char, getMessageOptions *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetAdvancedHistoryMessageListReverse(baseCallback, C.GoString(operationID), C.GoString(getMessageOptions))
+}
+
+//export revoke_message
+func revoke_message(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.RevokeMessage(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(clientMsgID))
+}
+
+//export typing_status_update
+func typing_status_update(cCallback C.CB_S_I_S_S, operationID *C.char, recvID *C.char, msgTip *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.TypingStatusUpdate(baseCallback, C.GoString(operationID), C.GoString(recvID), C.GoString(msgTip))
+}
+
+//export mark_conversation_message_as_read
+func mark_conversation_message_as_read(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.MarkConversationMessageAsRead(baseCallback, C.GoString(operationID), C.GoString(conversationID))
+}
+
+//export send_group_message_read_receipt
+func send_group_message_read_receipt(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SendGroupMessageReadReceipt(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(clientMsgIDs))
+}
+
+//export get_group_message_reader_list
+func get_group_message_reader_list(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char, filter, offset, count C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetGroupMessageReaderList(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(clientMsgID), int32(filter), int32(offset), int32(count))
+}
+
+//export delete_message_from_local_storage
+func delete_message_from_local_storage(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteMessageFromLocalStorage(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(clientMsgID))
+}
+
+//export delete_message
+func delete_message(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteMessage(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(clientMsgID))
+}
+
+//export hide_all_conversations
+func hide_all_conversations(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.HideAllConversations(baseCallback, C.GoString(operationID))
+}
+
+//export delete_all_msg_from_local_and_svr
+func delete_all_msg_from_local_and_svr(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteAllMsgFromLocalAndSvr(baseCallback, C.GoString(operationID))
+}
+
+//export delete_all_msg_from_local
+func delete_all_msg_from_local(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteAllMsgFromLocal(baseCallback, C.GoString(operationID))
+}
+
+//export clear_conversation_and_delete_all_msg
+func clear_conversation_and_delete_all_msg(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.ClearConversationAndDeleteAllMsg(baseCallback, C.GoString(operationID), C.GoString(conversationID))
+}
+
+//export delete_conversation_and_delete_all_msg
+func delete_conversation_and_delete_all_msg(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteConversationAndDeleteAllMsg(baseCallback, C.GoString(operationID), C.GoString(conversationID))
+}
+
+//export insert_single_message_to_local_storage
+func insert_single_message_to_local_storage(cCallback C.CB_S_I_S_S, operationID *C.char, message *C.char, recvID *C.char, sendID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.InsertSingleMessageToLocalStorage(baseCallback, C.GoString(operationID), C.GoString(message), C.GoString(recvID), C.GoString(sendID))
+}
+
+//export insert_group_message_to_local_storage
+func insert_group_message_to_local_storage(cCallback C.CB_S_I_S_S, operationID *C.char, message *C.char, groupID *C.char, sendID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.InsertGroupMessageToLocalStorage(baseCallback, C.GoString(operationID), C.GoString(message), C.GoString(groupID), C.GoString(sendID))
+}
+
+//export search_local_messages
+func search_local_messages(cCallback C.CB_S_I_S_S, operationID *C.char, searchParam *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SearchLocalMessages(baseCallback, C.GoString(operationID), C.GoString(searchParam))
+}
+
+//export set_message_local_ex
+func set_message_local_ex(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char, localEx *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetMessageLocalEx(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(clientMsgID), C.GoString(localEx))
+}
+
+//export set_message_local_content
+func set_message_local_content(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, message *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetMessageLocalContent(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(message))
+}
+
+//export change_input_states
+func change_input_states(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, inputStatus C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.ChangeInputStates(baseCallback, C.GoString(operationID), C.GoString(conversationID), parseBool(int(inputStatus)))
+}
+
+//export fetch_surrounding_messages
+func fetch_surrounding_messages(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.FetchSurroundingMessages(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export modify_message
+func modify_message(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.ModifyMessage(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export delete_messages
+func delete_messages(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteMessages(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export delete_user_all_messages_in_conv
+func delete_user_all_messages_in_conv(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, userID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteUserAllMessagesInConv(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(userID))
+}
+
+//export set_conversation_pinned_msg
+func set_conversation_pinned_msg(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char, pinned C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetConversationPinnedMsg(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(clientMsgID), parseBool(int(pinned)))
+}
+
+//export get_conversation_pinned_msg
+func get_conversation_pinned_msg(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetConversationPinnedMsg(baseCallback, C.GoString(operationID), C.GoString(conversationID))
+}
+
+//export reset_conversation_unread
+func reset_conversation_unread(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.ResetConversationUnread(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export get_input_states
+func get_input_states(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, userID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetInputStates(baseCallback, C.GoString(operationID), C.GoString(conversationID), C.GoString(userID))
+}
+
+// =====================================================user===============================================
+
+//export get_users_info
+func get_users_info(cCallback C.CB_S_I_S_S, operationID *C.char, userIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetUsersInfo(baseCallback, C.GoString(operationID), C.GoString(userIDs))
+}
+
+//export set_self_info
+func set_self_info(cCallback C.CB_S_I_S_S, operationID *C.char, userInfo *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetSelfInfo(baseCallback, C.GoString(operationID), C.GoString(userInfo))
+}
+
+//export get_self_user_info
+func get_self_user_info(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetSelfUserInfo(baseCallback, C.GoString(operationID))
+}
+
+//export get_file_transfer
+func get_file_transfer(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetFileTransfer(baseCallback, C.GoString(operationID))
+}
+
+// =====================================================file===============================================
+//
+
+//export upload_file
+func upload_file(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char, uploadCallback C.CB_I_S) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	uploadFileCallback := NewUploadFileCallback(uploadCallback)
+	open_im_sdk.UploadFile(baseCallback, C.GoString(operationID), C.GoString(req), uploadFileCallback)
+}
+
+//export cancel_upload
+func cancel_upload(cCallback C.CB_S_I_S_S, operationID *C.char, cancelID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CancelUpload(baseCallback, C.GoString(operationID), C.GoString(cancelID))
+}
+
+// =====================================================relation===============================================
+//
+//export get_specified_friends_info
+func get_specified_friends_info(cCallback C.CB_S_I_S_S, operationID *C.char, userIDList *C.char, filterBlack C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetSpecifiedFriendsInfo(baseCallback, C.GoString(operationID), C.GoString(userIDList), parseBool(int(filterBlack)))
+}
+
+//export get_friend_list
+func get_friend_list(cCallback C.CB_S_I_S_S, operationID *C.char, filterBlack C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetFriendList(baseCallback, C.GoString(operationID), parseBool(int(filterBlack)))
+}
+
+//export get_friend_list_page
+func get_friend_list_page(cCallback C.CB_S_I_S_S, operationID *C.char, offset C.int, count C.int, filterBlack C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetFriendListPage(baseCallback, C.GoString(operationID), int32(offset), int32(count), parseBool(int(filterBlack)))
+}
+
+//export search_friends
+func search_friends(cCallback C.CB_S_I_S_S, operationID *C.char, searchParam *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SearchFriends(baseCallback, C.GoString(operationID), C.GoString(searchParam))
+}
+
+//export check_friend
+func check_friend(cCallback C.CB_S_I_S_S, operationID *C.char, userIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CheckFriend(baseCallback, C.GoString(operationID), C.GoString(userIDList))
+}
+
+//export add_friend
+func add_friend(cCallback C.CB_S_I_S_S, operationID *C.char, userIDReqMsg *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.AddFriend(baseCallback, C.GoString(operationID), C.GoString(userIDReqMsg))
+}
+
+//export update_friends
+func update_friends(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdateFriends(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export delete_friend
+func delete_friend(cCallback C.CB_S_I_S_S, operationID *C.char, friendUserID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteFriend(baseCallback, C.GoString(operationID), C.GoString(friendUserID))
+}
+
+//export get_friend_application_list_as_recipient
+func get_friend_application_list_as_recipient(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetFriendApplicationListAsRecipient(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export get_friend_application_list_as_applicant
+func get_friend_application_list_as_applicant(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetFriendApplicationListAsApplicant(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export accept_friend_application
+func accept_friend_application(cCallback C.CB_S_I_S_S, operationID *C.char, userIDHandleMsg *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.AcceptFriendApplication(baseCallback, C.GoString(operationID), C.GoString(userIDHandleMsg))
+}
+
+//export refuse_friend_application
+func refuse_friend_application(cCallback C.CB_S_I_S_S, operationID *C.char, userIDHandleMsg *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.RefuseFriendApplication(baseCallback, C.GoString(operationID), C.GoString(userIDHandleMsg))
+}
+
+//export get_friend_application_unhandled_count
+func get_friend_application_unhandled_count(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetFriendApplicationUnhandledCount(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export add_black
+func add_black(cCallback C.CB_S_I_S_S, operationID *C.char, blackUserID *C.char, ex *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.AddBlack(baseCallback, C.GoString(operationID), C.GoString(blackUserID), C.GoString(ex))
+}
+
+//export get_black_list
+func get_black_list(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetBlackList(baseCallback, C.GoString(operationID))
+}
+
+//export remove_black
+func remove_black(cCallback C.CB_S_I_S_S, operationID *C.char, removeUserID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.RemoveBlack(baseCallback, C.GoString(operationID), C.GoString(removeUserID))
+
+}
+
+//export delete_friend_requests
+func delete_friend_requests(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteFriendRequests(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+// =====================================================group===============================================
+// CreateGroup creates a group
+//
+//export create_group
+func create_group(cCallback C.CB_S_I_S_S, operationID, cGroupReqInfo *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CreateGroup(baseCallback, C.GoString(operationID), C.GoString(cGroupReqInfo))
+}
+
+// JoinGroup joins a group
+//
+//export join_group
+func join_group(cCallback C.CB_S_I_S_S, operationID, cGroupID, cReqMsg *C.char, cJoinSource C.int, ex *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.JoinGroup(baseCallback, C.GoString(operationID), C.GoString(cGroupID), C.GoString(cReqMsg),
+		int32(cJoinSource), C.GoString(ex))
+}
+
+// QuitGroup quits a group
+//
+//export quit_group
+func quit_group(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.QuitGroup(baseCallback, C.GoString(operationID), C.GoString(cGroupID))
+}
+
+// DismissGroup dismisses a group
+//
+//export dismiss_group
+func dismiss_group(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DismissGroup(baseCallback, C.GoString(operationID), C.GoString(cGroupID))
+}
+
+// ChangeGroupMute changes the mute status of a group
+//
+//export change_group_mute
+func change_group_mute(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char, cIsMute C.int, muteBypassUserIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.ChangeGroupMute(baseCallback, C.GoString(operationID), C.GoString(cGroupID), parseBool(int(cIsMute)), C.GoString(muteBypassUserIDs))
+}
+
+// ChangeGroupMemberMute changes the mute status of a group member
+//
+//export change_group_member_mute
+func change_group_member_mute(cCallback C.CB_S_I_S_S, operationID, cGroupID, cUserID *C.char, cMutedSeconds C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.ChangeGroupMemberMute(baseCallback, C.GoString(operationID), C.GoString(cGroupID), C.GoString(cUserID),
+		int(cMutedSeconds))
+}
+
+// SetGroupMemberInfo sets the information of a group member
+//
+//export set_group_member_info
+func set_group_member_info(cCallback C.CB_S_I_S_S, operationID *C.char, cGroupMemberInfo *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetGroupMemberInfo(baseCallback, C.GoString(operationID), C.GoString(cGroupMemberInfo))
+}
+
+// GetJoinedGroupList retrieves the list of joined groups
+//
+//export get_joined_group_list
+func get_joined_group_list(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetJoinedGroupList(baseCallback, C.GoString(operationID))
+}
+
+// GetJoinedGroupListPage retrieves the list of joined groups with pagination
+//
+//export get_joined_group_list_page
+func get_joined_group_list_page(cCallback C.CB_S_I_S_S, operationID *C.char, offset, count C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetJoinedGroupListPage(baseCallback, C.GoString(operationID), int32(offset), int32(count))
+}
+
+// GetSpecifiedGroupsInfo retrieves the information of specified groups
+//
+//export get_specified_groups_info
+func get_specified_groups_info(cCallback C.CB_S_I_S_S, operationID, cGroupIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetSpecifiedGroupsInfo(baseCallback, C.GoString(operationID), C.GoString(cGroupIDList))
+}
+
+// SearchGroups searches for groups
+//
+//export search_groups
+func search_groups(cCallback C.CB_S_I_S_S, operationID, cSearchParam *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SearchGroups(baseCallback, C.GoString(operationID), C.GoString(cSearchParam))
+}
+
+// SetGroupInfo sets the information of a group
+//
+//export set_group_info
+func set_group_info(cCallback C.CB_S_I_S_S, operationID, cGroupInfo *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetGroupInfo(baseCallback, C.GoString(operationID), C.GoString(cGroupInfo))
+}
+
+// GetGroupMemberList retrieves the list of group members
+//
+//export get_group_member_list
+func get_group_member_list(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char, cFilter, cOffset, cCount C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetGroupMemberList(baseCallback, C.GoString(operationID), C.GoString(cGroupID), int32(cFilter),
+		int32(cOffset), int32(cCount))
+}
+
+//// GetGroupMemberOwnerAndAdmin retrieves the owner and admin members of a group
+////
+////export get_group_member_owner_and_admin
+//func get_group_member_owner_and_admin(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char) {
+//	baseCallback := NewBaseCallback(cCallback, operationID)
+//	open_im_sdk.GetGroupMemberOwnerAndAdmin(baseCallback, C.GoString(operationID), C.GoString(cGroupID))
+//}
+
+// GetGroupMemberListByJoinTimeFilter retrieves the list of group members filtered by join time
+//
+//export get_group_member_list_by_join_time_filter
+func get_group_member_list_by_join_time_filter(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char, cOffset,
+	cCount C.int, cJoinTimeBegin, cJoinTimeEnd C.longlong, cFilterUserIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetGroupMemberListByJoinTimeFilter(baseCallback, C.GoString(operationID), C.GoString(cGroupID),
+		int32(cOffset), int32(cCount), int64(cJoinTimeBegin), int64(cJoinTimeEnd), C.GoString(cFilterUserIDList))
+}
+
+// GetSpecifiedGroupMembersInfo retrieves the information of specified group members
+//
+//export get_specified_group_members_info
+func get_specified_group_members_info(cCallback C.CB_S_I_S_S, operationID, cGroupID, cUserIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetSpecifiedGroupMembersInfo(baseCallback, C.GoString(operationID), C.GoString(cGroupID),
+		C.GoString(cUserIDList))
+}
+
+// KickGroupMember kicks group members
+//
+//export kick_group_member
+func kick_group_member(cCallback C.CB_S_I_S_S, operationID, cGroupID, cReason, cUserIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.KickGroupMember(baseCallback, C.GoString(operationID), C.GoString(cGroupID), C.GoString(cReason),
+		C.GoString(cUserIDList))
+}
+
+// TransferGroupOwner transfers the ownership of a group
+//
+//export transfer_group_owner
+func transfer_group_owner(cCallback C.CB_S_I_S_S, operationID, cGroupID, cNewOwnerUserID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.TransferGroupOwner(baseCallback, C.GoString(operationID), C.GoString(cGroupID),
+		C.GoString(cNewOwnerUserID))
+}
+
+// InviteUserToGroup invites users to a group
+//
+//export invite_user_to_group
+func invite_user_to_group(cCallback C.CB_S_I_S_S, operationID, cGroupID, cReason, cUserIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.InviteUserToGroup(baseCallback, C.GoString(operationID), C.GoString(cGroupID), C.GoString(cReason),
+		C.GoString(cUserIDList))
+}
+
+// GetGroupApplicationListAsRecipient retrieves the group application list as a recipient
+//
+//export get_group_application_list_as_recipient
+func get_group_application_list_as_recipient(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetGroupApplicationListAsRecipient(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+// GetGroupApplicationListAsApplicant retrieves the group application list as an applicant
+//
+//export get_group_application_list_as_applicant
+func get_group_application_list_as_applicant(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetGroupApplicationListAsApplicant(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+// AcceptGroupApplication accepts a group application
+//
+//export accept_group_application
+func accept_group_application(cCallback C.CB_S_I_S_S, operationID, cGroupID, cFromUserID, cHandleMsg *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.AcceptGroupApplication(baseCallback, C.GoString(operationID), C.GoString(cGroupID),
+		C.GoString(cFromUserID), C.GoString(cHandleMsg))
+}
+
+// RefuseGroupApplication refuses a group application
+//
+//export refuse_group_application
+func refuse_group_application(cCallback C.CB_S_I_S_S, operationID, cGroupID, cFromUserID, cHandleMsg *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.RefuseGroupApplication(baseCallback, C.GoString(operationID), C.GoString(cGroupID),
+		C.GoString(cFromUserID), C.GoString(cHandleMsg))
+}
+
+// CheckLocalGroupFullSync checks if the local group is fully synchronized
+//
+//export check_local_group_full_sync
+func check_local_group_full_sync(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CheckLocalGroupFullSync(baseCallback, C.GoString(operationID))
+}
+
+// CheckGroupMemberFullSync checks if the group members are fully synchronized
+//
+//export check_group_member_full_sync
+func check_group_member_full_sync(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CheckGroupMemberFullSync(baseCallback, C.GoString(operationID), C.GoString(cGroupID))
+}
+
+// GetGroupApplicationUnhandledCount retrieves the count of unhandled group applications
+//
+//export get_group_application_unhandled_count
+func get_group_application_unhandled_count(cCallback C.CB_S_I_S_S, operationID, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetGroupApplicationUnhandledCount(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+// SearchGroupMembers searches for group members
+//
+//export search_group_members
+func search_group_members(cCallback C.CB_S_I_S_S, operationID, cSearchParam *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SearchGroupMembers(baseCallback, C.GoString(operationID), C.GoString(cSearchParam))
+}
+
+// IsJoinGroup checks if the user has joined a group
+//
+//export is_join_group
+func is_join_group(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.IsJoinGroup(baseCallback, C.GoString(operationID), C.GoString(cGroupID))
+}
+
+// GetUsersInGroup retrieves the users in a group
+//
+//export get_users_in_group
+func get_users_in_group(cCallback C.CB_S_I_S_S, operationID, cGroupID, userIDList *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetUsersInGroup(baseCallback, C.GoString(operationID), C.GoString(cGroupID), C.GoString(userIDList))
+}
+
+//export delete_group_requests
+func delete_group_requests(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteGroupRequests(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+// =====================================================signaling===============================================
+// signaling_invite_in_group sends an invitation to join a group for signaling purposes.
+//
+//export signaling_invite_in_group
+func signaling_invite_in_group(cCallback C.CB_S_I_S_S, operationID, cSignalInviteInGroupReq *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingInviteInGroup(baseCallback, C.GoString(operationID), C.GoString(cSignalInviteInGroupReq))
+}
+
+// signaling_invite sends a signaling invitation to a user.
+//
+//export signaling_invite
+func signaling_invite(cCallback C.CB_S_I_S_S, operationID, cSignalInviteReq *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingInvite(baseCallback, C.GoString(operationID), C.GoString(cSignalInviteReq))
+}
+
+// signaling_accept accepts a received signaling invitation.
+//
+//export signaling_accept
+func signaling_accept(cCallback C.CB_S_I_S_S, operationID, cSignalAcceptReq *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingAccept(baseCallback, C.GoString(operationID), C.GoString(cSignalAcceptReq))
+}
+
+// signaling_reject rejects a received signaling invitation.
+//
+//export signaling_reject
+func signaling_reject(cCallback C.CB_S_I_S_S, operationID, cSignalRejectReq *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingReject(baseCallback, C.GoString(operationID), C.GoString(cSignalRejectReq))
+}
+
+// signaling_cancel cancels an ongoing signaling session.
+//
+//export signaling_cancel
+func signaling_cancel(cCallback C.CB_S_I_S_S, operationID, cSignalCancelReq *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingCancel(baseCallback, C.GoString(operationID), C.GoString(cSignalCancelReq))
+}
+
+// signaling_hung_up sends a hang-up signal to end the signaling session.
+//
+//export signaling_hung_up
+func signaling_hung_up(cCallback C.CB_S_I_S_S, operationID, cSignalHungUpReq *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingHungUp(baseCallback, C.GoString(operationID), C.GoString(cSignalHungUpReq))
+}
+
+// signaling_get_room_by_group_id retrieves the signaling room information associated with a specific group ID.
+//
+//export signaling_get_room_by_group_id
+func signaling_get_room_by_group_id(cCallback C.CB_S_I_S_S, operationID, cGroupID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingGetRoomByGroupID(baseCallback, C.GoString(operationID), C.GoString(cGroupID))
+}
+
+// signaling_get_token_by_room_id retrieves the signaling token associated with a specific room ID.
+//
+//export signaling_get_token_by_room_id
+func signaling_get_token_by_room_id(cCallback C.CB_S_I_S_S, operationID, cRoomID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingGetTokenByRoomID(baseCallback, C.GoString(operationID), C.GoString(cRoomID))
+}
+
+// get_signaling_invitation_info_start_app retrieves the signaling invitation information when starting an app.
+//
+//export get_signaling_invitation_info_start_app
+func get_signaling_invitation_info_start_app(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetSignalingInvitationInfoStartApp(baseCallback, C.GoString(operationID))
+}
+
+// // signaling_create_meeting creates a signaling meeting with the given request parameters.
+// //
+// //export signaling_create_meeting
+// func signaling_create_meeting(cCallback C.CB_S_I_S_S, operationID, cSignalingCreateMeetingReq *C.char) {
+// 	baseCallback := NewBaseCallback(cCallback, operationID)
+// 	open_im_sdk.SignalingCreateMeeting(baseCallback, C.GoString(operationID), C.GoString(cSignalingCreateMeetingReq))
+// }
+
+// // signaling_join_meeting joins a signaling meeting with the provided meeting request.
+// //
+// //export signaling_join_meeting
+// func signaling_join_meeting(cCallback C.CB_S_I_S_S, operationID, cSignalingJoinMeetingReq *C.char) {
+// 	baseCallback := NewBaseCallback(cCallback, operationID)
+// 	open_im_sdk.SignalingJoinMeeting(baseCallback, C.GoString(operationID), C.GoString(cSignalingJoinMeetingReq))
+// }
+
+// // signaling_update_meeting_info updates the meeting information with the provided update request.
+// //
+// //export signaling_update_meeting_info
+// func signaling_update_meeting_info(cCallback C.CB_S_I_S_S, operationID, cSignalingUpdateMeetingInfoReq *C.char) {
+// 	baseCallback := NewBaseCallback(cCallback, operationID)
+// 	open_im_sdk.SignalingUpdateMeetingInfo(baseCallback, C.GoString(operationID), C.GoString(cSignalingUpdateMeetingInfoReq))
+// }
+
+// // signaling_close_room closes the signaling room associated with the specified room ID.
+// //
+// //export signaling_close_room
+// func signaling_close_room(cCallback C.CB_S_I_S_S, operationID, cRoomID *C.char) {
+// 	baseCallback := NewBaseCallback(cCallback, operationID)
+// 	open_im_sdk.SignalingCloseRoom(baseCallback, C.GoString(operationID), C.GoString(cRoomID))
+// }
+
+// // signaling_get_meetings retrieves a list of current signaling meetings.
+// //
+// //export signaling_get_meetings
+// func signaling_get_meetings(cCallback C.CB_S_I_S_S, operationID *C.char) {
+// 	baseCallback := NewBaseCallback(cCallback, operationID)
+// 	open_im_sdk.SignalingGetMeetings(baseCallback, C.GoString(operationID))
+// }
+
+// // signaling_operate_stream operates a stream in a signaling context with given parameters.
+// //
+// //export signaling_operate_stream
+// func signaling_operate_stream(cCallback C.CB_S_I_S_S, operationID, cStreamType, cRoomID, cUserID *C.char, mute, muteAll C.int) {
+// 	baseCallback := NewBaseCallback(cCallback, operationID)
+// 	open_im_sdk.SignalingOperateStream(baseCallback, C.GoString(operationID), C.GoString(cStreamType),
+// 		C.GoString(cRoomID), C.GoString(cUserID), parseBool(int(mute)), parseBool(int(muteAll)))
+// }
+
+// signaling_send_custom_signal sends a custom signal within a signaling context to a specified room.
+//
+//export signaling_send_custom_signal
+func signaling_send_custom_signal(cCallback C.CB_S_I_S_S, operationID, cCustomInfo, cRoomID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SignalingSendCustomSignal(baseCallback, C.GoString(operationID), C.GoString(cCustomInfo), C.GoString(cRoomID))
+}
+
+// =====================================================online===============================================
+
+//export subscribe_users_status
+func subscribe_users_status(cCallback C.CB_S_I_S_S, operationID *C.char, userIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SubscribeUsersStatus(baseCallback, C.GoString(operationID), C.GoString(userIDs))
+}
+
+//export unsubscribe_users_status
+func unsubscribe_users_status(cCallback C.CB_S_I_S_S, operationID *C.char, userIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UnsubscribeUsersStatus(baseCallback, C.GoString(operationID), C.GoString(userIDs))
+}
+
+//export get_subscribe_users_status
+func get_subscribe_users_status(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetSubscribeUsersStatus(baseCallback, C.GoString(operationID))
+}
+
+//export get_user_status
+func get_user_status(cCallback C.CB_S_I_S_S, operationID *C.char, userIDs *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetUserStatus(baseCallback, C.GoString(operationID), C.GoString(userIDs))
+}
+
+// =====================================================third===============================================
+
+//export create_timer_task
+func create_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CreateTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export update_timer_task
+func update_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdateTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export delete_timer_task
+func delete_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.DeleteTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export get_timer_task
+func get_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.GetTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export list_timer_tasks
+func list_timer_tasks(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.ListTimerTasks(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export create_message_timer_task
+func create_message_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CreateMessageTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export create_http_timer_task
+func create_http_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CreateHttpTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export create_rpc_timer_task
+func create_rpc_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CreateRpcTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export create_preset_timer_task
+func create_preset_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.CreatePresetTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export update_message_timer_task
+func update_message_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdateMessageTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export update_http_timer_task
+func update_http_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdateHttpTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export update_rpc_timer_task
+func update_rpc_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdateRpcTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export update_preset_timer_task
+func update_preset_timer_task(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdatePresetTimerTask(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export speech_to_text
+func speech_to_text(cCallback C.CB_S_I_S_S, operationID *C.char, req *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SpeechToText(baseCallback, C.GoString(operationID), C.GoString(req))
+}
+
+//export speech_to_text_capabilities
+func speech_to_text_capabilities(cCallback C.CB_S_I_S_S, operationID *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SpeechToTextCapabilities(baseCallback, C.GoString(operationID))
+}
+
+//export update_fcm_token
+func update_fcm_token(cCallback C.CB_S_I_S_S, operationID, fcmToken *C.char, expireTime C.longlong) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.UpdateFcmToken(baseCallback, C.GoString(operationID), C.GoString(fcmToken), int64(expireTime))
+}
+
+//export set_app_Badge
+func set_app_Badge(cCallback C.CB_S_I_S_S, operationID *C.char, appUnreadCount C.int) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.SetAppBadge(baseCallback, C.GoString(operationID), int32(appUnreadCount))
+}
+
+//export upload_logs
+func upload_logs(cCallback C.CB_S_I_S_S, operationID *C.char, line C.int, cancelID *C.char, ex *C.char, uploadLogProgressCallback C.CB_I_S) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	uploadLogCallback := NewUploadLogProgressCallback(uploadLogProgressCallback)
+	open_im_sdk.UploadLogs(baseCallback, C.GoString(operationID), int(line), C.GoString(cancelID), C.GoString(ex), uploadLogCallback)
+}
+
+//export logs
+func logs(cCallback C.CB_S_I_S_S, operationID *C.char, logLevel C.int, file *C.char, line C.int, msgs *C.char, err *C.char, keyAndValue *C.char) {
+	baseCallback := NewBaseCallback(cCallback, operationID)
+	open_im_sdk.Logs(baseCallback, C.GoString(operationID), int(logLevel), C.GoString(file), int(line), C.GoString(msgs), C.GoString(err), C.GoString(keyAndValue))
+}
+
+func main() {
+
+}

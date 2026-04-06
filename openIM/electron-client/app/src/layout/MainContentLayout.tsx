@@ -18,6 +18,8 @@ export const MainContentLayout = () => {
   const syncState = useUserStore((state) => state.syncState);
   const reinstall = useUserStore((state) => state.reinstall);
   const isLogining = useUserStore((state) => state.isLogining);
+  const preloadState = useUserStore((state) => state.preloadState);
+  const preloadProgress = useUserStore((state) => state.preloadProgress);
 
   useMount(() => {
     const isRoot = !matches.find((item) => item.pathname !== "/");
@@ -29,8 +31,12 @@ export const MainContentLayout = () => {
     }
   });
 
-  const loadingTip = isLogining ? t("common.toast.loading") : `${progress}%`;
-  const showLockLoading = isLogining || (reinstall && syncState === "loading");
+  const loadingTip = isLogining
+    ? t("common.toast.loading")
+    : preloadState === "loading"
+      ? `正在加载对话 ${preloadProgress}`
+      : `${progress}%`;
+  const showLockLoading = isLogining || (reinstall && syncState === "loading") || preloadState === "loading";
 
   return (
     <Spin className="max-h-none!" spinning={showLockLoading} tip={loadingTip}>

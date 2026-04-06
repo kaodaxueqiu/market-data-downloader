@@ -1,0 +1,715 @@
+syntax = "proto3";
+package openmeeting.meeting;
+
+import "sdkws/sdkws.proto";
+import "wrapperspb/wrapperspb.proto";
+
+option go_package = "github.com/openimsdk/protocol/openmeeting/meeting";
+
+// Defines LiveKit access information.
+message LiveKit {
+  string token = 1; // Access token for authentication.
+  string url = 2; // URL to connect to LiveKit.
+}
+
+// Information about a specific meeting that cannot be changed once set.
+message SystemGeneratedMeetingInfo {
+  string creatorUserID = 1; // The user ID of the meeting creator.
+  string creatorNickname = 2; // The user name of the meeting creator.
+  string status = 3; // The current status of the meeting, e.g., scheduled, in-progress, completed.
+  int64 startTime = 4; // The actual start time of the meeting (as a timestamp).
+  string meetingID = 5; // Unique identifier for the meeting.
+}
+
+// Information about a specific meeting that can be modified.
+message CreatorDefinedMeetingInfo {
+  string title = 1; // The title of the meeting.
+  int64 scheduledTime = 2; // The scheduled start time of the meeting (as a timestamp).
+  int64 meetingDuration = 3; // The duration of the meeting in seconds.
+  string password = 4; // Password required to join the meeting, if any.
+  string timeZone = 5; // creator specify time zone.
+  string hostUserID = 6;
+  repeated string coHostUSerID = 7;
+  repeated string inviteeUserIDs = 8;
+}
+
+// Information about a specific meeting, combining system-generated and creator-defined information.
+message MeetingInfo {
+  SystemGeneratedMeetingInfo systemGenerated = 1;
+  CreatorDefinedMeetingInfo creatorDefinedMeeting = 2;
+}
+
+enum DayOfWeek {
+  SUNDAY = 0;
+  MONDAY = 1;
+  TUESDAY = 2;
+  WEDNESDAY = 3;
+  THURSDAY = 4;
+  FRIDAY = 5;
+  SATURDAY = 6;
+}
+
+enum KickOffReason {
+  DuplicatedLogin = 0;
+  Offline = 1;
+  Logout = 2;
+}
+
+enum MeetingEndType {
+  CancelType = 0;
+  EndType = 1;
+}
+
+enum RepeatType {
+  REPEAT_TYPE_NONE = 0;
+  REPEAT_TYPE_DAILY = 1;
+  REPEAT_TYPE_WEEKLY = 2;
+  REPEAT_TYPE_WEEKDAY = 3;
+  REPEAT_TYPE_MONTHLY = 4;
+  REPEAT_TYPE_YEARLY = 5;
+  REPEAT_TYPE_HOURLY = 6;
+}
+
+message MeetingRepeatInfo {
+  int64 endDate = 1;
+  int32 repeatTimes = 2;
+  RepeatType repeatType = 3;
+  int32 interval = 5;
+  repeated DayOfWeek repeatDaysOfWeek = 6; // repeat days of the week
+  string repeatMeetingID = 8; // linkage to the repeat meeting definition
+  int32 repeatSequence = 9; // nth generated meeting of the repeat meeting
+  reserved 4, 7;
+}
+
+// Request-only repeat info; excludes server-managed fields.
+message MeetingRepeatInfoReq {
+  int64 endDate = 1;
+  int32 repeatTimes = 2;
+  RepeatType repeatType = 3;
+  int32 interval = 5;
+  repeated DayOfWeek repeatDaysOfWeek = 6; // repeat days of the week
+  reserved 4, 7;
+}
+
+enum RepeatStatus {
+  REPEAT_STATUS_UNKNOWN = 0;
+  REPEAT_STATUS_ACTIVE = 1;
+  REPEAT_STATUS_COMPLETED = 2;
+}
+
+// Settings controlling meeting features such as video, audio, and screen sharing permissions.
+message MeetingSetting {
+  bool canParticipantsEnableCamera = 1; // Whether participants can enable their video camera.
+  bool canParticipantsUnmuteMicrophone = 2; // Whether participants can unmute their microphone.
+  bool canParticipantsShareScreen = 3; // Whether participants can share their screen.
+  bool disableCameraOnJoin = 4; // Whether the camera is disabled by default when joining.
+  bool disableMicrophoneOnJoin = 5; // Whether the microphone is disabled by default when joining.
+  bool canParticipantJoinMeetingEarly = 6; // Allow participants to join the meeting early.
+  bool lockMeeting = 7; // if the meeting is locked, new comer could not join the meeting.
+  bool audioEncouragement = 8; // could turn on the audio encouragement for client.
+  bool videoMirroring = 9; // could turn on the video mirroring for client.
+  // Whether to record this meeting instance. Interpretation depends on server policy:
+  // force -> always on, allow -> follow this flag, deny -> always off.
+  bool recordOn = 10;
+}
+
+// Detailed information about a meeting, combining info and settings.
+message MeetingInfoSetting {
+  MeetingInfo info = 1;
+  MeetingSetting setting = 2;
+  MeetingRepeatInfo repeatInfo = 3;
+}
+
+// Recurring meeting definition data
+message RepeatMeetingData {
+  string repeatMeetingID = 1;
+  string creatorUserID = 2;
+  CreatorDefinedMeetingInfo creatorDefinedMeetingInfo = 3;
+  MeetingSetting setting = 4;
+  MeetingRepeatInfo repeatInfo = 5;
+  int32 generatedCount = 6;
+  int64 nextScheduleTime = 7;
+  RepeatStatus status = 8;
+}
+
+message CreateRepeatMeetingReq {
+  string creatorUserID = 1;
+  CreatorDefinedMeetingInfo creatorDefinedMeetingInfo = 2;
+  MeetingSetting setting = 3;
+  MeetingRepeatInfoReq repeatInfo = 4;
+}
+
+message CreateRepeatMeetingResp {
+  RepeatMeetingData repeatMeeting = 1;
+  MeetingInfoSetting generatedMeeting = 2;
+}
+
+message UpdateRepeatMeetingReq {
+  string repeatMeetingID = 1;
+  string updatingUserID = 2;
+  CreatorDefinedMeetingInfo creatorDefinedMeetingInfo = 3;
+  MeetingSetting setting = 4;
+  MeetingRepeatInfoReq repeatInfo = 5;
+}
+
+message UpdateRepeatMeetingResp {
+  RepeatMeetingData repeatMeeting = 1;
+  MeetingInfoSetting generatedMeeting = 2;
+}
+
+message DeleteRepeatMeetingReq {
+  string repeatMeetingID = 1;
+  string operatorUserID = 2;
+}
+
+message DeleteRepeatMeetingResp {}
+
+message GetRepeatMeetingReq {
+  string repeatMeetingID = 1;
+}
+
+message GetRepeatMeetingResp {
+  RepeatMeetingData repeatMeeting = 1;
+}
+
+message ListRepeatMeetingsReq {
+  string creatorUserID = 1;
+}
+
+message ListRepeatMeetingsResp {
+  repeated RepeatMeetingData repeatMeetings = 1;
+}
+
+message ListRepeatMeetingInstancesReq {
+  string repeatMeetingID = 1;
+}
+
+message ListRepeatMeetingInstancesResp {
+  repeated MeetingInfoSetting meetings = 1;
+}
+
+message UserInfo {
+  string userID = 1;
+  string nickname = 2;
+  string account = 3;
+  string faceURL = 4;
+}
+
+// participant meta data
+message ParticipantMetaData {
+  UserInfo userInfo = 1;
+}
+
+// Request to book a future meeting.
+message BookMeetingReq {
+  string creatorUserID = 1;
+  CreatorDefinedMeetingInfo creatorDefinedMeetingInfo = 2;
+  MeetingSetting setting = 3;
+  MeetingRepeatInfoReq repeatInfo = 4;
+}
+
+// Response after booking a meeting.
+message BookMeetingResp {
+  MeetingInfoSetting detail = 1;
+}
+
+// Request to create an immediate meeting.
+message CreateImmediateMeetingReq {
+  string creatorUserID = 1;
+  CreatorDefinedMeetingInfo creatorDefinedMeetingInfo = 2;
+  MeetingSetting setting = 3;
+}
+
+// Response after creating an immediate meeting.
+message CreateImmediateMeetingResp {
+  MeetingInfoSetting detail = 1;
+  LiveKit liveKit = 2;
+}
+
+// Request to join a meeting.
+message JoinMeetingReq {
+  string meetingID = 1;
+  string userID = 2; // User who joins the meeting.
+  string password = 3;
+}
+
+// Response after joining a meeting.
+message JoinMeetingResp {
+  LiveKit liveKit = 1;
+}
+
+// Request to get a specific meeting token.
+message GetMeetingTokenReq {
+  string meetingID = 1;
+  string userID = 2; // User who joins the meeting.
+}
+
+// Response after getting a specific meeting.
+message GetMeetingTokenResp {
+  string meetingID = 1;
+  LiveKit liveKit = 2;
+}
+
+// Request to leave a meeting.
+message LeaveMeetingReq {
+  string meetingID = 1;
+  string userID = 2; // User who leaves the room.
+}
+
+// Response after leaving a meeting.
+message LeaveMeetingResp {}
+
+// Request to end a meeting.
+message EndMeetingReq {
+  string meetingID = 1;
+  string userID = 2;
+  MeetingEndType endType = 3;
+}
+
+// Response after ending a meeting.
+message EndMeetingResp {}
+
+// Request to get a list of meetings both created and joined by a user.
+message GetMeetingsReq {
+  string userID = 1; // The unique identifier of the user.
+  repeated string status = 2; // The status filter for meetings, e.g., "scheduled", "in-progress", "completed".
+}
+
+// Response with a list of meetings that the user has created or joined.
+message GetMeetingsResp {
+  repeated MeetingInfoSetting meetingDetails = 1; // Detailed information about each meeting.
+}
+
+// Request to get information about a specific meeting.
+message GetMeetingReq {
+  string userID = 1;
+  string meetingID = 2;
+}
+
+// Response with detailed information about a meeting.
+message GetMeetingResp {
+  MeetingInfoSetting meetingDetail = 1;
+}
+
+// Request to invite users to an existing meeting.
+message InviteMeetingInviteesReq {
+  string meetingID = 1;
+  string inviterUserID = 2;
+  repeated string inviteeUserIDs = 3;
+}
+
+// Response after inviting users to a meeting.
+message InviteMeetingInviteesResp {
+  repeated string successUserIDList = 1;
+  repeated string failedUserIDList = 2;
+  MeetingInfoSetting meetingDetail = 3;
+}
+
+message ModifyMeetingParticipantNickNameReq {
+  string meetingID = 1;
+  string userID = 2;
+  string participantUserID = 3;
+  string nickname = 4;
+}
+
+message ModifyMeetingParticipantNickNameResp {}
+
+message InviteeInfo {
+  repeated string inviteeUserIDs = 1;
+}
+
+// Request to update specific fields of a meeting.
+message UpdateMeetingRequest {
+  string meetingID = 1;
+  string updatingUserID = 2;
+  openim.protobuf.StringValue title = 3;
+  openim.protobuf.Int64Value scheduledTime = 4;
+  openim.protobuf.Int64Value meetingDuration = 5;
+  openim.protobuf.StringValue password = 6;
+  openim.protobuf.StringValue timeZone = 7;
+  MeetingRepeatInfo repeatInfo = 8;
+  openim.protobuf.BoolValue canParticipantsEnableCamera = 9;
+  openim.protobuf.BoolValue canParticipantsUnmuteMicrophone = 10;
+  openim.protobuf.BoolValue canParticipantsShareScreen = 11;
+  openim.protobuf.BoolValue disableCameraOnJoin = 12;
+  openim.protobuf.BoolValue disableMicrophoneOnJoin = 13;
+  openim.protobuf.BoolValue canParticipantJoinMeetingEarly = 14; // Allow participants to join the meeting early.
+  openim.protobuf.BoolValue lockMeeting = 15; // if the meeting is locked, new comer could not join the meeting.
+  openim.protobuf.BoolValue audioEncouragement = 16; // could turn on the audio encouragement for client.
+  openim.protobuf.BoolValue videoMirroring = 17; // could turn on the video mirroring for client.
+  InviteeInfo inviteeInfo = 18;
+}
+
+// Response after updating meeting settings.
+message UpdateMeetingResp {}
+
+// Personal meeting settings related to video and audio on entry.
+message PersonalMeetingSetting {
+  bool cameraOnEntry = 1; // Whether the camera should be enabled by default when joining the meeting.
+  bool microphoneOnEntry = 2; // Whether the microphone should be enabled by default when joining the meeting.
+}
+
+// Request to get personal meeting settings.
+message GetPersonalMeetingSettingsReq {
+  string meetingID = 1;
+  string userID = 2;
+}
+
+// Response with personal meeting settings.
+message GetPersonalMeetingSettingsResp {
+  PersonalMeetingSetting setting = 1;
+}
+
+// Request to set personal meeting settings.
+message SetPersonalMeetingSettingsReq {
+  string meetingID = 1;
+  string userID = 2;
+  openim.protobuf.BoolValue cameraOnEntry = 3; // Whether the camera should be enabled by default when joining the meeting.
+  openim.protobuf.BoolValue microphoneOnEntry = 4; // Whether the microphone should be enabled by default when joining the meeting.
+}
+
+// Response after setting personal meeting settings.
+message SetPersonalMeetingSettingsResp {}
+
+message PersonalData {
+  string userID = 1;
+  PersonalMeetingSetting personalSetting = 2;
+  // limitSetting is that host user limit this user's stream operation
+  PersonalMeetingSetting limitSetting = 3;
+}
+
+// Metadata about a meeting, primarily used for encapsulating meeting details.
+message MeetingMetadata {
+  MeetingInfoSetting detail = 1;
+  repeated PersonalData personalData = 2;
+}
+
+// operate room all stream related to video and audio on entry.
+message OperateRoomAllStreamReq {
+  string meetingID = 1;
+  string operatorUserID = 2;
+  openim.protobuf.BoolValue cameraOnEntry = 3; // Whether the camera should be enabled by default when joining the meeting.
+  openim.protobuf.BoolValue microphoneOnEntry = 4; // Whether the microphone should be enabled by default when joining the meeting.
+}
+
+// Response with operate room all stream.
+message OperateRoomAllStreamResp {
+  repeated string streamNotExistUserIDList = 1;
+  repeated string failedUserIDList = 2;
+}
+
+message RemoveMeetingParticipantsReq {
+  string meetingID = 1;
+  string userID = 2;
+  repeated string participantUserIDs = 3;
+}
+
+message RemoveMeetingParticipantsResp {
+  repeated string successUserIDList = 1;
+  repeated string failedUserIDList = 2;
+}
+
+message SetMeetingHostInfoReq {
+  string meetingID = 1;
+  string userID = 2;
+  openim.protobuf.StringValue hostUserID = 3;
+  repeated string coHostUserIDs = 4;
+}
+
+message SetMeetingHostInfoResp {}
+
+message NotifyMeetingData {
+  string operatorUserID = 1;
+  oneof messageType {
+    StreamOperateData streamOperateData = 2;
+    MeetingHostData meetingHostData = 3;
+    KickOffMeetingData kickOffMeetingData = 4;
+    MeetingChatData meetingChatData = 5;
+  }
+}
+
+message MeetingChatData {
+  int64 createTime = 1;
+  repeated  MeetingChatMessage messages = 2;
+}
+
+message KickOffMeetingData {
+  string userID = 1;
+  string nickname = 2;
+  KickOffReason reasonCode = 3;
+  string reason = 4;
+}
+
+message StreamOperateData {
+  repeated UserOperationData operation = 1;
+}
+
+message UserOperationData {
+  string userID = 1;
+  openim.protobuf.BoolValue cameraOnEntry = 2; // Whether the camera should be enabled
+  openim.protobuf.BoolValue microphoneOnEntry = 3; // Whether the microphone should be enabled
+}
+
+message MeetingHostData {
+  string operatorNickname = 2;
+  string userID = 3;
+  string hostType = 4;
+}
+
+message CleanPreviousMeetingsReq {
+  string userID = 1;
+  int32 reasonCode = 2;
+  string reason = 3;
+}
+
+message CleanPreviousMeetingsResp {}
+
+message MeetingUser {
+  string userID = 1;
+  string nickname = 2;
+}
+
+message FileRecord {
+  string size = 1;
+  string fileURL = 2;
+}
+
+message MeetingRecord {
+  string roomID = 1;
+  string meetingName = 2;
+  string ex = 3;
+  string hostUserID = 4;
+  string hostUserNickname = 5;
+  int64 createTime = 6;
+  int64 startTime = 7;
+  int64 endTime = 8;
+  repeated MeetingUser joinedUsers = 9;
+  int32 status = 10;
+  repeated FileRecord fileRecords = 11;
+  string egressID = 20;
+  string downloadUrl = 21;
+  bool egressUploading = 22;
+  // 0: Recording not started
+  // 1: Recording completed
+  // 2: Recording failed
+  // 3: Recording in progress
+  int32 recordStatus = 23;
+  // Video file size in bytes (0 when unknown/unavailable).
+  int64 videoFileSize = 24;
+  // Video cover URL placeholder; field reserved for future implementation.
+  string videoCoverUrl = 25;
+  // Video file name, typically derived from the recording object key.
+  string videoName = 26;
+}
+
+message GetMeetingRecordsReq {
+  string hostUserID = 1;
+  string joinedUserID = 2;
+  int64 startTime = 3;
+  int64 endTime = 4;
+  openim.sdkws.RequestPagination pagination = 5;
+}
+
+message GetMeetingRecordsResp {
+  int32 total = 1;
+  repeated MeetingRecord meetingRecords = 2;
+}
+
+message GetMeetingRecordsByMeetingIDsReq {
+  string userID = 1;
+  repeated string meetingIDs = 2;
+}
+
+message GetMeetingRecordsByMeetingIDsResp {
+  repeated MeetingRecord meetingRecords = 1;
+}
+
+message GetUserMeetingHistoriesReq {
+  string userID = 1;
+  optional int64 startTime = 2;
+  optional int64 endTime = 3;
+  optional openim.sdkws.RequestPagination pagination = 4;
+  repeated string status = 5;
+}
+
+message GetUserMeetingHistoriesResp {
+  int32 total = 1;
+  repeated UserMeetingHistory meetingHistories = 2;
+}
+
+message UserMeetingHistory {
+  string roomID = 1;
+  string meetingName = 2;
+  string hostUserID = 3;
+  string hostUserNickname = 4;
+  int64 startTime = 5;
+  int64 endTime = 6;
+  string status = 7;
+  string ex = 8;
+}
+
+message GetUserHostedMeetingsReq {
+  string userID = 1;
+  optional int64 startTime = 2;
+  optional int64 endTime = 3;
+  optional openim.sdkws.RequestPagination pagination = 4;
+}
+
+message GetUserHostedMeetingsResp {
+  int32 total = 1;
+  repeated HostedMeeting hostedMeetings = 2;
+}
+
+message HostedMeeting {
+  string roomID = 1;
+  string meetingName = 2;
+  string status = 3;
+  int64 startTime = 4;
+  int64 endTime = 5;
+  string ex = 6;
+}
+
+message DeleteMeetingRecordsReq {
+  repeated string roomIDs = 1;
+}
+
+message DeleteMeetingRecordsResp {}
+
+// Meeting chat message payload with sequence and type.
+message MeetingChatMessage {
+  int64 seq = 1;
+  string sendID = 2;
+  int32 contentType = 3;
+  string content = 4;
+  int64  createTimeMs = 5;
+  repeated string dstUserIDs = 6;
+  string nickname = 7;
+  string faceURL = 8;
+}
+
+// Client pulls meeting chat messages incrementally.
+message PullMeetingChatReq {
+  string meetingID = 1;
+  int64 createTime = 2; // client known createTime (0 if unknown)
+  int64 currentSeq = 3; // client last received seq (0 if none)
+  string srcUserID = 4; // caller user id, for auth/log
+}
+
+// Meeting chat delivery payload: meta + messages.
+message PullMeetingChatResp {
+  int64 createTime = 1;
+  repeated MeetingChatMessage messages = 2;
+}
+
+// Client sends a meeting chat message.
+message SendMeetingChatReq {
+  string roomID = 1;
+  string srcUserID = 2;
+  int64 type = 3;
+  string payload = 4;
+  repeated string dstUserIDs = 5; // empty means broadcast to all
+  string nickname = 6;
+  string faceURL = 7;
+}
+
+message SendMeetingChatResp {
+  MeetingChatMessage message = 1;
+}
+
+// Recall a meeting chat message (contentType fixed to 2101).
+message RevokeMeetingChatReq {
+  string roomID = 1;
+  string srcUserID = 2;
+  int64 seq = 3; // target message seq to revoke
+  string ex = 4;
+  int64 sourceMessageSendTime = 5;
+  string sourceMessageSendID = 6;
+  string sourceMessageSenderNickname = 7;
+}
+
+message RevokeMeetingChatResp {
+  MeetingChatMessage message = 1;
+}
+
+message GetUserRelatedMeetingsReq {
+  string userID = 1;
+  repeated string status = 5;
+  optional int64 startTime = 2;
+  optional int64 endTime = 3;
+}
+
+message GetUserRelatedMeetingsResp {
+  repeated MeetingInfoSetting meetings = 1;
+}
+
+message GetMeetingAttendanceReq {
+  string meetingID = 1;
+}
+
+message GetMeetingAttendanceResp {
+  repeated string joinedUserIDs = 1;
+  repeated string absentUserIDs = 2;
+}
+
+// Defines services related to meeting management.
+service MeetingService {
+  // Books a future meeting.
+  rpc BookMeeting(BookMeetingReq) returns (BookMeetingResp);
+  // Creates an immediate meeting.
+  rpc CreateImmediateMeeting(CreateImmediateMeetingReq) returns (CreateImmediateMeetingResp);
+  // Joins a meeting.
+  rpc JoinMeeting(JoinMeetingReq) returns (JoinMeetingResp);
+  // get a specific meeting token
+  rpc GetMeetingToken(GetMeetingTokenReq) returns (GetMeetingTokenResp);
+  // Leaves a meeting.
+  rpc LeaveMeeting(LeaveMeetingReq) returns (LeaveMeetingResp);
+  // Ends a meeting.
+  rpc EndMeeting(EndMeetingReq) returns (EndMeetingResp);
+  // Retrieves a list of meetings that the user has created or joined, filtered by status.
+  rpc GetMeetings(GetMeetingsReq) returns (GetMeetingsResp);
+  // Gets detailed information about a specific meeting.
+  rpc GetMeeting(GetMeetingReq) returns (GetMeetingResp);
+  // Gets joined and absent user lists for a meeting.
+  rpc GetMeetingAttendance(GetMeetingAttendanceReq) returns (GetMeetingAttendanceResp);
+  // Updates specific fields of a meeting.
+  rpc UpdateMeeting(UpdateMeetingRequest) returns (UpdateMeetingResp);
+  // Invite users to join a meeting.
+  rpc InviteMeetingInvitees(InviteMeetingInviteesReq) returns (InviteMeetingInviteesResp);
+  // Gets personal meeting settings.
+  rpc GetPersonalMeetingSettings(GetPersonalMeetingSettingsReq) returns (GetPersonalMeetingSettingsResp);
+  // Sets personal meeting settings.
+  rpc SetPersonalMeetingSettings(SetPersonalMeetingSettingsReq) returns (SetPersonalMeetingSettingsResp);
+  // operate room all stream.
+  rpc OperateRoomAllStream(OperateRoomAllStreamReq) returns (OperateRoomAllStreamResp);
+  // modify meeting participant nickname
+  rpc ModifyMeetingParticipantNickName(ModifyMeetingParticipantNickNameReq) returns (ModifyMeetingParticipantNickNameResp);
+  // batch remove participant out of the meeting room
+  rpc RemoveParticipants(RemoveMeetingParticipantsReq) returns (RemoveMeetingParticipantsResp);
+  // modify host or co host of the meeting room
+  rpc SetMeetingHostInfo(SetMeetingHostInfoReq) returns (SetMeetingHostInfoResp);
+  // clean previous meetings in rtc when login
+  rpc CleanPreviousMeetings(CleanPreviousMeetingsReq) returns (CleanPreviousMeetingsResp);
+
+  rpc GetMeetingRecords(GetMeetingRecordsReq) returns (GetMeetingRecordsResp);
+  rpc GetMeetingRecordsByMeetingIDs(GetMeetingRecordsByMeetingIDsReq) returns (GetMeetingRecordsByMeetingIDsResp);
+  rpc GetUserMeetingHistories(GetUserMeetingHistoriesReq) returns (GetUserMeetingHistoriesResp);
+  rpc GetUserHostedMeetings(GetUserHostedMeetingsReq) returns (GetUserHostedMeetingsResp);
+  rpc DeleteMeetingRecords(DeleteMeetingRecordsReq) returns (DeleteMeetingRecordsResp);
+
+  // Pull meeting chat messages incrementally.
+  rpc PullMeetingChat(PullMeetingChatReq) returns (PullMeetingChatResp);
+  // Send a meeting chat message.
+  rpc SendMeetingChat(SendMeetingChatReq) returns (SendMeetingChatResp);
+  // Revoke a meeting chat message.
+  rpc RevokeMeetingChat(RevokeMeetingChatReq) returns (RevokeMeetingChatResp);
+
+  // Repeat meeting management
+  rpc CreateRepeatMeeting(CreateRepeatMeetingReq) returns (CreateRepeatMeetingResp);
+  rpc UpdateRepeatMeeting(UpdateRepeatMeetingReq) returns (UpdateRepeatMeetingResp);
+  rpc DeleteRepeatMeeting(DeleteRepeatMeetingReq) returns (DeleteRepeatMeetingResp);
+  rpc GetRepeatMeeting(GetRepeatMeetingReq) returns (GetRepeatMeetingResp);
+  rpc ListRepeatMeetings(ListRepeatMeetingsReq) returns (ListRepeatMeetingsResp);
+  rpc ListRepeatMeetingInstances(ListRepeatMeetingInstancesReq) returns (ListRepeatMeetingInstancesResp);
+
+  rpc GetUserRelatedMeetings(GetUserRelatedMeetingsReq) returns (GetUserRelatedMeetingsResp);
+}

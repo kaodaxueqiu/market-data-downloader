@@ -42,7 +42,7 @@ export interface SessionStore {
   incrementUnread: (sessionId: string) => void;
   clearUnread: (sessionId: string) => void;
   loadSessionHistory: (sessionId: string) => Promise<SessionMessage[]>;
-  setHistoryPanel: (open: boolean) => void;
+  setHistoryPanel: (open: boolean) => Promise<void>;
   clearSessionStore: () => void;
   getSessionById: (sessionId: string) => SessionItem | undefined;
 }
@@ -60,7 +60,6 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       agentId,
       activeSessionId: "",
       sessions: [],
-      tabSessionIds: [],
     });
 
     const legacySession: SessionItem = {
@@ -72,6 +71,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       lastActiveAt: 0,
       isDefault: false,
       isPinned: true,
+      isOpen: false,
       messageCount: 0,
     };
 
@@ -82,29 +82,28 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
 
       sessions = [legacySession, ...sessions.filter((s) => s.sessionId !== LEGACY_SESSION_ID)];
 
-      if (activeId && activeId !== LEGACY_SESSION_ID && !sessions.some((s) => s.sessionId === activeId)) {
-        sessions.push({
-          sessionId: activeId,
-          sessionKey: "",
-          title: "对话",
-          remark: "",
-          createdAt: Date.now(),
-          lastActiveAt: Date.now(),
-          isDefault: false,
-          isPinned: false,
-          messageCount: 0,
-        });
+      let restoredTabs = sessions
+        .filter((s) => s.isOpen)
+        .map((s) => s.sessionId);
+
+      let targetId = "";
+      if (activeId && restoredTabs.includes(activeId)) {
+        targetId = activeId;
+      } else if (restoredTabs.length > 0) {
+        targetId = restoredTabs[0];
       }
 
-      const targetId = activeId && sessions.some((s) => s.sessionId === activeId)
-        ? activeId
-        : !activeId
-          ? LEGACY_SESSION_ID
-          : sessions[sessions.length - 1]?.sessionId ?? "";
+      if (restoredTabs.length === 0) {
+        const fallbackId = activeId || LEGACY_SESSION_ID;
+        if (sessions.some((s) => s.sessionId === fallbackId)) {
+          restoredTabs = [fallbackId];
+          targetId = fallbackId;
+        }
+      }
 
       set({
         sessions,
-        tabSessionIds: targetId ? [targetId] : [],
+        tabSessionIds: restoredTabs,
         activeSessionId: targetId,
       });
     } catch (error) {
@@ -130,6 +129,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
         lastActiveAt: created.lastActiveAt ?? created.createdAt,
         isDefault: false,
         isPinned: false,
+        isOpen: true,
         messageCount: 0,
       };
 
@@ -148,10 +148,13 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   switchSession: (sessionId: string) => {
     if (sessionId === get().activeSessionId) return;
 
-    const { tabSessionIds } = get();
-    const nextTabs = tabSessionIds.includes(sessionId)
-      ? tabSessionIds
-      : [...tabSessionIds, sessionId];
+    const { tabSessionIds, agentId } = get();
+    const isNew = !tabSessionIds.includes(sessionId);
+    const nextTabs = isNew ? [...tabSessionIds, sessionId] : tabSessionIds;
+
+    if (isNew && sessionId !== LEGACY_SESSION_ID) {
+      apiUpdateSession(agentId, sessionId, { isOpen: true }).catch(console.error);
+    }
 
     set({
       activeSessionId: sessionId,
@@ -163,6 +166,9 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   addToTabs: (sessionId: string) => {
     set((state) => {
       if (state.tabSessionIds.includes(sessionId)) return {};
+      if (sessionId !== LEGACY_SESSION_ID) {
+        apiUpdateSession(state.agentId, sessionId, { isOpen: true }).catch(console.error);
+      }
       return { tabSessionIds: [...state.tabSessionIds, sessionId] };
     });
   },
@@ -173,6 +179,9 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       const nextActive = state.activeSessionId === sessionId
         ? nextTabs[0] || ""
         : state.activeSessionId;
+      if (sessionId !== LEGACY_SESSION_ID) {
+        apiUpdateSession(state.agentId, sessionId, { isOpen: false }).catch(console.error);
+      }
       return { tabSessionIds: nextTabs, activeSessionId: nextActive };
     });
   },
@@ -280,8 +289,33 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
     }
   },
 
-  setHistoryPanel: (open: boolean) => {
+  setHistoryPanel: async (open: boolean) => {
     set({ historyPanel: open });
+    if (open) {
+      const { agentId } = get();
+      if (!agentId) return;
+      try {
+        const resp = await apiGetSessions(agentId);
+        const data = resp.data as unknown as { sessions: SessionItem[] };
+        const legacySession: SessionItem = {
+          sessionId: LEGACY_SESSION_ID,
+          sessionKey: "",
+          title: LEGACY_SESSION_TITLE,
+          remark: "包含未分组的早期消息",
+          createdAt: 0,
+          lastActiveAt: 0,
+          isDefault: false,
+          isPinned: true,
+          isOpen: false,
+          messageCount: 0,
+        };
+        let sessions = sortSessions(data?.sessions ?? []);
+        sessions = [legacySession, ...sessions.filter((s) => s.sessionId !== LEGACY_SESSION_ID)];
+        set({ sessions });
+      } catch (error) {
+        console.error("[Session] 刷新 session 列表失败:", error);
+      }
+    }
   },
 
   clearSessionStore: () => {

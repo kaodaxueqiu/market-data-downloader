@@ -1,7 +1,7 @@
 packages:
   - .
   - packages/*
-  
+
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - core-js
@@ -9,3 +9,6 @@ onlyBuiltDependencies:
   - es5-ext
   - esbuild
   - koffi
+
+patchedDependencies:
+  '@openim/wasm-client-sdk@3.8.5': patches/@openim__wasm-client-sdk@3.8.5.patch

@@ -36,7 +36,7 @@ import { useConversationToggle } from "@/hooks/useConversationToggle";
 import { OverlayVisibleHandle, useOverlayVisible } from "@/hooks/useOverlayVisible";
 import { useUserRelation } from "@/hooks/useUserRelation";
 import { IMSDK } from "@/layout/MainContentWrap";
-import { useContactStore, useUserStore } from "@/store";
+import { useContactStore, useConversationStore, useUserStore } from "@/store";
 import { feedbackToast } from "@/utils/feedback";
 
 import CardActionRow from "./CardActionRow";
@@ -431,12 +431,31 @@ const UserCardModal: ForwardRefRenderFunction<
                 <Button
                   type="primary"
                   className="flex-1"
-                  onClick={() =>
-                    toSpecifiedConversation({
+                  onClick={async () => {
+                    let conv = useConversationStore.getState().conversationList.find(
+                      (c) => c.userID === userID,
+                    );
+                    if (!conv) {
+                      try {
+                        const { data } = await IMSDK.getOneConversation({
+                          sourceID: userID!,
+                          sessionType: SessionType.Single,
+                        });
+                        conv = data;
+                      } catch {}
+                    }
+                    if (conv?.isHidden) {
+                      (IMSDK as any).unhideConversation(conv.conversationID).catch(() => {});
+                      useConversationStore.getState().pushConversationList([
+                        { ...conv, isHidden: false },
+                      ]);
+                    }
+                    await toSpecifiedConversation({
                       sourceID: userID!,
                       sessionType: SessionType.Single,
-                    }).then(closeOverlay)
-                  }
+                    });
+                    closeOverlay();
+                  }}
                 >
                   {t("chat.action.sendMessage")}
                 </Button>

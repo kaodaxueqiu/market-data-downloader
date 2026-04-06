@@ -30,8 +30,10 @@ import { getApiUrl, getLogLevel, getWsUrl } from "@/config";
 import { ConversationGroupAllKey, SystemMessageTypes } from "@/constants";
 import { useEventTransfer } from "@/hooks/useEventTransfer";
 import {
+  conversationMessageCache,
   deleteMessagesByUser,
   deleteOneMessage,
+  preloadAllConversations,
   pushNewMessage,
   syncNewMessages,
   updateMessageNicknameAndFaceUrl,
@@ -68,6 +70,8 @@ export function useGlobalEvent() {
   const updateProgressState = useUserStore((state) => state.updateProgressState);
   const updateReinstallState = useUserStore((state) => state.updateReinstallState);
   const updateIsLogining = useUserStore((state) => state.updateIsLogining);
+  const updatePreloadState = useUserStore((state) => state.updatePreloadState);
+  const updatePreloadProgress = useUserStore((state) => state.updatePreloadProgress);
   const updateConnectState = useUserStore((state) => state.updateConnectState);
   const updateSelfInfo = useUserStore((state) => state.updateSelfInfo);
   const getWorkMomentsUnreadCount = useUserStore(
@@ -325,8 +329,8 @@ export function useGlobalEvent() {
           platformID: window.electronAPI?.getPlatform() ?? 5,
           apiAddr: getApiUrl(),
           wsAddr: getWsUrl(),
-          dataDir: window.electronAPI!.getDataPath("sdkResources") || "./",
-          logFilePath: window.electronAPI!.getDataPath("logsPath") || "./",
+          dataDir: window.electronAPI!.getDataPath("sdkResources"),
+          logFilePath: window.electronAPI!.getDataPath("logsPath"),
           logLevel: getLogLevel(),
           isLogStandardOutput: false,
           systemType: "electron",
@@ -460,7 +464,29 @@ export function useGlobalEvent() {
     updateSyncState("success");
     getFriendListByReq();
     getGroupListByReq();
-    getConversationListByReq(false, true);
+    getConversationListByReq(false, true).then(async () => {
+      const list = useConversationStore.getState().conversationList;
+      console.log("[Sync] conversation 总数:", list.length);
+      console.log("[Sync] 前5个:", list.slice(0, 5).map(c => ({
+        id: c.conversationID,
+        name: c.showName,
+      })));
+
+      const convIDs = list.map((c) => c.conversationID);
+      if (convIDs.length > 0) {
+        updatePreloadState("loading");
+        console.log(`[Preload] 开始预加载 ${convIDs.length} 个会话...`);
+        try {
+          await preloadAllConversations(convIDs, (loaded, total) => {
+            updatePreloadProgress(`${loaded}/${total}`);
+          });
+          console.log("[Preload] 预加载完成");
+        } catch (err) {
+          console.error("[Preload] 预加载失败:", err);
+        }
+        updatePreloadState("done");
+      }
+    });
     getUnReadCountByReq().then((count) => window.electronAPI?.updateUnreadCount(count));
     resume.current = false;
   };
@@ -608,13 +634,7 @@ export function useGlobalEvent() {
   const notPushType = [MessageType.TypingMessage, MessageType.RevokeMessage];
 
   const parseSessionId = (msg: ExMessageItem): string | null => {
-    if (!msg.ex) return null;
-    try {
-      const exData = JSON.parse(msg.ex);
-      return exData.sessionId ?? null;
-    } catch {
-      return null;
-    }
+    return (msg as any).sessionId || null;
   };
 
   const isAgentMessage = (msg: ExMessageItem): boolean => {
@@ -625,6 +645,7 @@ export function useGlobalEvent() {
   };
 
   const handleNewMessage = (newServerMsg: ExMessageItem) => {
+    console.log("[DEBUG] raw msg keys:", Object.keys(newServerMsg), "sessionId:", (newServerMsg as any).sessionId, "ex:", newServerMsg.ex);
     const needNotification =
       !notPushType.includes(newServerMsg.contentType) &&
       newServerMsg.sendID !== useUserStore.getState().selfInfo.userID;
@@ -646,6 +667,19 @@ export function useGlobalEvent() {
         const activeSessionId = useSessionStore.getState().activeSessionId;
 
         if (msgSessionId && activeSessionId && msgSessionId !== activeSessionId) {
+          const convID = useConversationStore.getState().currentConversation?.conversationID;
+          if (convID) {
+            const cached = conversationMessageCache.get(convID);
+            if (cached?.isComplete) {
+              const isRepeated = cached.allMessages.some(
+                (m) => m.clientMsgID === newServerMsg.clientMsgID,
+              );
+              if (!isRepeated) {
+                cached.allMessages.push(newServerMsg);
+              }
+            }
+          }
+
           useSessionStore.getState().incrementUnread(msgSessionId);
           return;
         }

@@ -1,6 +1,6 @@
 {
   "name": "G-Snowball-IM",
-  "version": "1.1.6",
+  "version": "1.2.0",
   "main": "dist-electron/main/index.js",
   "description": "G-Snowball IM Client.",
   "author": "ZiZhou",
@@ -29,7 +29,7 @@
     "restore:package": "pnpm --filter @openim/build-tooling run restore-package",
     "electron:build": "pnpm --filter @openim/build-tooling run electron-build",
     "electron:build:dev": "pnpm --filter @openim/build-tooling run electron-build -- --mode dev",
-    "electron:build:prod": "node scripts/install-ffi.js && pnpm build:packages && pnpm --filter @openim/build-tooling run electron-build -- --mode prod",
+    "electron:build:prod": "pnpm build:packages && pnpm --filter @openim/build-tooling run electron-build -- --mode prod",
     "electron:build:prod:all": "pnpm --filter @openim/build-tooling run electron-build -- --mode prod --all",
     "release:prod:web": "export BUILD_TARGET=web && pnpm run build:prod",
     "release:prod:all": "pnpm --filter @openim/build-tooling run release-all",
@@ -39,7 +39,7 @@
     "lint:fix": "eslint --fix --quiet src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepare": "husky install",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package && node scripts/patch-wasm-sdk.js"
   },
   "devDependencies": {
     "@commitlint/cli": "^17.4.4",

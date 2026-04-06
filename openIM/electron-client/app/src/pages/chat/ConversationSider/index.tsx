@@ -230,7 +230,10 @@ const ConversationSider = () => {
   }, []);
 
   const dataSoure = useMemo(
-    () => (conversationIniting ? generateSkeletons(20) : conversationList),
+    () =>
+      conversationIniting
+        ? generateSkeletons(20)
+        : conversationList.filter((c) => !c.isHidden),
     [conversationIniting, conversationList],
   );
 

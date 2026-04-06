@@ -24,15 +24,68 @@ import emitter, {
 const START_INDEX = 10000;
 const SPLIT_COUNT = 20;
 const MAX_FETCH_ROUNDS = 10;
+const FULL_FETCH_BATCH = 200;
+
+export const conversationMessageCache = new Map<string, {
+  allMessages: ExMessageItem[];
+  isComplete: boolean;
+}>();
+
+export async function preloadAllConversations(
+  conversationIDs: string[],
+  onProgress: (loaded: number, total: number) => void,
+): Promise<void> {
+  const total = conversationIDs.length;
+  let loaded = 0;
+
+  for (const convID of conversationIDs) {
+    if (conversationMessageCache.has(convID)) {
+      loaded++;
+      onProgress(loaded, total);
+      continue;
+    }
+
+    let allRawMessages: ExMessageItem[] = [];
+    let startMsgID = "";
+    let isEnd = false;
+
+    while (!isEnd) {
+      try {
+        const { data } = await IMSDK.getAdvancedHistoryMessageList({
+          count: FULL_FETCH_BATCH,
+          startClientMsgID: startMsgID,
+          conversationID: convID,
+          viewType: ViewType.History,
+        });
+
+        isEnd = data.isEnd;
+        allRawMessages = [
+          ...(data.messageList as ExMessageItem[]),
+          ...allRawMessages,
+        ];
+
+        if (data.messageList.length > 0) {
+          startMsgID = data.messageList[0].clientMsgID;
+        }
+      } catch (err) {
+        console.error(`[Preload] ${convID} 拉取失败:`, err);
+        break;
+      }
+    }
+
+    conversationMessageCache.set(convID, {
+      allMessages: allRawMessages,
+      isComplete: true,
+    });
+
+    loaded++;
+    onProgress(loaded, total);
+    console.log(`[Preload] ${loaded}/${total} ${convID}: ${allRawMessages.length} 条`);
+  }
+}
 
 function getMessageSessionId(msg: ExMessageItem): string | null {
-  if (!msg.ex) return null;
-  try {
-    const exData = JSON.parse(msg.ex);
-    return exData.sessionId ?? null;
-  } catch {
-    return null;
-  }
+  return (msg as any).sessionId || null;
 }
 
 function isCurrentConversationAgent(): boolean {
@@ -42,15 +95,36 @@ function isCurrentConversationAgent(): boolean {
 }
 
 function filterBySession(messages: ExMessageItem[]): ExMessageItem[] {
-  if (!isCurrentConversationAgent()) return messages;
+  if (!isCurrentConversationAgent()) {
+    console.warn("[filterBySession] 不是 Agent 对话，跳过过滤");
+    return messages;
+  }
 
   const activeSessionId = useSessionStore.getState().activeSessionId;
-  if (!activeSessionId) return messages;
+  if (!activeSessionId) {
+    console.warn("[filterBySession] activeSessionId 为空");
+    return messages;
+  }
 
-  return messages.filter((msg) => {
-    const effectiveId = getMessageSessionId(msg) ?? LEGACY_SESSION_ID;
-    return effectiveId === activeSessionId;
+  const sessionIdSet = new Set<string>();
+  messages.forEach((msg) => {
+    const sid = getMessageSessionId(msg);
+    sessionIdSet.add(sid ?? "__null__");
   });
+  console.log("[filterBySession] activeSessionId:", activeSessionId);
+  console.log("[filterBySession] 消息中的 sessionId 种类:", [...sessionIdSet]);
+  console.log("[filterBySession] 消息总数:", messages.length);
+
+  const filtered = messages.filter((msg) => {
+    const sid = getMessageSessionId(msg);
+    if (activeSessionId === LEGACY_SESSION_ID) {
+      return sid === null;
+    }
+    return sid === activeSessionId;
+  });
+
+  console.log("[filterBySession] 过滤后:", filtered.length, "条");
+  return filtered;
 }
 
 export function useHistoryMessageList({
@@ -126,6 +200,19 @@ export function useHistoryMessageList({
 
   useEffect(() => {
     const pushNewMessage = (message: ExMessageItem) => {
+      console.log("[DEBUG-PUSH] 新消息到达:", {
+        seq: message.seq,
+        sessionId: (message as any).sessionId,
+        hasEx: !!message.ex,
+        exPreview: message.ex?.substring(0, 60),
+        clientMsgID: message.clientMsgID?.substring(0, 16),
+      });
+      const cacheKey = latestConversationID.current;
+      const cached = conversationMessageCache.get(cacheKey);
+      if (cached?.isComplete) {
+        cached.allMessages.push(message);
+      }
+
       const isSearchMode = Boolean(useMessageStore.getState().jumpClientMsgID);
       const isRepeated = latestLoadState.current.messageList.some(
         (item) => item.clientMsgID === message.clientMsgID,
@@ -158,6 +245,17 @@ export function useHistoryMessageList({
       }
     };
     const updateOneMessage = (message: ExMessageItem) => {
+      const cacheKey = latestConversationID.current;
+      const cached = conversationMessageCache.get(cacheKey);
+      if (cached?.isComplete) {
+        const idx = cached.allMessages.findIndex(
+          (m) => m.clientMsgID === message.clientMsgID,
+        );
+        if (idx >= 0) {
+          cached.allMessages[idx] = { ...cached.allMessages[idx], ...message };
+        }
+      }
+
       setLoadState((preState) => {
         const tmpList = [...preState.messageList];
         const idx = tmpList.findIndex((msg) => msg.clientMsgID === message.clientMsgID);
@@ -195,6 +293,14 @@ export function useHistoryMessageList({
       });
     };
     const deleteOnewMessage = (clientMsgID: string) => {
+      const cacheKey = latestConversationID.current;
+      const cached = conversationMessageCache.get(cacheKey);
+      if (cached?.isComplete) {
+        cached.allMessages = cached.allMessages.filter(
+          (m) => m.clientMsgID !== clientMsgID,
+        );
+      }
+
       setLoadState((preState) => {
         const tmpList = [...preState.messageList];
         const idx = tmpList.findIndex((msg) => msg.clientMsgID === clientMsgID);
@@ -235,6 +341,11 @@ export function useHistoryMessageList({
       });
     };
     const clearMessages = () => {
+      const cacheKey = latestConversationID.current;
+      if (cacheKey) {
+        conversationMessageCache.delete(cacheKey);
+      }
+
       setLoadState(() => ({
         initLoading: false,
         hasMoreOld: true,
@@ -309,31 +420,89 @@ export function useHistoryMessageList({
             : "";
           let isEnd = false;
           let fetchRound = 0;
-          let consecutiveEmpty = 0;
 
-          while (allFiltered.length < SPLIT_COUNT && !isEnd && fetchRound < MAX_FETCH_ROUNDS) {
-            fetchRound++;
-            const { data } = await IMSDK.getAdvancedHistoryMessageList({
-              count: FETCH_BATCH,
-              startClientMsgID: startMsgID,
-              conversationID: conversationID ?? "",
-              viewType: useMessageStore.getState().jumpClientMsgID
-                ? ViewType.Search
-                : ViewType.History,
-            });
+          if (!loadMore) {
+            const cacheKey = requestConversationID;
+            const cached = conversationMessageCache.get(cacheKey);
 
-            if (requestId !== messageReqIdRef.current) return;
-            if (!isActiveConversation(requestConversationID)) return;
+            if (cached?.isComplete) {
+              allFiltered = filterBySession(cached.allMessages);
+              isEnd = true;
+              console.log(`[HistoryMessage] 命中缓存，原始 ${cached.allMessages.length} 条，过滤后 ${allFiltered.length} 条`);
+            } else if (isAgent) {
+              let allRawMessages: ExMessageItem[] = [];
 
-            isEnd = data.isEnd;
-            const batch = filterBySession(data.messageList as ExMessageItem[]);
-            allFiltered = [...batch, ...allFiltered];
+              while (!isEnd) {
+                fetchRound++;
+                const { data } = await IMSDK.getAdvancedHistoryMessageList({
+                  count: FULL_FETCH_BATCH,
+                  startClientMsgID: startMsgID,
+                  conversationID: cacheKey,
+                  viewType: ViewType.History,
+                });
 
-            if (data.messageList.length > 0) {
-              startMsgID = data.messageList[0].clientMsgID;
+                if (requestId !== messageReqIdRef.current) return;
+                if (!isActiveConversation(requestConversationID)) return;
+
+                isEnd = data.isEnd;
+                allRawMessages = [
+                  ...(data.messageList as ExMessageItem[]),
+                  ...allRawMessages,
+                ];
+
+                if (data.messageList.length > 0) {
+                  startMsgID = data.messageList[0].clientMsgID;
+                }
+              }
+
+              conversationMessageCache.set(cacheKey, {
+                allMessages: allRawMessages,
+                isComplete: true,
+              });
+
+              allFiltered = filterBySession(allRawMessages);
+              console.log(`[HistoryMessage] 全量拉取完成，共 ${fetchRound} 轮，原始 ${allRawMessages.length} 条，过滤后 ${allFiltered.length} 条`);
+            } else {
+              const { data } = await IMSDK.getAdvancedHistoryMessageList({
+                count: FETCH_BATCH,
+                startClientMsgID: startMsgID,
+                conversationID: conversationID ?? "",
+                viewType: useMessageStore.getState().jumpClientMsgID
+                  ? ViewType.Search
+                  : ViewType.History,
+              });
+
+              if (requestId !== messageReqIdRef.current) return;
+              if (!isActiveConversation(requestConversationID)) return;
+
+              isEnd = data.isEnd;
+              allFiltered = filterBySession(data.messageList as ExMessageItem[]);
             }
+          } else {
+            while (allFiltered.length < SPLIT_COUNT && !isEnd && fetchRound < MAX_FETCH_ROUNDS) {
+              fetchRound++;
+              const { data } = await IMSDK.getAdvancedHistoryMessageList({
+                count: FETCH_BATCH,
+                startClientMsgID: startMsgID,
+                conversationID: conversationID ?? "",
+                viewType: useMessageStore.getState().jumpClientMsgID
+                  ? ViewType.Search
+                  : ViewType.History,
+              });
 
-            if (!isAgent) break;
+              if (requestId !== messageReqIdRef.current) return;
+              if (!isActiveConversation(requestConversationID)) return;
+
+              isEnd = data.isEnd;
+              const batch = filterBySession(data.messageList as ExMessageItem[]);
+              allFiltered = [...batch, ...allFiltered];
+
+              if (data.messageList.length > 0) {
+                startMsgID = data.messageList[0].clientMsgID;
+              }
+
+              if (!isAgent) break;
+            }
           }
 
           allFiltered.forEach((message, idx) => {

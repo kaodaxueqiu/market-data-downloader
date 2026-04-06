@@ -61,6 +61,14 @@ export function useConversationToggle() {
           conversation.conversationID
       )
         return;
+      if (conversation.isHidden) {
+        (IMSDK as any).unhideConversation(conversation.conversationID).catch(() => {});
+        const unhidden = { ...conversation, isHidden: false };
+        useConversationStore.getState().pushConversationList([unhidden]);
+        await updateCurrentConversation(unhidden, isJump);
+        navigate(`/chat/${unhidden.conversationID}`);
+        return;
+      }
       await updateCurrentConversation({ ...conversation }, isJump);
       navigate(`/chat/${conversation.conversationID}`);
     },

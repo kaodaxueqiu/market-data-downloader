@@ -34,17 +34,14 @@ OpenIM Electron is a instant messaging application built on OpenIM SDK Wasm, Ope
 Follow these steps to set up a local development environment:
 
 1. Run `pnpm install` to install all dependencies.
-2. Install ffi assets(like: electron-ffi-assets-v3.8.4-alpha.8-e-v1.1.11.zip) into `node_modules/@openim/electron-client-sdk/assets` (supports nested bundles like `macos-latest-*-assets.zip`):
+2. Build the SDK from source (WASM + DLL):
 
    ```bash
-   # auto-detect a zip in the repo root (name can vary)
-   pnpm setup:ffi
+   # Build WASM in openIM/sdk-core
+   powershell -File sdk-core/build-all.ps1
 
-   # or specify a zip path explicitly
-   pnpm setup:ffi -- --zip /path/to/electron-ffi-assets-v3.8.4-alpha.8-e-v1.1.11.zip
-
-   # or point to an extracted directory (can contain nested zips)
-   pnpm setup:ffi -- --dir /path/to/electron-ffi-assets-v3.8.4-alpha.8-e-v1.1.11
+   # Build DLL in openIM/sdk-cpp/go
+   powershell -File sdk-cpp/go/build-dll.ps1
    ```
 
 3. Configure environment variables:

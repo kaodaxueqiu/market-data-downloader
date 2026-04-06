@@ -28,6 +28,13 @@ export const useWindowEventHandler = () => {
       isJump,
     }: ToSpecifiedConversationParams) => {
       window.electronAPI?.showMainWindow();
+      const conv = useConversationStore.getState().conversationList.find(
+        (c) => c.userID === sourceID || c.groupID === sourceID,
+      );
+      if (conv?.isHidden) {
+        const unhidden = { ...conv, isHidden: false };
+        useConversationStore.getState().pushConversationList([unhidden]);
+      }
       toSpecifiedConversation({ sourceID, sessionType, isJump, isChildWindow: false });
     };
 

@@ -209,7 +209,7 @@ const ConversationMenuContent = memo(
           />
           <MenuItem
             className="text-[#FF381F]"
-            title={t("common.text.remove")}
+            title="隐藏"
             onClick={() => removeMutation.mutate()}
           />
         </div>

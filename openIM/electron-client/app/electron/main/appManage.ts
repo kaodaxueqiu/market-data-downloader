@@ -136,11 +136,14 @@ class AppManager {
     global.pathConfig = pathConfig;
     updateLoggerPath(pathConfig.logsPath);
 
+    cacheManager.ensureBaseDirs([
+      global.pathConfig.logsPath,
+      global.pathConfig.sdkResourcesPath,
+    ]);
+
     if (isProd) {
       this.clearRendererAssetsOnAppUpdate();
       cacheManager.ensureBaseDirs([
-        global.pathConfig.logsPath,
-        global.pathConfig.sdkResourcesPath,
         global.pathConfig.autoUpdateCachePath,
         global.pathConfig.rendererAssetsPath,
         global.pathConfig.rendererTempPath,

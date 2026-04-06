@@ -49,7 +49,5 @@ openIM/electron-client/app/packages/electron-capturer/dist-electron/
 openIM/electron-client/app/*.db
 openIM/electron-client/app/open-im-sdk-core*
 openIM/electron-client/app/package.json.backup
-openIM/ffi-assets/
-
 # ── 集成打包资源（CI 构建时生成）──
 resources/im/

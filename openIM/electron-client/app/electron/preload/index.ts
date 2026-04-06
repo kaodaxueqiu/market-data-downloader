@@ -10,7 +10,6 @@ import "@openim/electron-capturer/preload";
 import { DataPath, IElectronAPI } from "../../src/types/globalExpose.d";
 import { IpcMainToRender, IpcRenderToMain } from "../constants";
 import { enableCLib } from "../config";
-import { isProd } from "../utils";
 import { ensureDirSync, getUniqueSavePath } from "../utils/fs";
 
 const buildListener =
@@ -117,8 +116,7 @@ const getPlatform = () => {
 const getOsArch = () => os.arch();
 
 const getDataPath = (key: DataPath) => {
-  if (!isProd) return "";
-  return ipcRenderer.sendSync(IpcRenderToMain.getDataPath, key);
+  return ipcRenderer.sendSync(IpcRenderToMain.getDataPath, key) || "";
 };
 
 const fileExists = (targetPath: string) => fs.existsSync(targetPath);
