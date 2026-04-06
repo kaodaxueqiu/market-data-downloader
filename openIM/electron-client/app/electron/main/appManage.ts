@@ -32,7 +32,11 @@ class AppManager {
     }
 
     app.on("second-instance", () => {
-      windowManager.showWindow();
+      if (app.isReady()) {
+        windowManager.showWindow();
+      } else {
+        app.whenReady().then(() => windowManager.showWindow());
+      }
     });
   }
 

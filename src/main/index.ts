@@ -5910,17 +5910,26 @@ ipcMain.handle('im:openWindow', async () => {
           ? join(process.resourcesPath, 'im', 'G-Snowball-IM.app', 'Contents', 'MacOS', 'G-Snowball-IM')
           : join(process.resourcesPath, 'im', 'G-Snowball-IM.exe')
 
-    const cleanEnv: Record<string, string> = {
-      PATH: process.env.PATH || '',
-      SystemRoot: process.env.SystemRoot || 'C:\\Windows',
-      TEMP: process.env.TEMP || '',
-      TMP: process.env.TMP || '',
-      APPDATA: process.env.APPDATA || '',
-      LOCALAPPDATA: process.env.LOCALAPPDATA || '',
-      USERPROFILE: process.env.USERPROFILE || '',
-      ProgramFiles: process.env.ProgramFiles || '',
-      CommonProgramFiles: process.env.CommonProgramFiles || '',
-    }
+    const cleanEnv: Record<string, string> = isMac
+      ? {
+          PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+          HOME: process.env.HOME || '',
+          USER: process.env.USER || '',
+          TMPDIR: process.env.TMPDIR || '/tmp',
+          SHELL: process.env.SHELL || '/bin/zsh',
+          LANG: process.env.LANG || 'en_US.UTF-8',
+        }
+      : {
+          PATH: process.env.PATH || '',
+          SystemRoot: process.env.SystemRoot || 'C:\\Windows',
+          TEMP: process.env.TEMP || '',
+          TMP: process.env.TMP || '',
+          APPDATA: process.env.APPDATA || '',
+          LOCALAPPDATA: process.env.LOCALAPPDATA || '',
+          USERPROFILE: process.env.USERPROFILE || '',
+          ProgramFiles: process.env.ProgramFiles || '',
+          CommonProgramFiles: process.env.CommonProgramFiles || '',
+        }
 
     require('child_process').spawn(imExePath, [], {
       detached: true,

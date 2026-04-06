@@ -354,6 +354,10 @@ class WindowManager {
   }
 
   showWindow = () => {
+    if (!app.isReady()) {
+      app.whenReady().then(() => this.showWindow());
+      return;
+    }
     if (!this.mainWindow) {
       this.createMainWindow();
       return;
