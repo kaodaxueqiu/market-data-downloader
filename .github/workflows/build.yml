@@ -185,29 +185,22 @@ jobs:
           echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
         shell: bash
           
-      - name: Release (Windows)
+      - name: Create Release (if not exists)
+        run: |
+          gh release create "v${{ steps.package-version.outputs.version }}" \
+            --title "v${{ steps.package-version.outputs.version }}" \
+            --generate-notes || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets (Windows)
         if: matrix.platform == 'win'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.package-version.outputs.version }}
-          files: |
-            dist/*.exe
-            dist/*.yml
-            dist/*.blockmap
-          draft: false
-          prerelease: false
+        run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.exe dist/*.yml dist/*.blockmap --clobber
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Release (macOS)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets (macOS)
         if: matrix.platform == 'mac'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.package-version.outputs.version }}
-          files: |
-            dist/*.dmg
-            dist/*.yml
-          draft: false
-          prerelease: false
+        run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.dmg dist/*.yml --clobber
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
