@@ -1,0 +1,12 @@
+diff --git a/lib/types/entity.d.ts b/lib/types/entity.d.ts
+index 1234567..abcdefg 100644
+--- a/lib/types/entity.d.ts
++++ b/lib/types/entity.d.ts
+@@ -183,6 +183,7 @@ export type ConversationItem = {
+     isPrivateChat: boolean;
+     isMsgDestruct: boolean;
+     isMarked: boolean;
++    isHidden: boolean;
+     attachedInfo: string;
+     ex?: string;
+     remark?: string;
