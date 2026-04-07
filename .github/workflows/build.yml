@@ -194,7 +194,7 @@ jobs:
       - name: Upload Release Assets (Windows)
         if: matrix.platform == 'win'
         shell: bash
-        run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.exe dist/*.yml dist/*.blockmap --clobber
+        run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.exe dist/*.yml --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
