@@ -186,21 +186,21 @@ jobs:
         shell: bash
           
       - name: Create Release (if not exists)
-        run: |
-          gh release create "v${{ steps.package-version.outputs.version }}" \
-            --title "v${{ steps.package-version.outputs.version }}" \
-            --generate-notes || true
+        shell: bash
+        run: gh release create "v${{ steps.package-version.outputs.version }}" --title "v${{ steps.package-version.outputs.version }}" --generate-notes || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Release Assets (Windows)
         if: matrix.platform == 'win'
+        shell: bash
         run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.exe dist/*.yml dist/*.blockmap --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Release Assets (macOS)
         if: matrix.platform == 'mac'
+        shell: bash
         run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.dmg dist/*.yml --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

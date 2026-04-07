@@ -3,7 +3,6 @@ import { create } from "zustand";
 
 import { IMSDK } from "@/layout/MainContentWrap";
 import {
-  clearMessages,
   clearMessageState,
 } from "@/pages/chat/queryChat/useHistoryMessageList";
 import { getCacheRecordSync, mergeCacheRecord } from "@/utils/cache/cacheStore";
@@ -57,7 +56,6 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
     }
   },
   clearPreviewList: () => {
-    clearMessages();
     set(() => ({ previewImgList: [], hasMore: false }));
   },
   updateCheckMode: (isCheckMode: boolean) => {
