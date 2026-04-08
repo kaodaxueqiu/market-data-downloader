@@ -644,8 +644,31 @@ export function useGlobalEvent() {
     return agents.some((a) => a.userID === currentConv.userID);
   };
 
+  const writeCacheForMessage = (msg: ExMessageItem) => {
+    const convList = useConversationStore.getState().conversationList;
+    const selfID = useUserStore.getState().selfInfo.userID;
+    let targetConvID: string | undefined;
+
+    if (isGroupSession(msg.sessionType)) {
+      targetConvID = convList.find((c) => c.groupID === msg.groupID)?.conversationID;
+    } else {
+      const otherUserID = msg.sendID === selfID ? msg.recvID : msg.sendID;
+      targetConvID = convList.find((c) => c.userID === otherUserID)?.conversationID;
+    }
+
+    if (!targetConvID) return;
+    const cached = conversationMessageCache.get(targetConvID);
+    if (cached?.isComplete) {
+      const isRepeated = cached.allMessages.some(
+        (m) => m.clientMsgID === msg.clientMsgID,
+      );
+      if (!isRepeated) {
+        cached.allMessages.push(msg);
+      }
+    }
+  };
+
   const handleNewMessage = (newServerMsg: ExMessageItem) => {
-    console.log("[DEBUG] raw msg keys:", Object.keys(newServerMsg), "sessionId:", (newServerMsg as any).sessionId, "ex:", newServerMsg.ex);
     const needNotification =
       !notPushType.includes(newServerMsg.contentType) &&
       newServerMsg.sendID !== useUserStore.getState().selfInfo.userID;
@@ -659,7 +682,10 @@ export function useGlobalEvent() {
       }
     }
 
-    if (!inCurrentConversation(newServerMsg)) return;
+    if (!inCurrentConversation(newServerMsg)) {
+      writeCacheForMessage(newServerMsg);
+      return;
+    }
 
     if (!notPushType.includes(newServerMsg.contentType)) {
       if (isAgentMessage(newServerMsg)) {
