@@ -51,3 +51,6 @@ openIM/electron-client/app/open-im-sdk-core*
 openIM/electron-client/app/package.json.backup
 # ── 集成打包资源（CI 构建时生成）──
 resources/im/
+
+# ── sdk-core 符号链接（指向 openIM/sdk-core，避免重复跟踪） ──
+openIM/sdk-cpp/go/sdk-core
