@@ -48,6 +48,6 @@ require (
 )
 
 replace (
-	github.com/openimsdk/openim-sdk-core/v3 => ./sdk-core
-	github.com/openimsdk/protocol => ./sdk-core/pkg/protocol
+	github.com/openimsdk/openim-sdk-core/v3 => ../../sdk-core
+	github.com/openimsdk/protocol => ../../sdk-core/pkg/protocol
 )
