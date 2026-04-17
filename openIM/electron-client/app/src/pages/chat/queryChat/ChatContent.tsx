@@ -40,6 +40,7 @@ const ChatContent = ({ isNotificationSession }: { isNotificationSession: boolean
         align: "end",
         behavior: "auto",
       });
+      isAtBottomRef.current = true;
     });
   }, []);
 
@@ -92,6 +93,7 @@ const ChatContent = ({ isNotificationSession }: { isNotificationSession: boolean
           <Virtuoso
             id="chat-list"
             className="w-full overflow-x-hidden"
+            key={conversationID}
             atBottomThreshold={300}
             atBottomStateChange={(atBottom) => {
               isAtBottomRef.current = atBottom;
@@ -103,7 +105,11 @@ const ChatContent = ({ isNotificationSession }: { isNotificationSession: boolean
               return isAtBottom;
             }}
             firstItemIndex={loadState.firstItemIndex}
-            initialTopMostItemIndex={SPLIT_COUNT - 1}
+            initialTopMostItemIndex={
+              loadState.messageList.length > 0
+                ? Math.min(SPLIT_COUNT - 1, loadState.messageList.length - 1)
+                : 0
+            }
             startReached={loadMoreMessage}
             endReached={prevLoad}
             ref={virtuoso}

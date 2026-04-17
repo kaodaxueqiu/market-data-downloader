@@ -144,6 +144,9 @@ public:
   // get advanced history message list
   void GetAdvancedHistoryMessageList(const std::function<void(const std::string&, int, const std::string&, const std::string&)>& getAdvancedHistoryCallback , const std::string& operationID, const std::string& getMessageOptions);
 
+  // get all history messages (full download, no seq gap-fill)
+  void GetAllHistoryMessages(const std::function<void(const std::string&, int, const std::string&, const std::string&, int)>& callback, const std::string& operationID, const std::string& req);
+
   // send message
   void SendMessage(const std::function<void(const std::string&, int, const std::string&, const std::string&, int)>& callback, const std::string& operationID,
   const std::string& message, const std::string& recvID, const std::string& groupID, const std::string& offlinePushInfo,bool isOnlineOnly);

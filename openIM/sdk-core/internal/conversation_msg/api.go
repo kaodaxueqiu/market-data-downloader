@@ -75,6 +75,18 @@ func (c *Conversation) HideConversation(ctx context.Context, conversationID stri
 	return api.UpdateConversation.Execute(ctx, req)
 }
 
+func (c *Conversation) UnhideConversation(ctx context.Context, conversationID string) error {
+	_ = c.db.UpdateColumnsConversation(ctx, conversationID, map[string]interface{}{
+		"is_hidden": false,
+	})
+	req := &pbConversation.UpdateConversationReq{
+		ConversationID: conversationID,
+		UserIDs:        []string{c.loginUserID},
+		IsHidden:       &wrapperspb.BoolValue{Value: false},
+	}
+	return api.UpdateConversation.Execute(ctx, req)
+}
+
 func (c *Conversation) GetAtAllTag(_ context.Context) string {
 	return constant.AtAllString
 }
@@ -899,6 +911,131 @@ func (c *Conversation) GetAdvancedHistoryMessageListReverse(ctx context.Context,
 		result.MessageList = s
 	}
 	return result, nil
+}
+
+func (c *Conversation) GetAllHistoryMessages(ctx context.Context, req sdk_params_callback.GetAllHistoryMessagesParams,
+	onProgress func(pulled, total int)) (*sdk_params_callback.GetAllHistoryMessagesCallback, error) {
+	const batchSize int64 = 200
+
+	var maxSeqResp sdkws.GetMaxSeqResp
+	if err := c.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: c.loginUserID}, constant.GetNewestSeq, &maxSeqResp); err != nil {
+		log.ZError(ctx, "GetAllHistoryMessages GetNewestSeq failed", err, "conversationID", req.ConversationID)
+		return nil, err
+	}
+	log.ZDebug(ctx, "GetAllHistoryMessages MaxSeqs", "allMaxSeqs", maxSeqResp.MaxSeqs, "conversationID", req.ConversationID)
+	maxSeq := maxSeqResp.MaxSeqs[req.ConversationID]
+	if maxSeq == 0 {
+		log.ZWarn(ctx, "GetAllHistoryMessages maxSeq is 0, returning empty", nil, "conversationID", req.ConversationID)
+		return &sdk_params_callback.GetAllHistoryMessagesCallback{
+			MessageList: make([]*sdk_struct.MsgStruct, 0),
+		}, nil
+	}
+
+	log.ZDebug(ctx, "GetAllHistoryMessages start pulling", "conversationID", req.ConversationID, "maxSeq", maxSeq)
+	totalEstimate := int(maxSeq)
+	var allMessages []*model_struct.LocalChatLog
+
+	for begin := int64(1); begin <= maxSeq; begin += batchSize {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		end := begin + batchSize - 1
+		if end > maxSeq {
+			end = maxSeq
+		}
+
+		pullReq := sdkws.PullMessageBySeqsReq{UserID: c.loginUserID}
+		pullReq.SeqRanges = append(pullReq.SeqRanges, &sdkws.SeqRange{
+			ConversationID: req.ConversationID,
+			Begin:          begin,
+			End:            end,
+			Num:            batchSize,
+		})
+		var pullResp sdkws.PullMessageBySeqsResp
+		if err := c.SendReqWaitResp(ctx, &pullReq, constant.PullMsgByRange, &pullResp); err != nil {
+			log.ZError(ctx, "GetAllHistoryMessages pull batch failed", err,
+				"conversationID", req.ConversationID, "begin", begin, "end", end)
+			continue
+		}
+
+		convMsgs, ok := pullResp.Msgs[req.ConversationID]
+		if !ok || convMsgs == nil {
+			log.ZDebug(ctx, "GetAllHistoryMessages batch empty", "conversationID", req.ConversationID, "begin", begin, "end", end)
+			continue
+		}
+
+		if err := c.messageEncryptor.Decryption(ctx, convMsgs.Msgs, req.ConversationID); err != nil {
+			log.ZWarn(ctx, "GetAllHistoryMessages decryption failed", err, "conversationID", req.ConversationID)
+		}
+
+		batchValid := 0
+		var selfMsgs, otherMsgs []*model_struct.LocalChatLog
+		for _, msgData := range convMsgs.Msgs {
+			if msgData == nil || msgData.Status == constant.MsgStatusHasDeleted {
+				continue
+			}
+			localMsg := converter.MsgDataToLocalChatLog(msgData)
+			if msgData.SendID == c.loginUserID {
+				selfMsgs = append(selfMsgs, localMsg)
+			} else {
+				otherMsgs = append(otherMsgs, localMsg)
+			}
+			batchValid++
+		}
+		filled := c.faceURLAndNicknameHandle(ctx, selfMsgs, otherMsgs, req.ConversationID)
+		allMessages = append(allMessages, filled...)
+
+		log.ZDebug(ctx, "GetAllHistoryMessages batch done", "conversationID", req.ConversationID,
+			"begin", begin, "end", end, "batchValid", batchValid, "totalSoFar", len(allMessages))
+
+		if onProgress != nil {
+			onProgress(len(allMessages), totalEstimate)
+		}
+	}
+
+	log.ZDebug(ctx, "GetAllHistoryMessages pull complete, writing to DB",
+		"conversationID", req.ConversationID, "totalMessages", len(allMessages))
+
+	if err := c.db.DeleteConversationAllMessages(ctx, req.ConversationID); err != nil {
+		log.ZError(ctx, "GetAllHistoryMessages delete old messages failed", err, "conversationID", req.ConversationID)
+		return nil, err
+	}
+
+	if len(allMessages) > 0 {
+		const dbBatchSize = 40
+		for i := 0; i < len(allMessages); i += dbBatchSize {
+			end := i + dbBatchSize
+			if end > len(allMessages) {
+				end = len(allMessages)
+			}
+			chunk := allMessages[i:end]
+			insertMap := make(map[string][]*model_struct.LocalChatLog)
+			insertMap[req.ConversationID] = chunk
+			if err := c.batchInsertMessageList(ctx, insertMap); err != nil {
+				log.ZError(ctx, "GetAllHistoryMessages batch insert failed", err,
+					"conversationID", req.ConversationID, "chunk", i, "chunkSize", len(chunk))
+				return nil, err
+			}
+		}
+	}
+
+	log.ZDebug(ctx, "GetAllHistoryMessages DB write done, reading back from DB",
+		"conversationID", req.ConversationID)
+
+	dbMessages, err := c.db.GetMessageList(ctx, req.ConversationID, int(maxSeq), 0, 0, "", false)
+	if err != nil {
+		log.ZError(ctx, "GetAllHistoryMessages read back from DB failed", err, "conversationID", req.ConversationID)
+		return nil, err
+	}
+
+	var messageList sdk_struct.NewMsgList = c.LocalChatLog2MsgStruct(dbMessages)
+	sort.Sort(messageList)
+
+	return &sdk_params_callback.GetAllHistoryMessagesCallback{
+		MessageList: messageList,
+		TotalCount:  len(messageList),
+	}, nil
 }
 
 func (c *Conversation) RevokeMessage(ctx context.Context, conversationID, clientMsgID string) error {

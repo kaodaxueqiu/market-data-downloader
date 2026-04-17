@@ -42,6 +42,17 @@ type GetAdvancedHistoryMessageListCallback struct {
 	ErrMsg      string                  `json:"errMsg"`
 }
 
+type GetAllHistoryMessagesParams struct {
+	ConversationID string `json:"conversationID"`
+}
+
+type GetAllHistoryMessagesCallback struct {
+	MessageList []*sdk_struct.MsgStruct `json:"messageList"`
+	TotalCount  int                     `json:"totalCount"`
+	ErrCode     int32                   `json:"errCode"`
+	ErrMsg      string                  `json:"errMsg"`
+}
+
 type DeleteMessagesReq struct {
 	ConversationID string   `json:"conversationID"`
 	ClientMsgIDs   []string `json:"clientMsgIDs"`

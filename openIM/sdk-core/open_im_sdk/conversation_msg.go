@@ -16,8 +16,14 @@ package open_im_sdk
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
+	sdk_params_callback "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/sdkerrs"
+	"github.com/openimsdk/tools/errs"
 )
 
 func GetAllConversationList(callback open_im_sdk_callback.Base, operationID string) {
@@ -42,6 +48,10 @@ func SetConversation(callback open_im_sdk_callback.Base, operationID string, con
 
 func HideConversation(callback open_im_sdk_callback.Base, operationID string, conversationID string) {
 	call(callback, operationID, IMUserContext.Conversation().HideConversation, conversationID)
+}
+
+func UnhideConversation(callback open_im_sdk_callback.Base, operationID string, conversationID string) {
+	call(callback, operationID, IMUserContext.Conversation().UnhideConversation, conversationID)
 }
 
 func SetConversationDraft(callback open_im_sdk_callback.Base, operationID string, conversationID string, draftText string) {
@@ -197,6 +207,47 @@ func GetAdvancedHistoryMessageList(callback open_im_sdk_callback.Base, operation
 
 func GetAdvancedHistoryMessageListReverse(callback open_im_sdk_callback.Base, operationID string, getMessageOptions string) {
 	call(callback, operationID, IMUserContext.Conversation().GetAdvancedHistoryMessageListReverse, getMessageOptions)
+}
+
+func GetAllHistoryMessages(callback open_im_sdk_callback.SendMsgCallBack, operationID string, req string) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				callback.OnError(sdkerrs.SdkInternalError, fmt.Sprintf("recover: %+v", r))
+			}
+		}()
+		if err := CheckResourceLoad(IMUserContext, ""); err != nil {
+			if code, ok := errs.Unwrap(err).(errs.CodeError); ok {
+				callback.OnError(int32(code.Code()), err.Error())
+			} else {
+				callback.OnError(sdkerrs.UnknownCode, err.Error())
+			}
+			return
+		}
+		ctx := ccontext.WithOperationID(IMUserContext.Context(), operationID)
+
+		var params sdk_params_callback.GetAllHistoryMessagesParams
+		if err := json.Unmarshal([]byte(req), &params); err != nil {
+			callback.OnError(sdkerrs.ArgsError, err.Error())
+			return
+		}
+
+		onProgress := func(pulled, total int) {
+			callback.OnProgress(pulled * 100 / max(total, 1))
+		}
+
+		result, err := IMUserContext.Conversation().GetAllHistoryMessages(ctx, params, onProgress)
+		if err != nil {
+			if code, ok := errs.Unwrap(err).(errs.CodeError); ok {
+				callback.OnError(int32(code.Code()), err.Error())
+			} else {
+				callback.OnError(sdkerrs.UnknownCode, err.Error())
+			}
+			return
+		}
+		data, _ := json.Marshal(result)
+		callback.OnSuccess(string(data))
+	}()
 }
 
 func RevokeMessage(callback open_im_sdk_callback.Base, operationID string, conversationID, clientMsgID string) {

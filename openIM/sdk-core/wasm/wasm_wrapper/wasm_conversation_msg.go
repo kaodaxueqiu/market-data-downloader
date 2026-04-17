@@ -208,6 +208,10 @@ func (w *WrapperConMsg) GetAdvancedHistoryMessageListReverse(_ js.Value, args []
 	callback := event_listener.NewBaseCallback(utils.FirstLower(utils.GetSelfFuncName()), w.commonFunc)
 	return event_listener.NewCaller(open_im_sdk.GetAdvancedHistoryMessageListReverse, callback, &args).AsyncCallWithCallback()
 }
+func (w *WrapperConMsg) GetAllHistoryMessages(_ js.Value, args []js.Value) interface{} {
+	callback := event_listener.NewBaseCallback(utils.FirstLower(utils.GetSelfFuncName()), w.commonFunc)
+	return event_listener.NewCaller(open_im_sdk.GetAllHistoryMessages, callback, &args).AsyncCallWithCallback()
+}
 
 //func (w *WrapperConMsg) GetHistoryMessageList(_ js.Value, args []js.Value) interface{} {
 //	callback := event_listener.NewBaseCallback(utils.FirstLower(utils.GetSelfFuncName()), w.commonFunc)

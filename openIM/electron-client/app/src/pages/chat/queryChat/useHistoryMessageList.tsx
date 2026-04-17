@@ -31,6 +31,8 @@ export const conversationMessageCache = new Map<string, {
   isComplete: boolean;
 }>();
 
+const PRELOAD_CONCURRENCY = 10;
+
 export async function preloadAllConversations(
   conversationIDs: string[],
   onProgress: (loaded: number, total: number) => void,
@@ -38,50 +40,40 @@ export async function preloadAllConversations(
   const total = conversationIDs.length;
   let loaded = 0;
 
-  for (const convID of conversationIDs) {
-    if (conversationMessageCache.has(convID)) {
+  const pending = conversationIDs.filter((id) => !conversationMessageCache.has(id));
+  loaded = total - pending.length;
+  if (loaded > 0) onProgress(loaded, total);
+
+  const tasks = pending.map((convID) => async () => {
+    try {
+      const { data } = await (IMSDK as any).getAllHistoryMessages(
+        { conversationID: convID },
+      );
+      const messages = (data.messageList ?? []) as ExMessageItem[];
+      conversationMessageCache.set(convID, {
+        allMessages: messages,
+        isComplete: true,
+      });
       loaded++;
       onProgress(loaded, total);
-      continue;
+      console.log(`[Preload] ${loaded}/${total} ${convID}: ${messages.length} 条`);
+    } catch (err) {
+      console.error(`[Preload] ${convID} 拉取失败:`, err);
+      conversationMessageCache.set(convID, { allMessages: [], isComplete: true });
+      loaded++;
+      onProgress(loaded, total);
     }
+  });
 
-    let allRawMessages: ExMessageItem[] = [];
-    let startMsgID = "";
-    let isEnd = false;
-
-    while (!isEnd) {
-      try {
-        const { data } = await IMSDK.getAdvancedHistoryMessageList({
-          count: FULL_FETCH_BATCH,
-          startClientMsgID: startMsgID,
-          conversationID: convID,
-          viewType: ViewType.History,
-        });
-
-        isEnd = data.isEnd;
-        allRawMessages = [
-          ...(data.messageList as ExMessageItem[]),
-          ...allRawMessages,
-        ];
-
-        if (data.messageList.length > 0) {
-          startMsgID = data.messageList[0].clientMsgID;
-        }
-      } catch (err) {
-        console.error(`[Preload] ${convID} 拉取失败:`, err);
-        break;
-      }
+  const executing = new Set<Promise<void>>();
+  for (const task of tasks) {
+    const p = task().then(() => { executing.delete(p); });
+    executing.add(p);
+    if (executing.size >= PRELOAD_CONCURRENCY) {
+      await Promise.race(executing);
     }
-
-    conversationMessageCache.set(convID, {
-      allMessages: allRawMessages,
-      isComplete: true,
-    });
-
-    loaded++;
-    onProgress(loaded, total);
-    console.log(`[Preload] ${loaded}/${total} ${convID}: ${allRawMessages.length} 条`);
   }
+  await Promise.all(executing);
 }
 
 function getMessageSessionId(msg: ExMessageItem): string | null {
@@ -402,7 +394,10 @@ export function useHistoryMessageList({
   }, []);
 
   const loadHistoryMessages = () =>
-    getMoreOldMessages(false).then(() => getConversationPreviewImgList());
+    getMoreOldMessages(false).then(() => {
+      getConversationPreviewImgList();
+      setTimeout(scrollToBottom, 100);
+    });
 
   const isAgent = isCurrentConversationAgent();
   const FETCH_BATCH = isAgent ? 50 : SPLIT_COUNT;
@@ -519,19 +514,18 @@ export function useHistoryMessageList({
             }
           });
 
-          setTimeout(() => {
-            if (!isActiveConversation(requestConversationID)) return;
-            setLoadState((preState) => ({
-              ...preState,
-              initLoading: false,
-              hasMoreOld: !isEnd,
-              messageList: removeRepeatedMessages([
-                ...allFiltered,
-                ...(loadMore ? preState.messageList : []),
-              ]),
-              firstItemIndex: preState.firstItemIndex - allFiltered.length,
-            }));
-          });
+          if (requestId !== messageReqIdRef.current) return;
+          if (!isActiveConversation(requestConversationID)) return;
+          setLoadState((preState) => ({
+            ...preState,
+            initLoading: false,
+            hasMoreOld: !isEnd,
+            messageList: removeRepeatedMessages([
+              ...allFiltered,
+              ...(loadMore ? preState.messageList : []),
+            ]),
+            firstItemIndex: preState.firstItemIndex - allFiltered.length,
+          }));
         } catch (error) {
           console.error("[HistoryMessage] Failed to load messages:", error);
           setLoadState((preState) => ({ ...preState, initLoading: false }));

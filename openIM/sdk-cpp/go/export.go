@@ -1001,6 +1001,12 @@ func get_advanced_history_message_list_reverse(cCallback C.CB_S_I_S_S, operation
 	open_im_sdk.GetAdvancedHistoryMessageListReverse(baseCallback, C.GoString(operationID), C.GoString(getMessageOptions))
 }
 
+//export get_all_history_messages
+func get_all_history_messages(cCallback C.CB_S_I_S_S_I, operationID, req *C.char) {
+	callback := NewSendMessageCallback(cCallback, operationID)
+	open_im_sdk.GetAllHistoryMessages(callback, C.GoString(operationID), C.GoString(req))
+}
+
 //export revoke_message
 func revoke_message(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char) {
 	baseCallback := NewBaseCallback(cCallback, operationID)

@@ -406,6 +406,14 @@ void OpenIMManager::GetAdvancedHistoryMessageList(const std::function<void(const
   get_advanced_history_message_list(_wrapper_callonce_cpp_function(getAdvancedHistoryCallback),operationID_cs,getMessageOptions_cs);
 }
 
+// get all history messages (full download, no seq gap-fill)
+void OpenIMManager::GetAllHistoryMessages(const std::function<void(const std::string&, int, const std::string&, const std::string&, int)>& callback, const std::string& operationID, const std::string& req)
+{
+  char* operationID_cs=const_cast<char*>(operationID.c_str());
+  char* req_cs=const_cast<char*>(req.c_str());
+  get_all_history_messages(_wrapper_callonce_cpp_function(callback),operationID_cs,req_cs);
+}
+
 // send message
 void SendMessage(const std::function<void(const std::string&, int, const std::string&, const std::string&,int)>& sendMessageCallback,
 const std::string& operationID, const std::string& message,const std::string& recvID,const std::string& groupID,const std::string& offlinePushInfo,bool isOnlineOnly)
