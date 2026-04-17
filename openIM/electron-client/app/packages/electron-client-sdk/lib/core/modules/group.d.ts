@@ -1,0 +1,68 @@
+import { BaseResponse } from '../../types/entity';
+import OpenIMSDK from '..';
+import { GroupItem, GroupApplicationItem, GroupMemberItem } from '@openim/wasm-client-sdk/lib/types/entity';
+import { CreateGroupParams, JoinGroupParams, SearchGroupParams, AccessGroupApplicationParams, GetGroupMemberParams, SearchGroupMemberParams, UpdateMemberInfoParams, GetGroupMemberByTimeParams, ChangeGroupMemberMuteParams, ChangeGroupMuteParams, TransferGroupParams, AccessToGroupParams, OffsetParams, GetSelfUnhandledApplyCountParams, GetGroupApplicationListParams } from '@openim/wasm-client-sdk/lib/types/params';
+export declare function setupGroupModule(openIMSDK: OpenIMSDK): {
+    createGroup: (params: CreateGroupParams, opid?: string) => Promise<BaseResponse<GroupItem>>;
+    joinGroup: (params: JoinGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    inviteUserToGroup: (params: AccessToGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    getJoinedGroupList: (opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    getJoinedGroupListPage: (params: OffsetParams, opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    searchGroups: (params: SearchGroupParams, opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    getSpecifiedGroupsInfo: (groupIDList: string[], opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    setGroupInfo: (params: Partial<GroupItem>, opid?: string) => Promise<BaseResponse<void>>;
+    getGroupApplicationListAsRecipient: (params?: GetGroupApplicationListParams, opid?: string) => Promise<BaseResponse<GroupApplicationItem[]>>;
+    getGroupApplicationListAsApplicant: (params?: GetGroupApplicationListParams, opid?: string) => Promise<BaseResponse<GroupApplicationItem[]>>;
+    getGroupApplicationUnhandledCount: (params: GetSelfUnhandledApplyCountParams, opid?: string) => Promise<BaseResponse<number>>;
+    acceptGroupApplication: (params: AccessGroupApplicationParams, opid?: string) => Promise<BaseResponse<void>>;
+    refuseGroupApplication: (params: AccessGroupApplicationParams, opid?: string) => Promise<BaseResponse<void>>;
+    deleteGroupRequests: (params: Array<{
+        fromUserID: string;
+        groupID: string;
+    }>, opid?: string) => Promise<BaseResponse<void>>;
+    getGroupMemberList: (params: GetGroupMemberParams, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    getSpecifiedGroupMembersInfo: (params: Omit<AccessToGroupParams, 'reason'>, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    searchGroupMembers: (params: SearchGroupMemberParams, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    setGroupMemberInfo: (params: UpdateMemberInfoParams, opid?: string) => Promise<BaseResponse<void>>;
+    getGroupMemberListByJoinTimeFilter: (params: GetGroupMemberByTimeParams, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    kickGroupMember: (params: AccessToGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    changeGroupMemberMute: (params: ChangeGroupMemberMuteParams, opid?: string) => Promise<BaseResponse<void>>;
+    changeGroupMute: (params: ChangeGroupMuteParams, opid?: string) => Promise<BaseResponse<void>>;
+    transferGroupOwner: (params: TransferGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    dismissGroup: (groupID: string, opid?: string) => Promise<BaseResponse<void>>;
+    quitGroup: (groupID: string, opid?: string) => Promise<BaseResponse<void>>;
+    isJoinGroup: (groupID: string, opid?: string) => Promise<BaseResponse<void>>;
+    getUsersInGroup: (params: Omit<AccessToGroupParams, 'reason'>, opid?: string) => Promise<BaseResponse<void>>;
+};
+export interface GroupModuleApi {
+    createGroup: (params: CreateGroupParams, opid?: string) => Promise<BaseResponse<GroupItem>>;
+    joinGroup: (params: JoinGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    inviteUserToGroup: (params: AccessToGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    getJoinedGroupList: (opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    getJoinedGroupListPage: (params: OffsetParams, opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    searchGroups: (params: SearchGroupParams, opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    getSpecifiedGroupsInfo: (groupIDList: string[], opid?: string) => Promise<BaseResponse<GroupItem[]>>;
+    setGroupInfo: (params: Partial<GroupItem>, opid?: string) => Promise<BaseResponse<void>>;
+    getGroupApplicationListAsRecipient: (params: GetGroupApplicationListParams, opid?: string) => Promise<BaseResponse<GroupApplicationItem[]>>;
+    getGroupApplicationListAsApplicant: (params: GetGroupApplicationListParams, opid?: string) => Promise<BaseResponse<GroupApplicationItem[]>>;
+    getGroupApplicationUnhandledCount: (params: GetSelfUnhandledApplyCountParams, opid?: string) => Promise<BaseResponse<number>>;
+    acceptGroupApplication: (params: AccessGroupApplicationParams, opid?: string) => Promise<BaseResponse<void>>;
+    refuseGroupApplication: (params: AccessGroupApplicationParams, opid?: string) => Promise<BaseResponse<void>>;
+    deleteGroupRequests: (params: Array<{
+        fromUserID: string;
+        groupID: string;
+    }>, opid?: string) => Promise<BaseResponse<void>>;
+    getGroupMemberList: (params: GetGroupMemberParams, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    getSpecifiedGroupMembersInfo: (params: Omit<AccessToGroupParams, 'reason'>, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    searchGroupMembers: (params: SearchGroupMemberParams, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    setGroupMemberInfo: (params: UpdateMemberInfoParams, opid?: string) => Promise<BaseResponse<void>>;
+    getGroupMemberListByJoinTimeFilter: (params: GetGroupMemberByTimeParams, opid?: string) => Promise<BaseResponse<GroupMemberItem[]>>;
+    kickGroupMember: (params: AccessToGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    changeGroupMemberMute: (params: ChangeGroupMemberMuteParams, opid?: string) => Promise<BaseResponse<void>>;
+    changeGroupMute: (params: ChangeGroupMuteParams, opid?: string) => Promise<BaseResponse<void>>;
+    transferGroupOwner: (params: TransferGroupParams, opid?: string) => Promise<BaseResponse<void>>;
+    dismissGroup: (groupID: string, opid?: string) => Promise<BaseResponse<void>>;
+    quitGroup: (groupID: string, opid?: string) => Promise<BaseResponse<void>>;
+    isJoinGroup: (groupID: string, opid?: string) => Promise<BaseResponse<void>>;
+    getUsersInGroup: (params: Omit<AccessToGroupParams, 'reason'>, opid?: string) => Promise<BaseResponse<void>>;
+}

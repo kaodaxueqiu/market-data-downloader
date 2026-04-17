@@ -1,0 +1,15 @@
+export declare function insertConversationGroup(localConversationGroupStr: string): Promise<string>;
+export declare function batchInsertConversationGroups(localConversationGroupsStr: string): Promise<string>;
+export declare function upsertConversationGroups(localConversationGroupsStr: string): Promise<string>;
+export declare function updateConversationGroup(localConversationGroupStr: string): Promise<string>;
+export declare function deleteConversationGroup(groupID: string): Promise<string>;
+export declare function deleteAllConversationGroups(): Promise<string>;
+export declare function getConversationGroup(groupID: string): Promise<string>;
+export declare function getConversationGroups(groupIDsStr: string): Promise<string>;
+export declare function getAllConversationGroups(): Promise<string>;
+export declare function updateConversationGroupSerial(groupID: string, serial: number): Promise<string>;
+export declare function addConversationGroupMembers(conversationID: string, groupIDsStr: string): Promise<string>;
+export declare function removeConversationGroupMembers(conversationID: string, groupIDsStr: string): Promise<string>;
+export declare function getConversationGroupIDsByConversationID(conversationID: string): Promise<string>;
+export declare function getConversationIDsByGroupID(groupID: string): Promise<string>;
+export declare function deleteConversationGroupMembersByGroupID(groupID: string): Promise<string>;

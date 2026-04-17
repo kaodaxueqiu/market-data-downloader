@@ -1,0 +1,21 @@
+{
+  "name": "@openim/electron-client-sdk",
+  "version": "3.8.5-enterprise",
+  "description": "Enterprise build of OpenIM SDK for Electron (vendored into workspace, never fetched from npm)",
+  "license": "Commercial",
+  "main": "lib/index.js",
+  "module": "lib/index.es.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib/**/*",
+    "assets/**/*"
+  ],
+  "dependencies": {
+    "koffi": "2.8.0",
+    "uuid": "^9.0.0"
+  },
+  "peerDependencies": {
+    "@openim/wasm-client-sdk": "workspace:*",
+    "electron": ">=12.0.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@openim/wasm-client-sdk",
+  "version": "3.8.5-enterprise",
+  "description": "Enterprise build of OpenIM SDK for Web (vendored into workspace, never fetched from npm)",
+  "license": "Commercial",
+  "main": "lib/index.js",
+  "module": "lib/index.es.js",
+  "unpkg": "lib/index.umd.js",
+  "jsdelivr": "lib/index.umd.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/index.es.js",
+      "require": "./lib/index.js",
+      "types": "./lib/index.d.ts"
+    }
+  },
+  "files": [
+    "lib/**/*",
+    "assets/**/*"
+  ]
+}

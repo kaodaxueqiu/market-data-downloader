@@ -1,0 +1,21 @@
+import { Database, QueryExecResult } from '@jlongster/sql.js';
+export type LocalConversationGroup = {
+    [key: string]: unknown;
+};
+export declare function localConversationGroups(db: Database): QueryExecResult[];
+export declare function insertConversationGroup(db: Database, localConversationGroup: LocalConversationGroup): QueryExecResult[];
+export declare function batchInsertConversationGroups(db: Database, localConversationGroups: LocalConversationGroup[]): QueryExecResult[];
+export declare function upsertConversationGroups(db: Database, localConversationGroups: LocalConversationGroup[]): QueryExecResult[];
+export declare function updateConversationGroup(db: Database, localConversationGroup: LocalConversationGroup): QueryExecResult[];
+export declare function deleteConversationGroup(db: Database, groupID: string): QueryExecResult[];
+export declare function deleteAllConversationGroups(db: Database): QueryExecResult[];
+export declare function getConversationGroup(db: Database, groupID: string): QueryExecResult[];
+export declare function getConversationGroups(db: Database, groupIDs: string[]): QueryExecResult[];
+export declare function getAllConversationGroups(db: Database): QueryExecResult[];
+export declare function updateConversationGroupSerial(db: Database, groupID: string, serial: number): QueryExecResult[];
+export declare function localConversationGroupMembers(db: Database): QueryExecResult[];
+export declare function addConversationGroupMembers(db: Database, conversationID: string, groupIDs: string[]): QueryExecResult[];
+export declare function removeConversationGroupMembers(db: Database, conversationID: string, groupIDs: string[]): QueryExecResult[];
+export declare function getConversationGroupIDsByConversationID(db: Database, conversationID: string): QueryExecResult[];
+export declare function getConversationIDsByGroupID(db: Database, groupID: string): QueryExecResult[];
+export declare function deleteConversationGroupMembersByGroupID(db: Database, groupID: string): QueryExecResult[];

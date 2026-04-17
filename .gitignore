@@ -54,3 +54,7 @@ resources/im/
 
 # ── sdk-core 符号链接（指向 openIM/sdk-core，避免重复跟踪） ──
 openIM/sdk-cpp/go/sdk-core
+
+# ── SDK 原生库编译产物（由 sdk-core / sdk-cpp 构建；打包时注入到 workspace 包）──
+openIM/electron-client/app/packages/electron-client-sdk/assets/*/libopenimsdk.*
+openIM/electron-client/app/packages/wasm-client-sdk/assets/openIM.wasm
