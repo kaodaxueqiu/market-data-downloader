@@ -6108,7 +6108,7 @@ ipcMain.handle('openclaw:start', async (_e, agentName: string) => {
 
     await new Promise(resolve => setTimeout(resolve, 1000))
 
-    if (openclawStatus === 'error') {
+    if ((openclawStatus as string) === 'error') {
       return { success: false, error: openclawLastError || '启动失败' }
     }
 

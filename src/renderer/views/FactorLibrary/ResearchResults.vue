@@ -634,25 +634,9 @@ const formatFullDate = (dateStr: string) => {
   })
 }
 
-// 格式化函数
-const formatNumber = (num: number | undefined | null, decimals: number = 2) => {
-  if (num === undefined || num === null || isNaN(num)) return '-'
-  return num.toFixed(decimals)
-}
-
-const formatPercent = (num: number | undefined | null) => {
-  if (num === undefined || num === null || isNaN(num)) return '-'
-  return (num * 100).toFixed(2) + '%'
-}
-
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-'
   return dateStr.replace('T', ' ').substring(0, 16)
-}
-
-const getValueClass = (value: number | undefined | null) => {
-  if (value === undefined || value === null || isNaN(value)) return ''
-  return value > 0 ? 'positive' : value < 0 ? 'negative' : ''
 }
 
 onMounted(() => {
