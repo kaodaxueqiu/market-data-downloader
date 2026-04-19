@@ -6049,6 +6049,10 @@ ipcMain.handle('openclaw:start', async (_e, agentName: string) => {
       return { success: false, error: '未找到 openclaw-node 程序，请确认已正确安装' }
     }
 
+    if (process.platform !== 'win32') {
+      try { fs.chmodSync(exePath, 0o755) } catch { /* ignore */ }
+    }
+
     writeNodeConfig(agentName.trim())
     saveOpenclawAgentToHistory(agentName.trim())
 
