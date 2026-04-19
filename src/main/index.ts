@@ -6051,6 +6051,12 @@ ipcMain.handle('openclaw:start', async (_e, agentName: string) => {
 
     if (process.platform !== 'win32') {
       try { fs.chmodSync(exePath, 0o755) } catch { /* ignore */ }
+      if (process.platform === 'darwin') {
+        try {
+          const { execSync } = require('child_process') as typeof import('child_process')
+          execSync(`xattr -cr "${exePath}"`, { timeout: 5000 })
+        } catch { /* ignore */ }
+      }
     }
 
     writeNodeConfig(agentName.trim())
