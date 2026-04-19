@@ -6055,6 +6055,7 @@ ipcMain.handle('openclaw:start', async (_e, agentName: string) => {
         try {
           const { execSync } = require('child_process') as typeof import('child_process')
           execSync(`xattr -cr "${exePath}"`, { timeout: 5000 })
+          execSync(`codesign --force --deep --sign - "${exePath}"`, { timeout: 10000 })
         } catch { /* ignore */ }
       }
     }
