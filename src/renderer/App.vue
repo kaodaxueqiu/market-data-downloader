@@ -218,6 +218,42 @@
                   </div>
                 </div>
               </el-popover>
+
+              <!-- 智能体控制本机开关 -->
+              <el-tooltip
+                :content="openclawMessage || '点击开启/关闭'"
+                :disabled="!openclawMessage"
+                placement="bottom"
+              >
+                <el-button
+                  :type="openclawIsActive ? 'danger' : openclawStatus === 'error' || openclawStatus === 'disconnected' ? 'warning' : 'default'"
+                  size="small"
+                  :class="['openclaw-btn', { 'openclaw-active': openclawStatus === 'connected' }]"
+                  @click="handleOpenclawToggle"
+                >
+                  <el-icon>
+                    <Monitor />
+                  </el-icon>
+                  <template v-if="openclawStatus === 'connected'">
+                    智能体控制本机 · 已连接
+                  </template>
+                  <template v-else-if="openclawStatus === 'running'">
+                    智能体控制本机 · 运行中
+                  </template>
+                  <template v-else-if="openclawStatus === 'starting'">
+                    正在连接…
+                  </template>
+                  <template v-else-if="openclawStatus === 'disconnected'">
+                    智能体控制本机 · 已断开
+                  </template>
+                  <template v-else-if="openclawStatus === 'error'">
+                    智能体控制本机 · 异常
+                  </template>
+                  <template v-else>
+                    允许智能体控制本机
+                  </template>
+                </el-button>
+              </el-tooltip>
             </div>
           </el-header>
           
@@ -232,6 +268,58 @@
         </el-container>
       </el-container>
       
+      <!-- 智能体控制本机 - 配置弹窗 -->
+      <el-dialog
+        v-model="openclawDialogVisible"
+        title="允许智能体控制本机"
+        width="460px"
+        :close-on-click-modal="false"
+        class="openclaw-dialog"
+      >
+        <div class="openclaw-warning">
+          <el-alert
+            type="warning"
+            :closable="false"
+            show-icon
+          >
+            <template #title>
+              <span style="font-weight: 600;">安全提示</span>
+            </template>
+            开启后，智能体将获得操控本机电脑的权限（包括屏幕查看、键鼠操作、命令执行等）。请确认你信任该智能体，并在使用完毕后及时关闭。
+          </el-alert>
+        </div>
+        <el-form label-width="100px" style="margin-top: 20px;">
+          <el-form-item label="智能体名称">
+            <el-select
+              v-model="openclawAgentNameInput"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="选择或输入智能体名称"
+              style="width: 100%;"
+            >
+              <el-option
+                v-for="name in openclawAgentHistory"
+                :key="name"
+                :label="name"
+                :value="name"
+              />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="openclawDialogVisible = false">取消</el-button>
+          <el-button
+            type="danger"
+            :loading="openclawStatus === 'starting'"
+            :disabled="!openclawAgentNameInput?.trim()"
+            @click="confirmOpenclawStart"
+          >
+            确认开启
+          </el-button>
+        </template>
+      </el-dialog>
+
       <!-- 🆕 全局更新下载进度对话框 -->
       <el-dialog
         v-model="showUpdateProgress"
@@ -289,7 +377,8 @@ import {
   Tickets,
   InfoFilled,
   Key,
-  Connection
+  Connection,
+  Monitor
 } from '@element-plus/icons-vue'
 import { allMenus, type MenuItem } from '@/config/menuConfig'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
@@ -305,6 +394,75 @@ const sidebarCollapsed = ref(false)
 // 🆕 系统状态
 const wsStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 const activeSubscriptionCount = ref(0)
+
+// 智能体控制本机
+const openclawStatus = ref<string>('stopped')
+const openclawMessage = ref('')
+const openclawDialogVisible = ref(false)
+const openclawAgentNameInput = ref('')
+const openclawAgentHistory = ref<string[]>([])
+
+const openclawIsActive = computed(() => 
+  ['running', 'connected', 'starting'].includes(openclawStatus.value)
+)
+
+const handleOpenclawToggle = async () => {
+  if (openclawIsActive.value) {
+    try {
+      const result = await window.electronAPI.openclaw.stop()
+      if (result.success) {
+        openclawStatus.value = 'stopped'
+        ElMessage.success('已关闭智能体控制')
+      } else {
+        ElMessage.error(result.error || '关闭失败')
+      }
+    } catch (e: any) {
+      ElMessage.error('关闭失败: ' + e.message)
+    }
+  } else {
+    openclawAgentNameInput.value = ''
+    try {
+      const config = await window.electronAPI.openclaw.getConfig()
+      openclawAgentHistory.value = config?.agentHistory || []
+    } catch { /* ignore */ }
+    openclawDialogVisible.value = true
+  }
+}
+
+const confirmOpenclawStart = async () => {
+  const name = openclawAgentNameInput.value?.trim()
+  if (!name) {
+    ElMessage.warning('请选择或输入智能体名称')
+    return
+  }
+
+  openclawStatus.value = 'starting'
+  openclawMessage.value = '正在启动…'
+  try {
+    const result = await window.electronAPI.openclaw.start(name)
+    if (result.success) {
+      openclawDialogVisible.value = false
+      if (!openclawAgentHistory.value.includes(name)) {
+        openclawAgentHistory.value.unshift(name)
+      }
+    } else {
+      openclawStatus.value = 'error'
+      ElMessage.error(result.error || '启动失败')
+    }
+  } catch (e: any) {
+    openclawStatus.value = 'error'
+    ElMessage.error('启动失败: ' + e.message)
+  }
+}
+
+const loadOpenclawStatus = async () => {
+  try {
+    const res = await window.electronAPI.openclaw.getStatus()
+    openclawStatus.value = (res.status as any) || 'stopped'
+  } catch {
+    openclawStatus.value = 'stopped'
+  }
+}
 
 // 🆕 全局更新下载进度
 const showUpdateProgress = ref(false)
@@ -1126,6 +1284,13 @@ onMounted(async () => {
   
   // 🆕 初始化状态
   refreshStatus()
+  loadOpenclawStatus()
+
+  // 监听 openclaw 状态实时推送
+  window.electronAPI.openclaw.onStatusChanged((data) => {
+    openclawStatus.value = data.status || 'stopped'
+    openclawMessage.value = data.message || ''
+  })
   
   // 🆕 监听 WebSocket 状态变化
   window.electronAPI.subscription.onConnected(() => {
@@ -1201,7 +1366,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // 🆕 组件卸载时清理定时器
   if (statusRefreshTimer) {
     clearInterval(statusRefreshTimer)
     statusRefreshTimer = null
@@ -1209,6 +1373,7 @@ onUnmounted(() => {
   stopPermissionRefresh()
   stopDatasourceRefresh()
   stopNotificationRefresh()
+  window.electronAPI.openclaw.removeStatusListener()
 })
 </script>
 
@@ -1592,6 +1757,38 @@ onUnmounted(() => {
       height: 8px;
       border-radius: 50%;
       background: #f56c6c;
+    }
+  }
+}
+
+// 智能体控制本机按钮
+.openclaw-btn {
+  font-weight: 500;
+  transition: all 0.3s;
+  
+  &.openclaw-active {
+    animation: openclaw-pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.4);
+  }
+}
+
+@keyframes openclaw-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 108, 108, 0); }
+}
+
+// 智能体控制弹窗
+.openclaw-dialog {
+  .openclaw-warning {
+    :deep(.el-alert) {
+      border-radius: 8px;
+      
+      .el-alert__description {
+        font-size: 13px;
+        line-height: 1.8;
+        color: #606266;
+        margin-top: 6px;
+      }
     }
   }
 }

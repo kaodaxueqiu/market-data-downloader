@@ -5944,3 +5944,225 @@ ipcMain.handle('im:openWindow', async () => {
     return { success: false, error: error.message || '启动失败' }
   }
 })
+
+// ── OpenClaw 智能体控制本机 ──
+
+import type { ChildProcess } from 'child_process'
+
+let openclawProcess: ChildProcess | null = null
+let openclawStatus: 'stopped' | 'starting' | 'running' | 'error' | 'connected' | 'disconnected' = 'stopped'
+let openclawLastError: string = ''
+let openclawMessage: string = ''
+
+function sendOpenclawStatus() {
+  try {
+    mainWindow?.webContents?.send('openclaw:status-changed', {
+      status: openclawProcess ? openclawStatus : 'stopped',
+      message: openclawMessage,
+      error: openclawLastError,
+    })
+  } catch { /* ignore if window destroyed */ }
+}
+
+function getOpenclawConfig(): { agentName: string; agentHistory: string[] } {
+  const raw = store?.get('openclawConfig') as any || {}
+  return {
+    agentName: raw.agentName || '',
+    agentHistory: Array.isArray(raw.agentHistory) ? raw.agentHistory : []
+  }
+}
+
+function saveOpenclawAgentToHistory(agentName: string) {
+  const config = getOpenclawConfig()
+  const history = config.agentHistory.filter(n => n !== agentName)
+  history.unshift(agentName)
+  store?.set('openclawConfig', {
+    agentName,
+    agentHistory: history.slice(0, 20)
+  })
+}
+
+function resolveOpenclawExePath(): string | null {
+  const isMac = process.platform === 'darwin'
+  const isWin = process.platform === 'win32'
+  const isArm = process.arch === 'arm64'
+
+  const exeName = isWin
+    ? 'openclaw-node-win.exe'
+    : isMac
+      ? (isArm ? 'openclaw-node-macos-arm64' : 'openclaw-node-macos-x64')
+      : null
+
+  if (!exeName) return null
+
+  const prodPath = join(process.resourcesPath, 'openclaw', exeName)
+  if (fs.existsSync(prodPath)) return prodPath
+
+  const devPaths = [
+    join(__dirname, '../../../openclaw', exeName),
+    join(process.env.USERPROFILE || process.env.HOME || '', 'Desktop', '打包程序', exeName),
+  ]
+  for (const p of devPaths) {
+    if (fs.existsSync(p)) return p
+  }
+
+  return null
+}
+
+function writeNodeConfig(agentName: string) {
+  const configDir = join(process.env.APPDATA || join(process.env.USERPROFILE || '', 'AppData', 'Roaming'), 'openclaw')
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true })
+  }
+  const configPath = join(configDir, 'node-config.json')
+  const gatewayUrl = `ws://61.151.241.233:8080/openclaw/agent/${agentName}`
+  const config = {
+    agentName,
+    gatewayUrl,
+    token: 'unified-gateway-token-2026'
+  }
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+}
+
+ipcMain.handle('openclaw:start', async (_e, agentName: string) => {
+  try {
+    if (openclawProcess) {
+      return { success: false, error: '已在运行中' }
+    }
+
+    if (!agentName?.trim()) {
+      return { success: false, error: '请输入智能体名称' }
+    }
+
+    const exePath = resolveOpenclawExePath()
+    if (!exePath) {
+      return { success: false, error: '未找到 openclaw-node 程序，请确认已正确安装' }
+    }
+
+    writeNodeConfig(agentName.trim())
+    saveOpenclawAgentToHistory(agentName.trim())
+
+    openclawStatus = 'starting'
+    openclawLastError = ''
+
+    const { spawn: spawnChild } = require('child_process') as typeof import('child_process')
+    openclawProcess = spawnChild(exePath, [], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env },
+      cwd: path.dirname(exePath),
+      windowsHide: true,
+    })
+
+    openclawProcess.stdout?.on('data', (data: Buffer) => {
+      const text = data.toString().trim()
+      console.log('[OpenClaw]', text)
+
+      if (text.includes('连接成功')) {
+        openclawStatus = 'connected'
+        openclawMessage = text
+        sendOpenclawStatus()
+      } else if (text.includes('连接失败')) {
+        openclawStatus = 'error'
+        openclawMessage = text
+        openclawLastError = text
+        sendOpenclawStatus()
+      } else if (text.includes('连接已断开')) {
+        openclawStatus = 'disconnected'
+        openclawMessage = text
+        sendOpenclawStatus()
+      } else if (text.includes('正在连接')) {
+        openclawStatus = 'starting'
+        openclawMessage = text
+        sendOpenclawStatus()
+      }
+    })
+
+    openclawProcess.stderr?.on('data', (data: Buffer) => {
+      const text = data.toString().trim()
+      console.error('[OpenClaw Error]', text)
+      if (!text.includes('Warning:') && !text.includes('single-executable')) {
+        openclawLastError = text
+        sendOpenclawStatus()
+      }
+    })
+
+    openclawProcess.on('close', (code: number | null) => {
+      console.log(`[OpenClaw] 进程退出, code=${code}`)
+      openclawProcess = null
+      openclawStatus = code === 0 ? 'stopped' : 'error'
+      openclawMessage = code === 0 ? '已停止' : `进程异常退出 (code: ${code})`
+      if (code !== 0 && code !== null) {
+        openclawLastError = `进程异常退出 (code: ${code})`
+      }
+      sendOpenclawStatus()
+    })
+
+    openclawProcess.on('error', (err: Error) => {
+      console.error('[OpenClaw] 启动失败:', err)
+      openclawProcess = null
+      openclawStatus = 'error'
+      openclawLastError = err.message
+      openclawMessage = '启动失败: ' + err.message
+      sendOpenclawStatus()
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    if (openclawStatus === 'error') {
+      return { success: false, error: openclawLastError || '启动失败' }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    openclawStatus = 'error'
+    openclawLastError = error.message
+    return { success: false, error: error.message || '启动失败' }
+  }
+})
+
+ipcMain.handle('openclaw:stop', async () => {
+  try {
+    if (!openclawProcess) {
+      openclawStatus = 'stopped'
+      return { success: true }
+    }
+
+    openclawProcess.kill('SIGTERM')
+
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        if (openclawProcess) {
+          openclawProcess.kill('SIGKILL')
+        }
+        resolve()
+      }, 3000)
+
+      openclawProcess?.on('close', () => {
+        clearTimeout(timeout)
+        resolve()
+      })
+    })
+
+    openclawProcess = null
+    openclawStatus = 'stopped'
+    openclawLastError = ''
+    openclawMessage = ''
+    sendOpenclawStatus()
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message || '停止失败' }
+  }
+})
+
+ipcMain.handle('openclaw:getStatus', async () => {
+  return {
+    status: openclawProcess ? openclawStatus : 'stopped',
+    agentName: getOpenclawConfig().agentName,
+    message: openclawMessage,
+    error: openclawLastError
+  }
+})
+
+ipcMain.handle('openclaw:getConfig', async () => {
+  return getOpenclawConfig()
+})

@@ -274,6 +274,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getResult: (factorId: string) => ipcRenderer.invoke('research:getResult', factorId)
   },
 
+  // OpenClaw 智能体控制本机
+  openclaw: {
+    start: (agentName: string) => ipcRenderer.invoke('openclaw:start', agentName),
+    stop: () => ipcRenderer.invoke('openclaw:stop'),
+    getStatus: () => ipcRenderer.invoke('openclaw:getStatus'),
+    getConfig: () => ipcRenderer.invoke('openclaw:getConfig'),
+    onStatusChanged: (callback: (data: any) => void) => {
+      ipcRenderer.on('openclaw:status-changed', (_event, data) => callback(data))
+    },
+    removeStatusListener: () => {
+      ipcRenderer.removeAllListeners('openclaw:status-changed')
+    },
+  },
+
   // 数据工单API
   workorder: {
     submit: (data: { field_name: string; field_desc?: string; calc_logic?: string }) =>
@@ -747,6 +761,14 @@ declare global {
         getStats: () => Promise<{ success: boolean; data?: any; error?: string }>
         getResearchers: () => Promise<{ success: boolean; researchers?: string[]; error?: string }>
         getResult: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+      }
+      openclaw: {
+        start: (agentName: string) => Promise<{ success: boolean; error?: string }>
+        stop: () => Promise<{ success: boolean; error?: string }>
+        getStatus: () => Promise<{ status: string; agentName: string; message: string; error: string }>
+        getConfig: () => Promise<{ agentName: string; agentHistory: string[] }>
+        onStatusChanged: (callback: (data: { status: string; message: string; error: string }) => void) => void
+        removeStatusListener: () => void
       }
       workorder: {
         getStats: () => Promise<{ success: boolean; data?: any; error?: string }>

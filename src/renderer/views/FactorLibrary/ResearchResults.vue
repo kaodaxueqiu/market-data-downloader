@@ -161,85 +161,151 @@
       :close-on-click-modal="false"
       class="detail-dialog"
     >
-      <div class="detail-content" v-if="currentTask">
-        <!-- 基本信息 -->
-        <div class="detail-section">
-          <div class="section-title">基本信息</div>
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="任务ID">
-              <code>{{ currentTask.task_id }}</code>
-            </el-descriptions-item>
-            <el-descriptions-item label="任务名称">{{ currentTask.task_name }}</el-descriptions-item>
-            <el-descriptions-item label="因子ID">
-              <code>{{ currentTask.factor_id }}</code>
-            </el-descriptions-item>
-            <el-descriptions-item label="研究员">{{ currentTask.researcher }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <span :class="['status-text', currentTask.status]">
-                {{ getStatusName(currentTask.status) }}
-              </span>
-            </el-descriptions-item>
-            <el-descriptions-item label="任务类型">{{ currentTask.task_type || '单因子回测' }}</el-descriptions-item>
-          </el-descriptions>
-        </div>
+      <div v-loading="detailLoading" class="detail-content">
+        <template v-if="taskDetail">
+          <!-- 基本信息 -->
+          <div class="detail-section">
+            <div class="section-title">
+              <el-icon><Document /></el-icon>
+              基本信息
+            </div>
+            <div class="section-body">
+              <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="任务ID">
+                  <code>{{ taskDetail.task_id }}</code>
+                </el-descriptions-item>
+                <el-descriptions-item label="任务名称">{{ taskDetail.task_name }}</el-descriptions-item>
+                <el-descriptions-item label="任务类型">{{ getTaskTypeName(taskDetail.task_type) }}</el-descriptions-item>
+                <el-descriptions-item label="状态">
+                  <el-tag :type="getStatusType(taskDetail.status)" size="small">
+                    {{ getStatusName(taskDetail.status) }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="执行人">{{ taskDetail.user_id || currentTask?.researcher || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="创建时间">{{ formatFullDate(taskDetail.created_at) }}</el-descriptions-item>
+                <el-descriptions-item label="完成时间" :span="2">{{ formatFullDate(taskDetail.completed_at) || '-' }}</el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
 
-        <!-- 回测配置 -->
-        <div class="detail-section">
-          <div class="section-title">回测配置</div>
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="开始日期">{{ currentTask.start_date }}</el-descriptions-item>
-            <el-descriptions-item label="结束日期">{{ currentTask.end_date }}</el-descriptions-item>
-            <el-descriptions-item label="股票池">{{ currentTask.universe }}</el-descriptions-item>
-            <el-descriptions-item label="进度" v-if="currentTask.status === 'running'">
-              {{ currentTask.progress || 0 }}%
-            </el-descriptions-item>
-          </el-descriptions>
-        </div>
+          <!-- 回测配置 -->
+          <div class="detail-section" v-if="taskDetail.task_config">
+            <div class="section-title">
+              <el-icon><Setting /></el-icon>
+              回测配置
+            </div>
+            <div class="section-body">
+              <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="开始日期">{{ taskDetail.task_config.start_date }}</el-descriptions-item>
+                <el-descriptions-item label="结束日期">{{ taskDetail.task_config.end_date }}</el-descriptions-item>
+                <el-descriptions-item label="股票池" :span="2">
+                  {{ getUniverseDisplay(taskDetail.task_config.universe) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="比较基准" :span="2" v-if="taskDetail.task_config.backtest_params?.benchmarks?.length">
+                  {{ getBenchmarkDisplay(taskDetail.task_config.backtest_params.benchmarks) }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
 
-        <!-- 回测指标 -->
-        <div class="detail-section" v-if="currentTask.status === 'completed' && currentTask.period_ic_stats?.length">
-          <div class="section-title">回测指标</div>
-          <el-table :data="currentTask.period_ic_stats" size="small" stripe>
-            <el-table-column prop="period" label="周期" width="80">
-              <template #default="{ row }">{{ row.period }}日</template>
-            </el-table-column>
-            <el-table-column prop="rank_ic_mean" label="Rank IC" width="100">
-              <template #default="{ row }">
-                <span :class="getValueClass(row.rank_ic_mean)">{{ formatNumber(row.rank_ic_mean, 4) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="rank_ic_ir" label="Rank IC_IR" width="100">
-              <template #default="{ row }">
-                <span :class="getValueClass(row.rank_ic_ir)">{{ formatNumber(row.rank_ic_ir, 4) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="sharpe_ratio" label="夏普比率" width="90">
-              <template #default="{ row }">
-                <span :class="getValueClass(row.sharpe_ratio)">{{ formatNumber(row.sharpe_ratio, 2) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="max_drawdown" label="最大回撤" width="90">
-              <template #default="{ row }">
-                <span class="negative">{{ formatPercent(row.max_drawdown) }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
+          <!-- 因子配置 -->
+          <div class="detail-section" v-if="taskDetail.task_config">
+            <div class="section-title">
+              <el-icon><DataAnalysis /></el-icon>
+              因子配置
+            </div>
+            <div class="section-body">
+              <div v-if="taskDetail.task_config.factor_expression" class="factor-block">
+                <div class="factor-label">因子表达式</div>
+                <code class="factor-code">{{ taskDetail.task_config.factor_expression }}</code>
+              </div>
+              <div v-else-if="taskDetail.task_config.factor_code" class="factor-block">
+                <div class="factor-label">Python代码</div>
+                <pre class="factor-code-block">{{ taskDetail.task_config.factor_code }}</pre>
+              </div>
+            </div>
+          </div>
 
-        <!-- 时间信息 -->
-        <div class="detail-section">
-          <div class="section-title">时间信息</div>
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="创建时间">{{ currentTask.created_at }}</el-descriptions-item>
-            <el-descriptions-item label="完成时间">{{ currentTask.completed_at || '-' }}</el-descriptions-item>
-          </el-descriptions>
-        </div>
+          <!-- 数据源配置 -->
+          <div class="detail-section" v-if="taskDetail.task_config?.data_sources?.length">
+            <div class="section-title">
+              <el-icon><Connection /></el-icon>
+              数据源 ({{ taskDetail.task_config.data_sources.length }})
+            </div>
+            <div class="section-body">
+              <div class="datasource-list">
+                <div 
+                  v-for="(ds, idx) in taskDetail.task_config.data_sources" 
+                  :key="idx"
+                  class="datasource-item"
+                >
+                  <div class="ds-header">
+                    <span class="ds-name">{{ ds.name || ds.table }}</span>
+                    <el-tag size="small" type="info">{{ ds.database }}</el-tag>
+                  </div>
+                  <div class="ds-body">
+                    <div class="ds-row">
+                      <span class="ds-label">表名:</span>
+                      <code>{{ ds.table }}</code>
+                    </div>
+                    <div class="ds-row">
+                      <span class="ds-label">字段:</span>
+                      <span class="ds-fields">
+                        <el-tag v-for="f in ds.fields" :key="f" size="small" effect="plain">{{ f }}</el-tag>
+                      </span>
+                    </div>
+                    <div class="ds-row">
+                      <span class="ds-label">日期字段:</span>
+                      <code>{{ ds.date_field }}</code>
+                      <span class="ds-label" style="margin-left: 16px;">代码字段:</span>
+                      <code>{{ ds.code_field }}</code>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 回测参数 -->
+          <div class="detail-section" v-if="taskDetail.task_config?.backtest_params">
+            <div class="section-title">
+              <el-icon><Setting /></el-icon>
+              回测参数
+            </div>
+            <div class="section-body">
+              <el-descriptions :column="3" border size="small">
+                <el-descriptions-item label="分组数">{{ taskDetail.task_config.backtest_params.num_groups }}</el-descriptions-item>
+                <el-descriptions-item label="因子方向">{{ getDirectionName(taskDetail.task_config.backtest_params.factor_direction) }}</el-descriptions-item>
+                <el-descriptions-item label="预测周期">
+                  {{ taskDetail.task_config.backtest_params.forward_periods?.join(', ') || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="买入价格" v-if="taskDetail.task_config.backtest_params.buy_price_type">
+                  {{ getBuyPriceTypeName(taskDetail.task_config.backtest_params.buy_price_type) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="卖出价格" v-if="taskDetail.task_config.backtest_params.sell_price_type">
+                  {{ getSellPriceTypeName(taskDetail.task_config.backtest_params.sell_price_type) }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
+
+          <!-- 错误信息 -->
+          <div class="detail-section error" v-if="taskDetail.error_message">
+            <div class="section-title">
+              <el-icon><Warning /></el-icon>
+              错误信息
+            </div>
+            <div class="section-body">
+              <div class="error-message">{{ taskDetail.error_message }}</div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
         <el-button 
-          v-if="currentTask?.status === 'completed'" 
+          v-if="taskDetail?.status === 'completed'" 
           type="primary" 
           @click="viewResult(currentTask)"
         >
@@ -254,7 +320,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh } from '@element-plus/icons-vue'
+import { 
+  Search, Refresh, Document, Setting, DataAnalysis, Connection, Warning
+} from '@element-plus/icons-vue'
 
 const router = useRouter()
 
@@ -286,7 +354,10 @@ const sort = ref({
 
 // 详情弹窗
 const detailDialogVisible = ref(false)
+const detailLoading = ref(false)
 const currentTask = ref<any>(null)
+const taskDetail = ref<any>(null)
+
 
 // 加载统计信息
 const loadStats = async () => {
@@ -373,9 +444,26 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string | null 
 }
 
 // 查看任务详情
-const viewDetail = (row: any) => {
+const viewDetail = async (row: any) => {
   currentTask.value = row
   detailDialogVisible.value = true
+  detailLoading.value = true
+  taskDetail.value = null
+
+  try {
+    const result = await window.electronAPI.backtest.getTaskDetail(row.task_id)
+    if (result.success && result.data?.task) {
+      taskDetail.value = result.data.task
+    } else {
+      ElMessage.error(result.error || '获取任务详情失败')
+      detailDialogVisible.value = false
+    }
+  } catch (error: any) {
+    ElMessage.error('获取任务详情失败: ' + error.message)
+    detailDialogVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 // 查看回测结果
@@ -430,6 +518,120 @@ const getStatusText = (status: string) => {
     'cancelled': '取消'
   }
   return map[status] || status
+}
+
+const getStatusType = (status: string) => {
+  const map: Record<string, string> = {
+    'pending': 'warning',
+    'running': 'primary',
+    'completed': 'success',
+    'failed': 'danger',
+    'cancelled': 'info'
+  }
+  return map[status] || 'info'
+}
+
+const getTaskTypeName = (type: string) => {
+  const map: Record<string, string> = {
+    'single_factor': '单因子',
+    'multi_factor': '多因子',
+    'factor_compare': '因子对比',
+    'daily_update': '每日更新'
+  }
+  return map[type] || type
+}
+
+// 股票池显示
+const getUniverseDisplay = (universe: any) => {
+  if (!universe) return '-'
+  if (universe.type === 'preset') {
+    const names: Record<string, string> = {
+      'all': '全市场',
+      'hs300': '沪深300',
+      'zz500': '中证500',
+      'zz1000': '中证1000',
+      'sz50': '上证50',
+      'zz2000': '中证2000'
+    }
+    return names[universe.preset_name] || universe.preset_name
+  }
+  return '自定义股票池'
+}
+
+// 比较基准显示
+const getBenchmarkDisplay = (benchmarks: string[]) => {
+  if (!benchmarks?.length) return '-'
+  return benchmarks.map(code => {
+    const standardMap: Record<string, string> = {
+      'sh000001': '上证指数',
+      'sh000300': '沪深300',
+      'sh000905': '中证500',
+      'sh000852': '中证1000',
+      'sh000016': '上证50',
+      'sz399001': '深证成指',
+      'sz399006': '创业板指',
+      'sh000688': '科创50',
+      'csi2000': '中证2000',
+      'SH.000300': '沪深300',
+      'SH.000905': '中证500',
+      'SH.000852': '中证1000',
+      'SH.000688': '科创50'
+    }
+    if (standardMap[code]) return standardMap[code]
+    if (code.includes('_')) {
+      const [indexCode, industry] = code.split('_')
+      const indexNames: Record<string, string> = {
+        'SSE50': '上证50',
+        'CSI300': '沪深300',
+        'CSI500': '中证500',
+        'CSI1000': '中证1000',
+        'CSI2000': '中证2000'
+      }
+      return `${indexNames[indexCode] || indexCode}-${industry}`
+    }
+    return code
+  }).join('、')
+}
+
+const getDirectionName = (direction: string) => {
+  const map: Record<string, string> = {
+    'positive': '正向',
+    'negative': '负向',
+    'auto': '自动'
+  }
+  return map[direction] || direction
+}
+
+const getBuyPriceTypeName = (type: string) => {
+  const map: Record<string, string> = {
+    'daily_open': '日线开盘价',
+    'vwap_30min': '30分钟VWAP (9:30-10:00)',
+    'vwap_60min': '60分钟VWAP (9:30-10:30)'
+  }
+  return map[type] || type
+}
+
+const getSellPriceTypeName = (type: string) => {
+  const map: Record<string, string> = {
+    'daily_close': '日线收盘价',
+    'daily_vwap': '日线全天VWAP',
+    'vwap_30min': '30分钟VWAP (14:30-15:00)',
+    'vwap_60min': '60分钟VWAP (14:00-15:00)'
+  }
+  return map[type] || type
+}
+
+const formatFullDate = (dateStr: string) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
 }
 
 // 格式化函数
@@ -636,6 +838,8 @@ onMounted(() => {
   }
   
   .detail-content {
+    min-height: 200px;
+    
     .detail-section {
       border-bottom: 1px solid #ebeef5;
       
@@ -643,43 +847,132 @@ onMounted(() => {
         border-bottom: none;
       }
       
+      &.error {
+        .section-title {
+          background: #fef0f0;
+          color: #f56c6c;
+        }
+      }
+      
       .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         padding: 12px 20px;
         background: #f5f7fa;
         font-size: 14px;
         font-weight: 600;
         color: #303133;
+        
+        .el-icon {
+          font-size: 16px;
+          color: #409eff;
+        }
       }
       
-      :deep(.el-descriptions) {
-        margin: 16px 20px;
+      .section-body {
+        padding: 16px 20px;
+        
+        code {
+          background: #f5f7fa;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: 'SF Mono', 'Consolas', monospace;
+          font-size: 13px;
+          color: #606266;
+        }
+        
+        .factor-block {
+          .factor-label {
+            font-size: 13px;
+            color: #909399;
+            margin-bottom: 8px;
+          }
+          
+          .factor-code {
+            display: block;
+            background: #f5f7fa;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+          }
+          
+          .factor-code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.6;
+            overflow-x: auto;
+            max-height: 200px;
+            margin: 0;
+          }
+        }
+        
+        .datasource-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          
+          .datasource-item {
+            background: #fafafa;
+            border: 1px solid #ebeef5;
+            border-radius: 6px;
+            overflow: hidden;
+            
+            .ds-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding: 10px 14px;
+              background: #f5f7fa;
+              border-bottom: 1px solid #ebeef5;
+              
+              .ds-name {
+                font-weight: 500;
+                color: #303133;
+              }
+            }
+            
+            .ds-body {
+              padding: 12px 14px;
+              
+              .ds-row {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-bottom: 8px;
+                
+                &:last-child {
+                  margin-bottom: 0;
+                }
+                
+                .ds-label {
+                  font-size: 13px;
+                  color: #909399;
+                }
+                
+                .ds-fields {
+                  display: flex;
+                  flex-wrap: wrap;
+                  gap: 4px;
+                }
+              }
+            }
+          }
+        }
+        
+        .error-message {
+          background: #fef0f0;
+          color: #f56c6c;
+          padding: 12px 14px;
+          border-radius: 6px;
+          font-size: 13px;
+          line-height: 1.6;
+        }
       }
-      
-      :deep(.el-table) {
-        margin: 16px 20px;
-        width: calc(100% - 40px);
-      }
-      
-      code {
-        background: #f5f7fa;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-family: 'Monaco', 'Menlo', monospace;
-        font-size: 12px;
-        color: #606266;
-      }
-    }
-    
-    .status-text {
-      font-weight: 500;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      
-      &.pending { color: #d97706; background: #fef3c7; }
-      &.running { color: #2563eb; background: #dbeafe; }
-      &.completed { color: #16a34a; background: #dcfce7; }
-      &.failed { color: #dc2626; background: #fee2e2; }
     }
     
     .positive { color: #16a34a; }
