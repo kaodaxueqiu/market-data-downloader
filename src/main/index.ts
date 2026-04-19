@@ -6009,8 +6009,18 @@ function resolveOpenclawExePath(): string | null {
   return null
 }
 
+function getOpenclawConfigDir(): string {
+  if (process.platform === 'win32') {
+    return join(process.env.APPDATA || join(process.env.USERPROFILE || '', 'AppData', 'Roaming'), 'openclaw')
+  }
+  if (process.platform === 'darwin') {
+    return join(process.env.HOME || '', 'Library', 'Application Support', 'openclaw')
+  }
+  return join(process.env.HOME || '', '.config', 'openclaw')
+}
+
 function writeNodeConfig(agentName: string) {
-  const configDir = join(process.env.APPDATA || join(process.env.USERPROFILE || '', 'AppData', 'Roaming'), 'openclaw')
+  const configDir = getOpenclawConfigDir()
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true })
   }
