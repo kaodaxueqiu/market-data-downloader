@@ -63,10 +63,14 @@ const routes: RouteRecordRaw[] = [
         meta: { menuId: 'backtest_result' }
       },
       {
-        path: 'backtest/expression-dict',
+        path: 'expression-dict',
         name: 'ExpressionDict',
-        component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
+        component: () => import('../views/FactorLibrary/ExpressionDict.vue'),
         meta: { menuId: 'expression_dict' }
+      },
+      {
+        path: 'backtest/expression-dict',
+        redirect: '/factor-library/expression-dict'
       },
       // 研究成果
       {
@@ -444,8 +448,7 @@ router.beforeEach((to, _from, next) => {
     const subRoutes = [
       { path: '/factor-library/backtest/submit', menuId: 'backtest_submit' },
       { path: '/factor-library/backtest/tasks', menuId: 'backtest_tasks' },
-      { path: '/factor-library/backtest/result', menuId: 'backtest_result' },
-      { path: '/factor-library/backtest/expression-dict', menuId: 'expression_dict' }
+      { path: '/factor-library/backtest/result', menuId: 'backtest_result' }
     ]
     
     // 找到第一个有权限的子路由

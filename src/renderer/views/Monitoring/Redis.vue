@@ -44,8 +44,17 @@
           <div class="metric-row">
             <span class="metric-label">实例状态</span>
             <span class="metric-value">
-              <span class="healthy-count">{{ market.healthyInstances }}</span>
-              /{{ market.totalInstances }}
+              <template v-if="market.monitoredInstances > 0">
+                <span class="healthy-count">{{ market.healthyInstances }}</span>
+                /{{ market.monitoredInstances }}
+                <span class="unit">已采集</span>
+              </template>
+              <template v-else>
+                <span class="unit">未接入 Prometheus</span>
+              </template>
+              <span v-if="market.totalInstances > market.monitoredInstances" class="unit">
+                （配置 {{ market.totalInstances }} 个）
+              </span>
             </span>
           </div>
 
@@ -90,6 +99,8 @@ interface MarketSummary {
   name: string
   icon: string
   totalInstances: number
+  /** Prometheus 中能查到 redis_up 的实例数 */
+  monitoredInstances: number
   healthyInstances: number
   totalMemory: string
   totalConnections: number
@@ -110,7 +121,10 @@ const formatMemoryToGB = (bytes: number): string => {
 
 // 获取整体状态样式
 const getOverallStatusClass = (market: MarketSummary) => {
-  const ratio = market.healthyInstances / market.totalInstances
+  if (market.totalInstances === 0) return 'status-healthy'
+  // 全部未接入采集：与「全挂」区分，用灰色指示
+  if (market.monitoredInstances === 0) return 'status-nodata'
+  const ratio = market.healthyInstances / market.monitoredInstances
   if (ratio === 1) return 'status-healthy'
   if (ratio >= 0.8) return 'status-warning'
   return 'status-error'
@@ -133,6 +147,7 @@ const fetchMarketSummaries = async () => {
       const marketInstances = REDIS_INSTANCES.filter(i => i.market === marketKey)
       
       let healthyCount = 0
+      let monitoredCount = 0
       let totalMemoryBytes = 0
       let totalConnections = 0
       let totalOps = 0
@@ -147,14 +162,15 @@ const fetchMarketSummaries = async () => {
             prometheusService.query(`rate(redis_commands_processed_total{instance="${instance.name}"}[1m])`)
           ])
           
-          const isUp = upResult[0]?.value[1] === '1'
+          const hasUpSeries = upResult.length > 0 && upResult[0]?.value?.[1] !== undefined && upResult[0].value[1] !== ''
+          const isUp = hasUpSeries && upResult[0].value[1] === '1'
           const clients = parseInt(clientsResult[0]?.value[1] || '0')
           const memory = parseInt(memoryResult[0]?.value[1] || '0')
           const ops = Math.round(parseFloat(opsResult[0]?.value[1] || '0'))
           
-          return { isUp, clients, memory, ops }
+          return { hasUpSeries, isUp, clients, memory, ops }
         } catch (err) {
-          return { isUp: false, clients: 0, memory: 0, ops: 0 }
+          return { hasUpSeries: false, isUp: false, clients: 0, memory: 0, ops: 0 }
         }
       })
       
@@ -162,6 +178,7 @@ const fetchMarketSummaries = async () => {
       
       // 汇总该市场的数据
       results.forEach(result => {
+        if (result.hasUpSeries) monitoredCount++
         if (result.isUp) healthyCount++
         totalMemoryBytes += result.memory
         totalConnections += result.clients
@@ -173,6 +190,7 @@ const fetchMarketSummaries = async () => {
         name: marketInfo.name,
         icon: marketInfo.icon,
         totalInstances: marketInstances.length,
+        monitoredInstances: monitoredCount,
         healthyInstances: healthyCount,
         totalMemory: formatMemoryToGB(totalMemoryBytes),
         totalConnections,
@@ -316,6 +334,11 @@ onUnmounted(() => {
         &.status-warning {
           background: #E6A23C;
           box-shadow: 0 0 8px #E6A23C;
+        }
+
+        &.status-nodata {
+          background: #909399;
+          box-shadow: 0 0 8px rgba(144, 147, 153, 0.65);
         }
 
         &.status-error {

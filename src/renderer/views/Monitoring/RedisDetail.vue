@@ -152,7 +152,7 @@ const getStatusText = (status: string) => {
     healthy: '健康',
     warning: '警告',
     error: '异常',
-    unknown: '未知'
+    unknown: '未监控'
   }
   return texts[status] || '未知'
 }
@@ -199,7 +199,9 @@ const fetchInstancesData = async () => {
           prometheusService.query(`count(count by (db)(redis_db_keys{instance="${config.name}"}))`)
         ])
         
-        const up = upResult[0]?.value[1] === '1'
+        // redis_up 无数据：Prometheus 未采集该 instance（非「进程挂了」）
+        const hasUpSeries = upResult.length > 0 && upResult[0]?.value?.[1] !== undefined && upResult[0].value[1] !== ''
+        const upVal = hasUpSeries ? upResult[0].value[1] : ''
         const clients = parseInt(clientsResult[0]?.value[1] || '0')
         const memoryBytes = parseInt(memoryResult[0]?.value[1] || '0')
         const ops = Math.round(parseFloat(opsResult[0]?.value[1] || '0'))
@@ -212,10 +214,12 @@ const fetchInstancesData = async () => {
         const memoryUnit = getMemoryUnit(memoryBytes)
         
         let status: 'healthy' | 'warning' | 'error' | 'unknown' = 'unknown'
-        if (!up) {
-          status = 'error'
-        } else {
+        if (!hasUpSeries) {
+          status = 'unknown'
+        } else if (upVal === '1') {
           status = 'healthy'
+        } else {
+          status = 'error'
         }
         
         return {

@@ -76,6 +76,7 @@ export const allMenus: MenuItem[] = [
           { id: 'backtest_result', name: '回测结果', path: '/factor-library/backtest/result', icon: null }
         ]
       },
+      { id: 'expression_dict', name: '表达式字典', path: '/factor-library/expression-dict', icon: null },
       { 
         id: 'data_workorder', 
         name: '数据工单', 

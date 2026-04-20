@@ -29,15 +29,6 @@
         <el-icon><TrendCharts /></el-icon>
         <span>回测结果</span>
       </button>
-      <button 
-        v-if="hasPermission('expression_dict')"
-        class="nav-tab"
-        :class="{ active: activeTab === 'expression-dict' }"
-        @click="switchTab('expression-dict')"
-      >
-        <el-icon><Document /></el-icon>
-        <span>表达式字典</span>
-      </button>
     </div>
 
     <!-- 内容区域 -->
@@ -45,7 +36,6 @@
       <SubmitContent v-if="activeTab === 'submit'" @submitted="handleSubmitSuccess" />
       <TasksContent v-else-if="activeTab === 'tasks'" @view-result="handleViewResult" />
       <ResultContent v-else-if="activeTab === 'result'" :task-id="currentTaskId" @back="handleBackToResult" />
-      <ExpressionDictContent v-else-if="activeTab === 'expression-dict'" />
     </div>
   </div>
 </template>
@@ -53,12 +43,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataAnalysis, List, TrendCharts, Document } from '@element-plus/icons-vue'
+import { DataAnalysis, List, TrendCharts } from '@element-plus/icons-vue'
 import SubmitContent from './SubmitContent.vue'
 import TasksContent from './TasksContent.vue'
 import ResultContent from './ResultContent.vue'
-import ExpressionDictContent from './ExpressionDictContent.vue'
-
 const route = useRoute()
 const router = useRouter()
 
@@ -82,7 +70,6 @@ const availableTabs = computed(() => {
   if (hasPermission('backtest_submit')) tabs.push('submit')
   if (hasPermission('backtest_tasks')) tabs.push('tasks')
   if (hasPermission('backtest_result')) tabs.push('result')
-  if (hasPermission('expression_dict')) tabs.push('expression-dict')
   return tabs
 })
 
@@ -94,8 +81,6 @@ const setTabFromRoute = () => {
     activeTab.value = 'submit'
   } else if (path.includes('/backtest/tasks') && hasPermission('backtest_tasks')) {
     activeTab.value = 'tasks'
-  } else if (path.includes('/backtest/expression-dict') && hasPermission('expression_dict')) {
-    activeTab.value = 'expression-dict'
   } else if (path.includes('/backtest/result') && hasPermission('backtest_result')) {
     activeTab.value = 'result'
     // 提取 taskId
@@ -126,8 +111,6 @@ const switchTab = (tab: string) => {
     } else {
       router.push('/factor-library/backtest/result')
     }
-  } else if (tab === 'expression-dict') {
-    router.push('/factor-library/backtest/expression-dict')
   }
 }
 

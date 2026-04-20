@@ -650,7 +650,7 @@ const pageTitle = computed(() => {
     '/factor-library/backtest/submit': '因子回测',
     '/factor-library/backtest/tasks': '因子回测',
     '/factor-library/backtest/result': '因子回测',
-    '/factor-library/backtest/expression-dict': '因子回测',
+    '/factor-library/expression-dict': '表达式字典',
     '/factor-library/research-results': '研究成果',
     '/fund-management': '基金管理',
     '/fund-management/list': '基金列表',

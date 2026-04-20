@@ -6,7 +6,10 @@
         <el-button @click="goBack" size="small" :icon="ArrowLeft">返回</el-button>
         <div class="market-title">
           <span class="market-icon">{{ marketInfo?.icon }}</span>
-          <h2>{{ marketInfo?.name }}</h2>
+          <div class="market-title-text">
+            <h2>{{ marketInfo?.name }}</h2>
+            <span v-if="marketInfo?.zzRange" class="header-zz-range">{{ marketInfo.zzRange }}</span>
+          </div>
         </div>
       </div>
       <div class="header-right">
@@ -41,7 +44,7 @@
     <div class="search-bar">
       <el-input
         v-model="searchTerm"
-        placeholder="搜索业务类型、消息号或进程名..."
+        placeholder="搜索业务类型、消息号、ZZ 编号或进程名..."
         clearable
       />
     </div>
@@ -58,7 +61,7 @@
           <div class="subscription-header">
             <span class="sub-label">订阅组</span>
             <h3 class="sub-name">{{ sub.description }}</h3>
-            <span class="sub-message-no">{{ sub.messageNo }}</span>
+            <span v-if="sub.zzCode" class="sub-zz-range">{{ sub.zzCode }}</span>
           </div>
 
           <div class="subscription-info">
@@ -140,6 +143,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { prometheusService } from '@/services/prometheus.service'
 import { MESSAGE_DESCRIPTIONS } from '@/config/messageDescriptions'
+import { RECEIVER_MARKETS } from '@/config/marketMonitoringMarkets'
+import { getZzCodeForReceiverMessageNo } from '@/config/marketReceiverMessageNoToZz'
 
 interface ProcessInfo {
   name: string
@@ -155,6 +160,8 @@ interface ProcessInfo {
 
 interface SubscriptionGroup {
   messageNo: string
+  /** 对应数据中心数据源编号 */
+  zzCode?: string
   description: string
   mode: string
   currentLeader: string
@@ -174,13 +181,8 @@ let refreshTimer: NodeJS.Timeout | null = null
 
 const marketKey = computed(() => route.params.market as string)
 
-const MARKET_INFO: Record<string, any> = {
-  sz: { name: '深圳市场', icon: '🏢', jobName: 'market_receiver_sz' },
-  sh: { name: '上海市场', icon: '🏛️', jobName: 'market_receiver_sh' },
-  futures: { name: '期货市场', icon: '📊', jobName: 'market_receiver_futures' },
-  options: { name: '期权市场', icon: '🎯', jobName: 'market_receiver_options' },
-  hk: { name: '陆港通市场', icon: '🌉', jobName: 'market_receiver_hk' }
-}
+const MARKET_INFO: Record<string, { name: string; icon: string; jobName: string; zzRange: string }> =
+  Object.fromEntries(RECEIVER_MARKETS.map(m => [m.key, { name: m.name, icon: m.icon, jobName: m.jobName, zzRange: m.zzRange }]))
 
 const marketInfo = computed(() => MARKET_INFO[marketKey.value])
 
@@ -213,8 +215,10 @@ const filteredSubscriptions = computed(() => {
   
   const lowerSearch = searchTerm.value.toLowerCase()
   return subscriptions.value.filter(sub => {
+    const zz = sub.zzCode?.toLowerCase() ?? ''
     return sub.messageNo.includes(searchTerm.value) ||
            sub.description.toLowerCase().includes(lowerSearch) ||
+           zz.includes(lowerSearch) ||
            sub.process1?.name.toLowerCase().includes(lowerSearch) ||
            sub.process2?.name.toLowerCase().includes(lowerSearch)
   })
@@ -312,6 +316,7 @@ const fetchSubscriptionData = async () => {
         if (!subscriptionGroups.has(messageNo)) {
           subscriptionGroups.set(messageNo, {
             messageNo,
+            zzCode: getZzCodeForReceiverMessageNo(messageNo),
             description: MESSAGE_DESCRIPTIONS[messageNo] || `消息 ${messageNo}`,
             mode: '主备',
             currentLeader: '-',
@@ -399,11 +404,25 @@ onUnmounted(() => {
           font-size: 24px;
         }
 
+        .market-title-text {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 6px;
+        }
+
         h2 {
           margin: 0;
           font-size: 20px;
           color: #4facfe;
           font-weight: 600;
+        }
+
+        .header-zz-range {
+          font-size: 12px;
+          font-weight: 500;
+          letter-spacing: 0.02em;
+          color: rgba(79, 172, 254, 0.9);
         }
       }
     }
@@ -515,10 +534,13 @@ onUnmounted(() => {
           line-height: 1.3;
         }
 
-        .sub-message-no {
+        .sub-zz-range {
           display: block;
+          margin-top: 4px;
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.5);
+          font-weight: 500;
+          letter-spacing: 0.02em;
+          color: rgba(79, 172, 254, 0.9);
         }
       }
 

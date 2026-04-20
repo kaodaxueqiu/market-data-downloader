@@ -35,6 +35,7 @@
             <div class="market-title">
               <h3>{{ market.name }}</h3>
               <span class="market-subtitle">市场数据接收</span>
+              <span v-if="market.zzRange" class="market-zz-range">{{ market.zzRange }}</span>
             </div>
           </div>
           <div class="status-indicator" :class="getStatusClass(market)"></div>
@@ -91,11 +92,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { prometheusService } from '@/services/prometheus.service'
+import { RECEIVER_MARKETS } from '@/config/marketMonitoringMarkets'
 
 interface MarketSummary {
   key: string
   name: string
   icon: string
+  /** 该市场涵盖的数据源 ZZ 编号区间（与下载/字典一致） */
+  zzRange: string
   totalProcesses: number
   onlineProcesses: number
   totalGroups: number
@@ -111,15 +115,6 @@ const error = ref<string | null>(null)
 const marketSummaries = ref<MarketSummary[]>([])
 const lastUpdateTime = ref('--:--:--')
 let refreshTimer: NodeJS.Timeout | null = null
-
-// 市场配置
-const MARKETS = [
-  { key: 'sz', name: '深圳市场', icon: '🏢', jobName: 'market_receiver_sz' },
-  { key: 'sh', name: '上海市场', icon: '🏛️', jobName: 'market_receiver_sh' },
-  { key: 'futures', name: '期货市场', icon: '📊', jobName: 'market_receiver_futures' },
-  { key: 'options', name: '期权市场', icon: '🎯', jobName: 'market_receiver_options' },
-  { key: 'hk', name: '陆港通市场', icon: '🌉', jobName: 'market_receiver_hk' }
-]
 
 // 获取状态样式
 const getStatusClass = (market: MarketSummary) => {
@@ -139,7 +134,7 @@ const fetchMarketSummaries = async () => {
     error.value = null
     const summaries: MarketSummary[] = []
     
-    for (const market of MARKETS) {
+    for (const market of RECEIVER_MARKETS) {
       try {
         // 查询该市场的指标
         const [upResult, messagesResult, rateResult, isLeaderResult] = await Promise.all([
@@ -168,6 +163,7 @@ const fetchMarketSummaries = async () => {
           key: market.key,
           name: market.name,
           icon: market.icon,
+          zzRange: market.zzRange,
           totalProcesses,
           onlineProcesses,
           totalGroups,
@@ -182,6 +178,7 @@ const fetchMarketSummaries = async () => {
           key: market.key,
           name: market.name,
           icon: market.icon,
+          zzRange: market.zzRange,
           totalProcesses: 0,
           onlineProcesses: 0,
           totalGroups: 0,
@@ -311,6 +308,15 @@ onUnmounted(() => {
           .market-subtitle {
             font-size: 12px;
             color: rgba(255, 255, 255, 0.55);
+          }
+
+          .market-zz-range {
+            display: block;
+            margin-top: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            color: rgba(79, 172, 254, 0.9);
           }
         }
       }
