@@ -56,7 +56,7 @@ func BuildAndroid() error {
 // BuildIOS compiles the project for iOS.
 func BuildIOS() error {
 	fmt.Println("Building for iOS...")
-	outPath += "ios"
+	outPath := outPath + "ios"
 	arch := os.Getenv("GOARCH")
 
 	if len(arch) == 0 {
@@ -86,7 +86,7 @@ func BuildIOS() error {
 func BuildLinux() error {
 	fmt.Println("Building for Linux...")
 
-	outPath += "linux"
+	outPath := outPath + "linux"
 	arch := os.Getenv("GOARCH")
 	cc := os.Getenv("CC")
 	cxx := os.Getenv("CXX")
@@ -126,7 +126,7 @@ func BuildLinux() error {
 func BuildWindows() error {
 	fmt.Println("Building for Windows...")
 
-	outPath += "windows"
+	outPath := outPath + "windows"
 	arch := os.Getenv("GOARCH")
 	cc := os.Getenv("CC")
 	cxx := os.Getenv("CXX")

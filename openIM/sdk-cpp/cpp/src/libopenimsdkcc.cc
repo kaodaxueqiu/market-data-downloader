@@ -103,7 +103,7 @@ std::string OpenIMManager::GetLoginUser()
   char* user=get_login_user();
   std::string user_str(user);
   free(user);
-  return get_login_user();
+  return user_str;
 }
 
 void OpenIMManager::NetworkStatusChanged(const std::function<void(const std::string&, int, const std::string&, const std::string&)>& networkStatusCallback, const std::string& operationID)

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  OpenIM SDK 统一编译部署脚本" -ForegroundColor Cyan

@@ -126,13 +126,18 @@ const TabItem: FC<{
     setTimeout(() => inputRef.current?.select());
   }, [session.title]);
 
-  const confirmRename = useCallback(() => {
+  const confirmRename = useCallback(async () => {
+    if (!renaming) return;
+    setRenaming(false);
     const trimmed = renameValue.trim();
     if (trimmed && trimmed !== session.title) {
-      renameSession(session.sessionId, trimmed);
+      try {
+        await renameSession(session.sessionId, trimmed);
+      } catch (e) {
+        console.error("rename failed", e);
+      }
     }
-    setRenaming(false);
-  }, [renameValue, session.sessionId, session.title, renameSession]);
+  }, [renaming, renameValue, session.sessionId, session.title, renameSession]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -164,6 +169,22 @@ const TabItem: FC<{
     });
   }, [session.sessionId, session.remark]);
 
+  const handleShowInfo = useCallback(() => {
+    Modal.info({
+      title: "会话基本信息",
+      icon: null,
+      content: (
+        <div style={{ wordBreak: "break-all" }}>
+          <p><b>标题：</b>{session.title || "新对话"}</p>
+          <p><b>Session ID：</b>{session.sessionId}</p>
+          {session.sessionKey && <p><b>Session Key：</b>{session.sessionKey}</p>}
+          {session.remark && <p><b>备注：</b>{session.remark}</p>}
+        </div>
+      ),
+      okText: "关闭",
+    });
+  }, [session]);
+
   const menuItems: MenuProps["items"] = [
     { key: "rename", label: "重命名", onClick: startRename },
     { key: "remark", label: "备注", onClick: handleRemark },
@@ -173,6 +194,7 @@ const TabItem: FC<{
       onClick: () => pinSession(session.sessionId, !session.isPinned),
     },
     { type: "divider" },
+    { key: "info", label: "基本信息", onClick: handleShowInfo },
     {
       key: "close",
       label: "关闭标签",
