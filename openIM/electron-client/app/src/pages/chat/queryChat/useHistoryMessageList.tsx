@@ -15,6 +15,7 @@ import {
   useUserStore,
 } from "@/store";
 import { useContactStore } from "@/store/contact";
+import { isBot } from "@/store/botMap";
 import emitter, {
   emit,
   GetMessageContextParams,
@@ -30,6 +31,7 @@ export const conversationMessageCache = new Map<string, {
   allMessages: ExMessageItem[];
   isComplete: boolean;
 }>();
+(window as any).__CONVERSATION_CACHE__ = conversationMessageCache;
 
 const PRELOAD_CONCURRENCY = 10;
 
@@ -82,8 +84,7 @@ function getMessageSessionId(msg: ExMessageItem): string | null {
 
 function isCurrentConversationAgent(): boolean {
   const currentConv = useConversationStore.getState().currentConversation;
-  if (!currentConv?.userID) return false;
-  return useContactStore.getState().agents.some((a) => a.userID === currentConv.userID);
+  return isBot(currentConv?.userID);
 }
 
 function filterBySession(messages: ExMessageItem[]): ExMessageItem[] {
@@ -156,7 +157,7 @@ export function useHistoryMessageList({
   useEffect(() => {
     messageReqIdRef.current += 1;
     pendingClientMsgIDs.current = [];
-    if (!useMessageStore.getState().jumpClientMsgID) {
+    if (!useMessageStore.getState().jumpClientMsgID && !isCurrentConversationAgent()) {
       loadHistoryMessages();
     }
     return () => {
@@ -524,7 +525,7 @@ export function useHistoryMessageList({
               ...allFiltered,
               ...(loadMore ? preState.messageList : []),
             ]),
-            firstItemIndex: preState.firstItemIndex - allFiltered.length,
+            firstItemIndex: Math.max(0, preState.firstItemIndex - allFiltered.length),
           }));
         } catch (error) {
           console.error("[HistoryMessage] Failed to load messages:", error);
@@ -616,7 +617,7 @@ export function useHistoryMessageList({
         hasMoreOld: startMessageIdx === SPLIT_COUNT,
         hasMoreNew: messageList.length - startMessageIdx === SPLIT_COUNT + 1,
         messageList: messageList,
-        firstItemIndex: START_INDEX - startMessageIdx,
+        firstItemIndex: Math.max(0, START_INDEX - startMessageIdx),
       }));
       scrollToIndex(startMessageIdx);
     },

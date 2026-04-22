@@ -25,6 +25,7 @@ import {
   useUserStore,
 } from "@/store";
 import { useContactStore } from "@/store/contact";
+import { getBot } from "@/store/botMap";
 import { formatMessageTime } from "@/utils/imCommon";
 import { emit } from "@/utils/window/events";
 
@@ -102,9 +103,7 @@ const MessageItem: FC<IMessageItemProps> = ({
     conversationID: conversationID ?? "",
   });
   const currentGroupInfo = useConversationStore((state) => state.currentGroupInfo);
-  const agentInfo = useContactStore((state) =>
-    state.agents.find((agent) => agent.userID === message.sendID),
-  );
+  const agentInfo = getBot(message.sendID);
   const MessageRenderComponent = components[message.contentType] || CatchMessageRender;
 
   // locale re render

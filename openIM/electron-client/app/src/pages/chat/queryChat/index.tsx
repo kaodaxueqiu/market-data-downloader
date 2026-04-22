@@ -10,6 +10,7 @@ import SessionHistoryPanel from "@/components/SessionHistoryPanel";
 import SessionTabBar from "@/components/SessionTabBar";
 import { IMSDK } from "@/layout/MainContentWrap";
 import { useConversationStore, useMessageStore, useUserStore } from "@/store";
+import { isBot } from "@/store/botMap";
 
 import ChatContent from "./ChatContent";
 import ChatFooter from "./ChatFooter";
@@ -98,7 +99,9 @@ export const QueryChat = () => {
       orientation="vertical"
     >
       <ChatHeader agent={agent} isBlackUser={isBlackUser} />
-      {agent && <SessionTabBar agentId={agent.userID} />}
+      {isBot(currentConversation?.userID) && (
+        <SessionTabBar agentId={currentConversation!.userID} />
+      )}
       <Panel id="chat-main">
         <div className="flex h-full flex-col overflow-hidden">
           {agent && selfUserID && (
@@ -119,7 +122,7 @@ export const QueryChat = () => {
         </div>
       )}
 
-      {agent && <SessionHistoryPanel />}
+      {isBot(currentConversation?.userID) && <SessionHistoryPanel />}
     </Group>
   );
 };

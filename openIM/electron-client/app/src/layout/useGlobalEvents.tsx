@@ -47,6 +47,7 @@ import {
   useUserStore,
 } from "@/store";
 import { useContactStore } from "@/store/contact";
+import { isBot, loadBotMap } from "@/store/botMap";
 import { feedbackToast } from "@/utils/feedback";
 import {
   calcApplicationBadge,
@@ -475,6 +476,7 @@ export function useGlobalEvent() {
       const convIDs = list.map((c) => c.conversationID);
       if (convIDs.length > 0) {
         updatePreloadState("loading");
+        await loadBotMap();
         console.log(`[Preload] 开始预加载 ${convIDs.length} 个会话...`);
         try {
           await preloadAllConversations(convIDs, (loaded, total) => {
@@ -637,11 +639,9 @@ export function useGlobalEvent() {
     return (msg as any).sessionId || null;
   };
 
-  const isAgentMessage = (msg: ExMessageItem): boolean => {
-    const agents = useContactStore.getState().agents;
+  const isAgentMessage = (_msg: ExMessageItem): boolean => {
     const currentConv = useConversationStore.getState().currentConversation;
-    if (!currentConv?.userID) return false;
-    return agents.some((a) => a.userID === currentConv.userID);
+    return isBot(currentConv?.userID);
   };
 
   const writeCacheForMessage = (msg: ExMessageItem) => {

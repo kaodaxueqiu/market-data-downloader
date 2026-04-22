@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useCurrentMemberRole } from "@/hooks/useCurrentMemberRole";
 import { IMSDK } from "@/layout/MainContentWrap";
 import { useContactStore, useConversationStore, useUserStore } from "@/store";
+import { getBot } from "@/store/botMap";
 
 export default function useConversationState() {
   const syncState = useUserStore((state) => state.syncState);
@@ -28,9 +29,7 @@ export default function useConversationState() {
         (user) => user.userID === currentConversation?.userID,
       ) !== -1,
   );
-  const agent = useContactStore((state) =>
-    state.agents.find((agent) => agent.userID === currentConversation?.userID),
-  );
+  const agent = getBot(currentConversation?.userID);
 
   const { isJoinGroup, isNomal, currentIsMuted } = useCurrentMemberRole();
 

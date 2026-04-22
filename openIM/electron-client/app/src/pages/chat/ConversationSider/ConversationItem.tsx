@@ -19,6 +19,7 @@ import conversation_sending from "@/assets/images/conversation_sending.png";
 import disturb from "@/assets/images/disturb.png";
 import OIMAvatar from "@/components/OIMAvatar";
 import { useContactStore, useConversationStore, useUserStore } from "@/store";
+import { getBot, isBot } from "@/store/botMap";
 import { escapeHtml } from "@/utils/escapeHtml";
 import { formatConversionTime, getConversationContent } from "@/utils/imCommon";
 
@@ -51,10 +52,8 @@ const ConversationItem = ({
   );
   const currentUser = useUserStore((state) => state.selfInfo.userID);
 
-  const agentInfo = useContactStore((state) =>
-    state.agents.find((agent) => agent.userID === conversation.userID),
-  );
-  const isAgent = Boolean(agentInfo);
+  const agentInfo = getBot(conversation.userID);
+  const isAgent = isBot(conversation.userID);
 
   const { droping } = useDropFileAndDom({
     domRef: conversationItemRef,

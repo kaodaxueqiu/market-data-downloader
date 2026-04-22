@@ -9,7 +9,7 @@ import {
   useMessageStore,
   useSessionStore,
 } from "@/store";
-import { useContactStore } from "@/store/contact";
+import { isBot } from "@/store/botMap";
 
 import {
   deleteAndPushOneMessage,
@@ -36,18 +36,11 @@ export function useSendMessage() {
         !sourceID;
       needPush = needPush ?? inCurrentConversation;
 
-      const isAgentConversation = useContactStore
-        .getState()
-        .agents.some((a) => a.userID === currentConversation?.userID);
-      const allAgents = useContactStore.getState().agents;
-      console.log("[DEBUG-SEND] isAgent:", isAgentConversation, "convUserID:", currentConversation?.userID, "agentUserIDs:", allAgents.map(a => a.userID));
-      if (isAgentConversation) {
+      if (isBot(currentConversation?.userID)) {
         const sessionId = useSessionStore.getState().activeSessionId;
-        console.log("[DEBUG-SEND] activeSessionId:", sessionId, "LEGACY:", LEGACY_SESSION_ID);
         if (sessionId && sessionId !== LEGACY_SESSION_ID) {
           (message as any).sessionId = sessionId;
         }
-        console.log("[DEBUG-SEND] message.sessionId after set:", (message as any).sessionId);
       }
 
       if (needPush) {
