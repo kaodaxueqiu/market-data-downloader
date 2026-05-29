@@ -157,7 +157,23 @@ function createWindow() {
   })
 
   // 🔒 隐藏原生菜单栏（File、Edit、View等）
-  Menu.setApplicationMenu(null)
+  if (process.env.NODE_ENV === 'development') {
+    const devMenu = Menu.buildFromTemplate([
+      {
+        label: 'Dev',
+        submenu: [
+          { role: 'reload' },
+          { role: 'forceReload' },
+          { role: 'toggleDevTools' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      }
+    ])
+    Menu.setApplicationMenu(devMenu)
+  } else {
+    Menu.setApplicationMenu(null)
+  }
 
   // 捕获渲染进程崩溃
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -183,7 +199,7 @@ function createWindow() {
 
   // 开发环境
   if (process.env.NODE_ENV === 'development') {
-    console.log('正在加载开发服务器: http://localhost:3100')
+    console.log('正在加载开发服务器: http://localhost:3101')
     
     // 延迟加载，确保Vite服务器准备就绪
     let retryCount = 0
@@ -193,7 +209,7 @@ function createWindow() {
       try {
         retryCount++
         console.log(`🔄 尝试加载页面... (第${retryCount}次)`)
-        await mainWindow!.loadURL('http://localhost:3100')
+        await mainWindow!.loadURL('http://localhost:3101')
         console.log('✅ 页面加载成功！')
         // 开发模式下启用DevTools
         mainWindow!.webContents.openDevTools()
@@ -3409,6 +3425,453 @@ ipcMain.handle('factor:myBacktestHistory', async (_event, factorId: string | num
     return { success: true, data: response.data.data }
   } catch (error: any) {
     console.error('获取因子回测历史失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// ========== Py文件源码API（MinIO远程存储） ==========
+
+// 选择Py文件（仅打开对话框，返回路径和元信息，不上传）
+ipcMain.handle('factor:selectPyFile', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: '选择因子 Python 文件',
+      filters: [{ name: 'Python Files', extensions: ['py'] }],
+      properties: ['openFile']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: 'cancelled' }
+    }
+
+    const sourcePath = result.filePaths[0]
+    const fs = require('fs')
+    const path = require('path')
+
+    const stats = fs.statSync(sourcePath)
+    if (stats.size > 1024 * 1024) {
+      return { success: false, error: '文件大小超过1MB限制' }
+    }
+
+    return {
+      success: true,
+      filePath: sourcePath,
+      fileName: path.basename(sourcePath),
+      fileSize: stats.size
+    }
+  } catch (error: any) {
+    console.error('选择Py文件失败:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// 上传Py文件到服务器（用已选的本地文件路径）
+ipcMain.handle('factor:uploadSourceFile', async (_event, factorId: string, filePath: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const fs = require('fs')
+    const path = require('path')
+    const FormData = require('form-data')
+
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: '文件不存在，请重新选择' }
+    }
+
+    const fileName = path.basename(filePath)
+    const fileBuffer = fs.readFileSync(filePath)
+    const fileSize = fileBuffer.length
+
+    const form = new FormData()
+    form.append('file', fileBuffer, { filename: fileName, contentType: 'text/x-python' })
+
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/${factorId}/source`,
+      form,
+      {
+        headers: {
+          'X-API-Key': apiKey,
+          ...form.getHeaders()
+        },
+        maxContentLength: 2 * 1024 * 1024
+      }
+    )
+
+    if (response.data.success) {
+      return {
+        success: true,
+        fileName,
+        fileSize,
+        uploadedAt: response.data.data?.uploaded_at
+      }
+    } else {
+      return { success: false, error: response.data.error || '上传失败' }
+    }
+  } catch (error: any) {
+    console.error('上传Py文件失败:', error.message)
+    const errMsg = error.response?.data?.error || error.message
+    return { success: false, error: errMsg }
+  }
+})
+
+// 从服务器获取因子源码内容（支持按版本获取）
+ipcMain.handle('factor:getSourceFile', async (_event, factorId: string, version?: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const params: any = {}
+    if (version != null) params.version = version
+
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/${factorId}/source`,
+      { headers: { 'X-API-Key': apiKey }, params }
+    )
+
+    if (response.data.success) {
+      return {
+        success: true,
+        content: response.data.data.content,
+        fileName: response.data.data.file_name,
+        fileSize: response.data.data.file_size,
+        uploadedAt: response.data.data.uploaded_at
+      }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      return { success: false, error: '源码文件未上传' }
+    }
+    console.error('获取Py文件失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 删除服务器上的因子源码文件（支持按版本删除）
+ipcMain.handle('factor:deleteSourceFile', async (_event, factorId: string, version?: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const params: any = {}
+    if (version != null) params.version = version
+
+    await axios.delete(
+      `${MY_FACTOR_API_BASE}/${factorId}/source`,
+      { headers: { 'X-API-Key': apiKey }, params }
+    )
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('删除Py文件失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 选择并上传自定义股票域文件
+ipcMain.handle('factor:selectUniverseFile', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: '选择股票列表文件',
+      filters: [
+        { name: 'CSV/TXT Files', extensions: ['csv', 'txt'] }
+      ],
+      properties: ['openFile']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: 'cancelled' }
+    }
+
+    const sourcePath = result.filePaths[0]
+    const fs = require('fs')
+    const path = require('path')
+
+    const stats = fs.statSync(sourcePath)
+    if (stats.size > 1024 * 1024) {
+      return { success: false, error: '文件大小超过1MB限制' }
+    }
+
+    return {
+      success: true,
+      filePath: sourcePath,
+      fileName: path.basename(sourcePath),
+      fileSize: stats.size
+    }
+  } catch (error: any) {
+    console.error('选择股票域文件失败:', error.message)
+    return { success: false, error: error.message }
+  }
+})
+
+// 上传自定义股票域文件到服务器
+ipcMain.handle('factor:uploadUniverseFile', async (_event, factorId: string, filePath: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const fs = require('fs')
+    const path = require('path')
+    const FormData = require('form-data')
+
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: '文件不存在，请重新选择' }
+    }
+
+    const fileName = path.basename(filePath)
+    const fileBuffer = fs.readFileSync(filePath)
+
+    const form = new FormData()
+    form.append('file', fileBuffer, { filename: fileName, contentType: 'text/csv' })
+
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/${factorId}/universe-file`,
+      form,
+      {
+        headers: {
+          'X-API-Key': apiKey,
+          ...form.getHeaders()
+        },
+        maxContentLength: 2 * 1024 * 1024
+      }
+    )
+
+    if (response.data.success) {
+      return {
+        success: true,
+        fileName,
+        fileSize: fileBuffer.length,
+        uploadedAt: response.data.data?.uploaded_at
+      }
+    } else {
+      return { success: false, error: response.data.error || '上传失败' }
+    }
+  } catch (error: any) {
+    console.error('上传股票域文件失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 从服务器获取自定义股票域文件内容（支持按版本获取）
+ipcMain.handle('factor:getUniverseFile', async (_event, factorId: string, version?: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const params: any = {}
+    if (version != null) params.version = version
+
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/${factorId}/universe-file`,
+      { headers: { 'X-API-Key': apiKey }, params }
+    )
+
+    if (response.data.success) {
+      return {
+        success: true,
+        content: response.data.data.content,
+        fileName: response.data.data.file_name,
+        fileSize: response.data.data.file_size
+      }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      return { success: false, error: '股票域文件未上传' }
+    }
+    console.error('获取股票域文件失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// ========== 因子版本与广场API ==========
+
+// 获取因子版本列表
+ipcMain.handle('factor:myVersions', async (_event, factorId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/${factorId}/versions`,
+      { headers: { 'X-API-Key': apiKey } }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取版本列表失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 获取特定版本详情
+ipcMain.handle('factor:myVersionDetail', async (_event, factorId: string, version: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/${factorId}/version/${version}`,
+      { headers: { 'X-API-Key': apiKey } }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取版本详情失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 删除指定版本（最后一个版本时整体删除因子）
+ipcMain.handle('factor:deleteVersion', async (_event, factorId: string, version: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.delete(
+      `${MY_FACTOR_API_BASE}/${factorId}/versions/${version}`,
+      { headers: { 'X-API-Key': apiKey } }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('删除版本失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 提交到因子广场
+ipcMain.handle('factor:submitPlaza', async (_event, factorId: string, remark: string, version?: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const body: any = { remark }
+    if (version) body.version = version
+
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/${factorId}/submit-plaza`,
+      body,
+      { headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' } }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('提交到广场失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 因子广场列表
+ipcMain.handle('factor:plazaList', async (_event, params: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.get(
+      'http://61.151.241.233:8080/api/v1/factor/plaza/list',
+      { headers: { 'X-API-Key': apiKey }, params }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取广场列表失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 因子广场详情
+ipcMain.handle('factor:plazaDetail', async (_event, plazaId: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.get(
+      `http://61.151.241.233:8080/api/v1/factor/plaza/${plazaId}`,
+      { headers: { 'X-API-Key': apiKey } }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取广场详情失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 因子广场获取源码（支持按版本获取）
+ipcMain.handle('factor:plazaSource', async (_event, plazaId: string, version?: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const params: any = {}
+    if (version != null) params.version = version
+
+    const response = await axios.get(
+      `http://61.151.241.233:8080/api/v1/factor/plaza/${plazaId}/source`,
+      { headers: { 'X-API-Key': apiKey }, params }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取广场源码失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 因子广场提交记录流水
+ipcMain.handle('factor:plazaSubmissions', async (_event, params: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.get(
+      'http://61.151.241.233:8080/api/v1/factor/plaza/submissions',
+      { headers: { 'X-API-Key': apiKey }, params }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取广场提交记录失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 因子广场分类（含广场因子数量）
+ipcMain.handle('factor:plazaCategories', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.get(
+      'http://61.151.241.233:8080/api/v1/factor/plaza/categories',
+      { headers: { 'X-API-Key': apiKey } }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取广场分类失败:', error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 因子广场版本列表
+ipcMain.handle('factor:plazaVersions', async (_event, factorId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+
+    const response = await axios.get(
+      `http://61.151.241.233:8080/api/v1/factor/plaza/${factorId}/versions`,
+      { headers: { 'X-API-Key': apiKey } }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('获取广场版本列表失败:', error.message)
     return { success: false, error: error.response?.data?.error || error.message }
   }
 })

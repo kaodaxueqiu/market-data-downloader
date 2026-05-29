@@ -603,7 +603,7 @@ provide('unreadCount', unreadCount)
 const filterMenuTree = (menus: MenuItem[]): MenuItem[] => {
   return menus
     .filter(menu => {
-      // 当前菜单必须在权限列表里才显示
+      if (menu.hidden) return false
       return menuPermissions.value.includes(menu.id)
     })
     .map(menu => {
@@ -629,7 +629,7 @@ const visibleMenus = computed(() => {
   // 如果没有权限数据或权限为空，默认显示所有菜单（兼容旧用户）
   if (!menuPermissions.value || menuPermissions.value.length === 0) {
     console.log('⚠️ 无菜单权限数据，显示全部菜单（兼容模式）')
-    return allMenus
+    return allMenus.filter(m => !m.hidden)
   }
   
   // 精确过滤：只显示在权限列表里的菜单

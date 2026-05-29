@@ -59,10 +59,19 @@ win:
   requestedExecutionLevel: asInvoker
   forceCodeSigning: false
   verifyUpdateCodeSignature: false
-  artifactName: ${productName}-${version}.${ext}
   extraResources:
     - from: resources/openclaw-win
       to: openclaw
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ZiZhou G-Snowball
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
 linux:
   target:
     - target: AppImage

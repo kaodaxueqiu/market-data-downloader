@@ -34,6 +34,7 @@ export interface MenuItem {
   children?: MenuItem[]   // 子菜单
   tag?: { text: string; type: 'success' | 'warning' | 'danger' | 'info' }  // 标签
   showInHome?: boolean    // 是否在首页显示卡片，默认 true
+  hidden?: boolean        // 是否隐藏菜单（不显示但保留路由）
 }
 
 // 所有菜单配置（一级菜单）
@@ -70,6 +71,7 @@ export const allMenus: MenuItem[] = [
         name: '因子回测', 
         path: '/factor-library/backtest/submit', 
         icon: null,
+        hidden: true,
         children: [
           { id: 'backtest_submit', name: '单因子回测', path: '/factor-library/backtest/submit', icon: null },
           { id: 'backtest_tasks', name: '回测任务', path: '/factor-library/backtest/tasks', icon: null },

@@ -63,11 +63,11 @@
           </button>
           <button 
             class="nav-tab"
-            :class="{ active: currentStatus === 'created' }"
-            @click="handleStatusChange('created')"
+            :class="{ active: currentStatus === 'submitted' }"
+            @click="handleStatusChange('submitted')"
           >
             <el-icon><EditPen /></el-icon>
-            <span>已创建 ({{ statusCounts.created }})</span>
+            <span>已提交 ({{ statusCounts.submitted || 0 }})</span>
           </button>
           <button 
             class="nav-tab"
@@ -143,7 +143,7 @@
                 :data="categories"
                 :props="{ children: 'children', label: 'name' }"
                 :expand-on-click-node="false"
-                node-key="id"
+                node-key="_uid"
                 highlight-current
                 @node-click="handleCategoryClick"
                 @node-contextmenu="handleCategoryContextMenu"
@@ -154,7 +154,7 @@
                   <span class="node-count" v-if="data.factor_count !== undefined">
                     ({{ data.factor_count }})
                   </span>
-                  <el-tag v-if="data.is_system" size="small" type="info" style="margin-left: 4px">系统</el-tag>
+                  <el-tag v-if="data.is_system === false" size="small" type="warning" style="margin-left: 4px">自定义</el-tag>
                 </div>
               </template>
               </el-tree>
@@ -287,8 +287,21 @@
                 <el-tag size="small" :type="getStatusType(factor.status)">
                   {{ getStatusLabel(factor.status) }}
                 </el-tag>
+                <el-tag v-if="isPyFileFactor(factor)" size="small" type="warning" effect="plain">
+                  Py
+                </el-tag>
+                <el-tag v-else size="small" type="info" effect="plain">
+                  表达式
+                </el-tag>
+                <el-tag v-if="factor.version != null" size="small" effect="plain">
+                  v{{ factor.version }}
+                </el-tag>
+                <el-tag v-if="factor.plaza_submitted" size="small" type="success" effect="plain">
+                  有广场提交
+                </el-tag>
               </div>
               <div class="factor-name">{{ factor.factor_name }}</div>
+              <div class="factor-id" style="font-size: 11px; color: #999; font-family: monospace;">{{ factor.factor_id }}</div>
               <div class="factor-category">
                 {{ factor.category_l1_name }} / {{ factor.category_l2_name }} / {{ factor.category_l3_name }}
               </div>
@@ -385,17 +398,101 @@
                     {{ currentFactorDetail?.created_by || '-' }}
                   </el-descriptions-item>
                   <el-descriptions-item label="描述">
-                    {{ currentFactorDetail?.description || '-' }}
+                    {{ activeDetail?.description || '-' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="最新版本">
+                    <el-tag size="small">v{{ currentFactorDetail?.version }}</el-tag>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="广场提交">
+                    <div v-if="submittedVersions.length > 0" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                      <el-tag v-for="v in [...submittedVersions].sort()" :key="v" size="small" type="success">
+                        v{{ v }}
+                      </el-tag>
+                    </div>
+                    <el-tag v-else size="small" type="info">无提交记录</el-tag>
                   </el-descriptions-item>
                 </el-descriptions>
               </el-card>
 
-              <!-- 因子表达式 -->
+              <!-- 版本历史 -->
+              <el-card shadow="never" class="info-section" v-if="currentFactorDetail?.version >= 1">
+                <template #header>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>版本历史 ({{ allVersions.length }})</span>
+                    <el-button size="small" text @click="loadVersionHistory" :loading="loadingVersions">
+                      <el-icon><Refresh /></el-icon>
+                      刷新
+                    </el-button>
+                  </div>
+                </template>
+                <div v-loading="loadingVersions">
+                  <el-timeline v-if="allVersions.length > 0">
+                    <el-timeline-item
+                      v-for="ver in allVersions"
+                      :key="ver.version"
+                      :timestamp="formatTime(ver.updated_at || ver.created_at)"
+                      :type="(selectedVersion || Number(currentFactorDetail?.version)) === ver.version ? 'primary' : ''"
+                      :hollow="(selectedVersion || Number(currentFactorDetail?.version)) !== ver.version"
+                    >
+                      <div 
+                        class="version-item version-clickable" 
+                        :class="{ 'version-selected': (selectedVersion || Number(currentFactorDetail?.version)) === ver.version }"
+                        @click="selectVersion(ver)"
+                      >
+                        <el-tag size="small" :type="ver.version === Number(currentFactorDetail?.version) ? 'primary' : 'info'">
+                          v{{ ver.version }}
+                        </el-tag>
+                        <span v-if="ver.version === Number(currentFactorDetail?.version)" class="version-desc" style="color: #409eff;">最新版本</span>
+                        <span class="version-desc" v-else-if="ver.description">{{ ver.description }}</span>
+                        <el-tag v-if="ver.has_source === false && isPyFileFactor(currentFactorDetail)" size="small" type="danger" effect="plain">
+                          无源码
+                        </el-tag>
+                        <el-tag v-if="submittedVersions.includes(ver.version)" size="small" type="success" effect="dark">
+                          已提交
+                        </el-tag>
+                        <el-tag v-else size="small" type="info" effect="plain">
+                          未提交
+                        </el-tag>
+                        <el-button 
+                          size="small" 
+                          type="danger" 
+                          text 
+                          style="margin-left: auto; padding: 2px 6px;"
+                          @click.stop="handleDeleteVersion(ver.version)"
+                        >
+                          <el-icon><Delete /></el-icon>
+                        </el-button>
+                      </div>
+                    </el-timeline-item>
+                  </el-timeline>
+                  <el-empty v-else description="暂无版本记录" :image-size="60" />
+                </div>
+              </el-card>
+
+              <!-- 因子表达式 / Py文件源码 -->
               <el-card shadow="never" class="info-section">
                 <template #header>
-                  <span>因子表达式</span>
+                  <span>{{ isPyFileFactor(currentFactorDetail) ? 'Python 源码' : '因子表达式' }}</span>
                 </template>
-                <pre class="expression-code">{{ currentFactorDetail?.expression || '-' }}</pre>
+                <template v-if="isPyFileFactor(currentFactorDetail)">
+                  <div class="py-source-actions">
+                    <el-button 
+                      type="primary" 
+                      size="small" 
+                      @click="viewPySource" 
+                      :loading="loadingPySource"
+                      :disabled="!currentVersionHasSource"
+                    >
+                      <el-icon><Document /></el-icon>
+                      查看 v{{ selectedVersion || Number(currentFactorDetail?.version) }} 源码
+                    </el-button>
+                    <el-tag v-if="!currentVersionHasSource" size="small" type="danger" style="margin-left: 8px;">该版本无源码</el-tag>
+                  </div>
+                  <pre v-if="pySourceContent" class="expression-code py-source-code">{{ pySourceContent }}</pre>
+                </template>
+                <template v-else>
+                  <pre class="expression-code">{{ activeDetail?.expression || '-' }}</pre>
+                </template>
               </el-card>
 
               <!-- 数据依赖 -->
@@ -403,9 +500,9 @@
                 <template #header>
                   <span>数据依赖</span>
                 </template>
-                <div v-if="hasDataSources(currentFactorDetail?.data_sources)" class="data-sources-display">
+                <div v-if="hasDataSources(activeDetail?.data_sources)" class="data-sources-display">
                   <div 
-                    v-for="(info, tableName) in parseDataSourcesForDisplay(currentFactorDetail.data_sources)" 
+                    v-for="(info, tableName) in parseDataSourcesForDisplay(activeDetail.data_sources)" 
                     :key="tableName"
                     class="source-item"
                   >
@@ -433,93 +530,77 @@
                 <div v-else class="no-data">暂无数据依赖</div>
               </el-card>
 
-              <!-- 性能指标（最近一次回测） -->
-              <el-card v-if="currentFactorDetail?.status === 'backtested'" shadow="never" class="info-section">
+              <!-- 性能指标 -->
+              <el-card v-if="activeDetail?.status === 'backtested' || hasPerformanceData(activeDetail)" shadow="never" class="info-section">
                 <template #header>
                   <div class="section-header-with-tip">
                     <span>性能指标</span>
-                    <el-tag size="small" type="info">最近一次回测</el-tag>
+                    <el-tag v-if="selectedVersion" size="small" type="primary">v{{ selectedVersion }}</el-tag>
                   </div>
                 </template>
-                
-                <!-- 多周期选择器 -->
-                <div v-if="availablePeriods.length > 0" class="period-selector">
-                  <span class="period-label">预测周期：</span>
-                  <el-segmented v-model="selectedPeriod" :options="periodOptions" size="small" />
-                </div>
-                
-                <!-- 有多周期数据时显示选中周期的指标 -->
-                <el-descriptions v-if="currentPeriodStats" :column="2" size="small" border>
+                <el-descriptions :column="2" size="small" border>
                   <el-descriptions-item label="Rank IC均值">
-                    {{ currentPeriodStats.rank_ic_mean?.toFixed(4) || '-' }}
+                    {{ activeDetail?.rank_ic_mean?.toFixed(4) || '-' }}
                   </el-descriptions-item>
                   <el-descriptions-item label="Rank IC IR">
                     <el-text type="success" style="font-weight: bold;">
-                      {{ currentPeriodStats.rank_ic_ir?.toFixed(2) || '-' }}
+                      {{ activeDetail?.rank_ic_ir?.toFixed(2) || '-' }}
                     </el-text>
                   </el-descriptions-item>
                   <el-descriptions-item label="夏普比率">
-                    {{ currentPeriodStats.sharpe_ratio?.toFixed(2) || '-' }}
+                    {{ activeDetail?.sharpe_ratio?.toFixed(2) || '-' }}
                   </el-descriptions-item>
                   <el-descriptions-item label="最大回撤">
                     <el-text type="danger">
-                      {{ currentPeriodStats.max_drawdown ? (currentPeriodStats.max_drawdown * 100).toFixed(2) + '%' : '-' }}
+                      {{ activeDetail?.max_drawdown ? (activeDetail.max_drawdown * 100).toFixed(2) + '%' : '-' }}
                     </el-text>
                   </el-descriptions-item>
                   <el-descriptions-item label="年化收益">
-                    <el-text :type="currentPeriodStats.annual_return > 0 ? 'success' : 'danger'">
-                      {{ currentPeriodStats.annual_return ? (currentPeriodStats.annual_return * 100).toFixed(2) + '%' : '-' }}
+                    <el-text :type="(activeDetail?.annual_return || 0) > 0 ? 'success' : 'danger'">
+                      {{ activeDetail?.annual_return ? (activeDetail.annual_return * 100).toFixed(2) + '%' : '-' }}
                     </el-text>
                   </el-descriptions-item>
                   <el-descriptions-item label="胜率">
-                    {{ currentPeriodStats.win_rate ? (currentPeriodStats.win_rate * 100).toFixed(2) + '%' : '-' }}
-                  </el-descriptions-item>
-                </el-descriptions>
-                
-                <!-- 降级：无多周期数据时显示汇总指标 -->
-                <el-descriptions v-else :column="2" size="small" border>
-                  <el-descriptions-item label="Rank IC均值">
-                    {{ currentFactorDetail?.rank_ic_mean?.toFixed(4) || '-' }}
-                  </el-descriptions-item>
-                  <el-descriptions-item label="Rank IC IR">
-                    <el-text type="success" style="font-weight: bold;">
-                      {{ currentFactorDetail?.rank_ic_ir?.toFixed(2) || '-' }}
-                    </el-text>
-                  </el-descriptions-item>
-                  <el-descriptions-item label="夏普比率">
-                    {{ currentFactorDetail?.sharpe_ratio?.toFixed(2) || '-' }}
-                  </el-descriptions-item>
-                  <el-descriptions-item label="最大回撤">
-                    <el-text type="danger">
-                      {{ currentFactorDetail?.max_drawdown ? (currentFactorDetail.max_drawdown * 100).toFixed(2) + '%' : '-' }}
-                    </el-text>
+                    {{ activeDetail?.win_rate ? (activeDetail.win_rate * 100).toFixed(2) + '%' : '-' }}
                   </el-descriptions-item>
                 </el-descriptions>
               </el-card>
 
-              <!-- 版本信息 -->
+              <!-- 版本信息（联动版本历史选择） -->
               <el-card shadow="never" class="info-section">
                 <template #header>
-                  <span>版本信息</span>
+                  <span>版本信息 <el-tag v-if="selectedVersion" size="small" type="primary">v{{ selectedVersion }}</el-tag></span>
                 </template>
                 <el-descriptions :column="1" size="small" border>
                   <el-descriptions-item label="因子ID">
-                    {{ currentFactorDetail?.factor_id }}
+                    {{ activeDetail?.factor_id || currentFactorDetail?.factor_id }}
                   </el-descriptions-item>
                   <el-descriptions-item label="版本">
-                    {{ currentFactorDetail?.version || '1.0' }}
+                    {{ activeDetail?.version }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="描述">
+                    {{ activeDetail?.description || '-' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="IC均值">
+                    {{ activeDetail?.ic_mean?.toFixed(4) || '-' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="Rank IC IR">
+                    {{ activeDetail?.rank_ic_ir?.toFixed(4) || '-' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="夏普比率">
+                    {{ activeDetail?.sharpe_ratio?.toFixed(2) || '-' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="回测周期">
+                    {{ activeDetail?.backtest_period || (activeDetail?.data_start_date && activeDetail?.data_end_date ? `${activeDetail.data_start_date} ~ ${activeDetail.data_end_date}` : '-') }}
                   </el-descriptions-item>
                   <el-descriptions-item label="创建时间">
-                    {{ formatFullTime(currentFactorDetail?.created_at) }}
-                  </el-descriptions-item>
-                  <el-descriptions-item label="更新时间">
-                    {{ formatFullTime(currentFactorDetail?.updated_at) }}
+                    {{ formatFullTime(activeDetail?.created_at) }}
                   </el-descriptions-item>
                 </el-descriptions>
               </el-card>
 
-              <!-- 回测历史 -->
-              <el-card shadow="never" class="info-section">
+              <!-- 回测历史（仅表达式模式因子显示） -->
+              <el-card v-if="!isPyFileFactor(currentFactorDetail)" shadow="never" class="info-section">
                 <template #header>
                   <div class="section-header-with-action">
                     <span>回测历史</span>
@@ -587,22 +668,18 @@
                   :icon="Edit"
                   @click="handleEdit(currentFactorDetail)"
                 >
-                  编辑
+                  版本升级
                 </el-button>
+                <!-- 表达式因子发起回测（暂时隐藏） -->
                 <el-button 
-                  type="success" 
-                  :icon="DataAnalysis"
-                  @click="goToBacktest(currentFactorDetail)"
+                  type="warning" 
+                  :icon="Upload"
+                  @click="handleSubmitPlaza(currentFactorDetail)"
+                  :disabled="submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version))"
                 >
-                  发起回测
+                  {{ submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) ? `v${selectedVersion || Number(currentFactorDetail?.version)} 已提交` : `提交 v${selectedVersion || Number(currentFactorDetail?.version)} 到广场` }}
                 </el-button>
-                <el-button 
-                  type="danger" 
-                  :icon="Delete"
-                  @click="handleDelete(currentFactorDetail)"
-                >
-                  删除
-                </el-button>
+                <!-- 整体删除已移至版本历史，按版本删除 -->
               </div>
             </div>
           </div>
@@ -614,16 +691,28 @@
     <el-dialog 
       v-model="dialogVisible" 
       :title="isEdit ? '编辑因子' : '新建因子'"
-      width="700px"
+      width="900px"
       destroy-on-close
+      top="5vh"
     >
+      <div style="max-height: 70vh; overflow-y: auto; overflow-x: hidden; padding-right: 8px;">
       <el-form 
         ref="formRef" 
         :model="form" 
         :rules="rules" 
         label-position="top"
-        size="large"
+        size="default"
       >
+        <!-- 因子类型选择（仅新建时显示） -->
+        <el-form-item v-if="!isEdit" label="因子类型">
+          <el-radio-group v-model="factorMode">
+            <el-radio value="pyfile">Py 文件（上传本地 Python 脚本）</el-radio>
+            <el-radio value="expression" disabled>表达式（开发中，敬请期待）</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-divider v-if="!isEdit" style="margin: 12px 0 20px" />
+
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="因子代码" prop="factor_code">
@@ -636,7 +725,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="因子名称" prop="factor_name">
-              <el-input v-model="form.factor_name" placeholder="中文名称，如 5日动量" />
+              <el-input v-model="form.factor_name" placeholder="中文名称，如 5日动量" :disabled="isEdit" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -648,24 +737,41 @@
             :props="{ value: 'id', label: 'name', children: 'children' }"
             placeholder="选择三级分类"
             style="width: 100%"
+            :disabled="isEdit"
             @change="handleFormCategoryChange"
           />
         </el-form-item>
 
-        <el-form-item label="因子表达式" prop="expression">
+        <el-form-item label="因子表达式" prop="expression" v-if="factorMode === 'expression'">
           <el-input 
             v-model="form.expression" 
             type="textarea" 
-            :rows="6"
+            :rows="4"
             placeholder="输入因子表达式，如：(close - lag(close, 5)) / lag(close, 5)"
           />
+        </el-form-item>
+
+        <!-- Py文件模式：文件选择 -->
+        <el-form-item label="Python 文件" v-if="factorMode === 'pyfile'" required>
+          <div class="py-file-upload">
+            <el-button type="primary" plain @click="handleSelectPyFile">
+              <el-icon><Upload /></el-icon>
+              选择 .py 文件
+            </el-button>
+            <div v-if="pyFileInfo.fileName" class="py-file-info">
+              <el-tag type="success" effect="light">
+                {{ pyFileInfo.fileName }}
+              </el-tag>
+              <span class="file-size">{{ formatFileSize(pyFileInfo.fileSize) }}</span>
+            </div>
+          </div>
         </el-form-item>
 
         <el-form-item label="因子描述">
           <el-input 
             v-model="form.description" 
             type="textarea" 
-            :rows="3"
+            :rows="2"
             placeholder="可选，描述因子的含义和用途"
           />
         </el-form-item>
@@ -867,15 +973,135 @@
           </el-select>
         </el-form-item>
 
+        <!-- Py文件模式：股票域选择 -->
+        <div v-if="factorMode === 'pyfile'" class="performance-section">
+          <div class="section-header">
+            <el-icon><Grid /></el-icon>
+            <span>股票域（必填）</span>
+          </div>
+          <el-tabs v-model="universeTab" @tab-change="handleUniverseTabChange" class="stock-pool-tabs-mini">
+            <el-tab-pane label="标准指数" name="index">
+              <el-radio-group v-model="universeForm.id" v-loading="stockPoolsLoading" class="pool-radio-list-mini" @change="universeForm.type = 'index'">
+                <el-radio 
+                  v-for="pool in stockPoolData?.index?.pools || []" 
+                  :key="pool.id" 
+                  :value="pool.id"
+                >
+                  {{ pool.name }}
+                </el-radio>
+              </el-radio-group>
+            </el-tab-pane>
+            <el-tab-pane label="申万行业" name="industry">
+              <el-radio-group v-model="universeForm.id" v-loading="stockPoolsLoading" class="pool-radio-grid-mini" @change="universeForm.type = 'industry'">
+                <el-radio 
+                  v-for="pool in stockPoolData?.industry?.pools || []" 
+                  :key="pool.id" 
+                  :value="pool.id"
+                >
+                  {{ pool.name }}
+                </el-radio>
+              </el-radio-group>
+            </el-tab-pane>
+            <el-tab-pane label="自定义" name="custom">
+              <el-form-item label="域形成逻辑" required>
+                <el-input
+                  v-model="universeForm.desc"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="描述股票域的筛选逻辑，如：日均成交额>5000万 & 总市值>50亿 & 非ST & 上市满1年"
+                />
+              </el-form-item>
+              <el-form-item label="股票列表文件" required>
+                <div class="py-file-upload">
+                  <el-button type="primary" plain @click="handleSelectUniverseFile">
+                    <el-icon><Upload /></el-icon>
+                    选择 .csv / .txt 文件
+                  </el-button>
+                  <div v-if="universeFileInfo.fileName" class="py-file-info">
+                    <el-icon><Document /></el-icon>
+                    <span>{{ universeFileInfo.fileName }}</span>
+                    <el-tag size="small" type="info">{{ formatFileSize(universeFileInfo.fileSize) }}</el-tag>
+                  </div>
+                </div>
+              </el-form-item>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+
+        <!-- Py文件模式：绩效指标 -->
+        <div v-if="factorMode === 'pyfile'" class="performance-section">
+          <div class="section-header">
+            <el-icon><TrendCharts /></el-icon>
+            <span>绩效指标（必填）</span>
+          </div>
+          <el-row :gutter="12">
+            <el-col :span="6">
+              <el-form-item label="回测起始" required>
+                <el-date-picker v-model="perfForm.backtest_start" type="date" value-format="YYYY-MM-DD" placeholder="起始日期" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="回测截止" required>
+                <el-date-picker v-model="perfForm.backtest_end" type="date" value-format="YYYY-MM-DD" placeholder="截止日期" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="周期描述">
+                <el-input v-model="perfForm.backtest_period" placeholder="如：近3年、2020-2024" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="6">
+              <el-form-item label="IC 均值" required>
+                <el-input-number v-model="perfForm.ic_mean" :precision="4" :step="0.01" placeholder="0.035" controls-position="right" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="IC IR" required>
+                <el-input-number v-model="perfForm.ic_ir" :precision="4" :step="0.01" placeholder="0.42" controls-position="right" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="Rank IC 均值" required>
+                <el-input-number v-model="perfForm.rank_ic_mean" :precision="4" :step="0.01" placeholder="0.038" controls-position="right" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="Rank IC IR" required>
+                <el-input-number v-model="perfForm.rank_ic_ir" :precision="4" :step="0.01" placeholder="0.45" controls-position="right" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="6">
+              <el-form-item label="夏普比率" required>
+                <el-input-number v-model="perfForm.sharpe_ratio" :precision="4" :step="0.1" placeholder="1.8" controls-position="right" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="最大回撤" required>
+                <el-input-number v-model="perfForm.max_drawdown" :precision="4" :step="0.01" :min="0" :max="1" placeholder="0.12" controls-position="right" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="换手率" required>
+                <el-input-number v-model="perfForm.turnover" :precision="4" :step="0.01" placeholder="0.35" controls-position="right" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
         <el-form-item label="英文名称">
           <el-input v-model="form.factor_name_en" placeholder="可选，如 5-Day Momentum" />
         </el-form-item>
       </el-form>
+      </div>
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSubmit" :loading="submitting">
-          {{ isEdit ? '保存' : '创建' }}
+          {{ isEdit ? '保存并迭代版本' : '创建' }}
         </el-button>
       </template>
     </el-dialog>
@@ -1350,6 +1576,64 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 版本详情弹窗 -->
+    <el-dialog
+      v-model="versionDetailVisible"
+      :title="`版本 v${versionDetailData?.version || ''} 详情`"
+      width="700px"
+      top="8vh"
+    >
+      <div v-loading="loadingVersionDetail" style="max-height: 60vh; overflow-y: auto;">
+        <el-descriptions v-if="versionDetailData" :column="2" size="small" border>
+          <el-descriptions-item label="因子名称" :span="2">
+            {{ versionDetailData.factor_name }}
+          </el-descriptions-item>
+          <el-descriptions-item label="因子代码">
+            <el-text style="font-family: monospace;">{{ versionDetailData.factor_code }}</el-text>
+          </el-descriptions-item>
+          <el-descriptions-item label="版本">
+            <el-tag size="small">v{{ versionDetailData.version }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="描述" :span="2">
+            {{ versionDetailData.description || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="IC均值">
+            {{ versionDetailData.ic_mean?.toFixed(4) || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="Rank IC IR">
+            {{ versionDetailData.rank_ic_ir?.toFixed(4) || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="夏普比率">
+            {{ versionDetailData.sharpe_ratio?.toFixed(2) || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="最大回撤">
+            {{ versionDetailData.max_drawdown ? (versionDetailData.max_drawdown * 100).toFixed(2) + '%' : '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="换手率">
+            {{ versionDetailData.turnover ? (versionDetailData.turnover * 100).toFixed(2) + '%' : '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="回测周期">
+            {{ versionDetailData.backtest_period || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="数据起始">
+            {{ versionDetailData.data_start_date || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="数据截止">
+            {{ versionDetailData.data_end_date || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="股票域类型">
+            {{ versionDetailData.universe_type || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="股票域">
+            {{ versionDetailData.universe_id || versionDetailData.universe_desc || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="更新时间" :span="2">
+            {{ formatTime(versionDetailData.updated_at) }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1359,12 +1643,13 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
   Loading, Box, Plus, Search, Edit, Delete, DataAnalysis, WarningFilled, Refresh,
-  Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document, Clock
+  Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document, Clock, TrendCharts
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
 // 页面状态
+const factorMode = ref<'expression' | 'pyfile'>('pyfile')
 const pageLoading = ref(true)
 const isInitialized = ref(false)
 const dbStatus = ref<{ initialized: boolean; database_name: string; user_name: string } | null>(null)
@@ -1396,46 +1681,6 @@ const selectedCategoryLevel = ref<number | null>(null)
 
 // 性能指标 - 多周期选择
 const selectedPeriod = ref<number>(1)  // 当前选择的预测周期
-
-// 获取多周期数据：优先从因子详情，否则从最新回测历史记录的 factor_result
-const latestPeriodStats = computed(() => {
-  // 先尝试从因子详情获取
-  const factorStats = currentFactorDetail.value?.period_ic_stats || currentFactorDetail.value?.period_stats
-  if (Array.isArray(factorStats) && factorStats.length > 0) {
-    return factorStats
-  }
-  // 降级：从最新的回测历史记录的 factor_result 获取
-  if (backtestHistory.value.length > 0) {
-    const latestRecord = backtestHistory.value[0]
-    // 新数据结构：period_ic_stats 在 factor_result 里面
-    const periodStats = latestRecord.factor_result?.period_ic_stats || latestRecord.period_stats
-    if (Array.isArray(periodStats) && periodStats.length > 0) {
-      return periodStats
-    }
-  }
-  return []
-})
-
-const availablePeriods = computed(() => {
-  const stats = latestPeriodStats.value
-  if (Array.isArray(stats) && stats.length > 0) {
-    return stats.map((s: any) => s.period).sort((a: number, b: number) => a - b)
-  }
-  return []
-})
-const periodOptions = computed(() => {
-  return availablePeriods.value.map((p: number) => ({
-    label: `${p}日`,
-    value: p
-  }))
-})
-const currentPeriodStats = computed(() => {
-  const stats = latestPeriodStats.value
-  if (Array.isArray(stats) && stats.length > 0) {
-    return stats.find((s: any) => s.period === selectedPeriod.value) || stats[0]
-  }
-  return null
-})
 
 // 批量选择（多选，用于批量操作）
 const selectedFactorIds = ref<number[]>([])
@@ -1512,6 +1757,65 @@ const form = reactive({
   description: '',
   tag_ids: [] as number[]
 })
+
+// Py文件模式状态
+const pyFileInfo = reactive({
+  fileName: '',
+  filePath: '',
+  fileSize: 0
+})
+const perfForm = reactive({
+  ic_mean: undefined as number | undefined,
+  ic_ir: undefined as number | undefined,
+  rank_ic_mean: undefined as number | undefined,
+  rank_ic_ir: undefined as number | undefined,
+  sharpe_ratio: undefined as number | undefined,
+  max_drawdown: undefined as number | undefined,
+  turnover: undefined as number | undefined,
+  backtest_start: '' as string,
+  backtest_end: '' as string,
+  backtest_period: '' as string
+})
+
+// 股票域选择状态
+const universeForm = reactive({
+  type: 'index' as 'index' | 'industry' | 'custom',
+  id: '' as string,
+  desc: '' as string
+})
+const universeFileInfo = reactive({
+  fileName: '',
+  filePath: '',
+  fileSize: 0
+})
+const universeTab = ref('index')
+
+// 股票域 Tab 切换
+const handleUniverseTabChange = (tab: string) => {
+  universeTab.value = tab
+  if (tab === 'custom') {
+    universeForm.type = 'custom'
+    universeForm.id = 'custom'
+  } else {
+    universeForm.type = tab as 'index' | 'industry'
+    const pools = stockPoolData.value?.[tab as keyof StockPoolData]?.pools || []
+    if (pools.length > 0 && !universeForm.id) {
+      universeForm.id = pools[0].id
+    }
+  }
+}
+
+// 选择自定义股票域文件
+const handleSelectUniverseFile = async () => {
+  const result = await window.electronAPI.factor.selectUniverseFile()
+  if (result.success) {
+    universeFileInfo.fileName = result.fileName || ''
+    universeFileInfo.filePath = result.filePath || ''
+    universeFileInfo.fileSize = result.fileSize || 0
+  } else if (result.error !== 'cancelled') {
+    ElMessage.error(result.error || '文件选择失败')
+  }
+}
 
 // 数据依赖
 interface DataSourceItem {
@@ -1777,7 +2081,7 @@ const parseDataSources = (dataSourcesStr: string | object | null) => {
 // 状态统计
 const statusCounts = reactive({
   all: 0,
-  created: 0,
+  submitted: 0,
   backtested: 0
 })
 
@@ -1791,9 +2095,6 @@ const rules: FormRules = {
   ],
   category_l3_id: [
     { required: true, message: '请选择因子分类', trigger: 'change' }
-  ],
-  expression: [
-    { required: true, message: '请输入因子表达式', trigger: 'blur' }
   ]
 }
 
@@ -1854,13 +2155,22 @@ const handleInit = async () => {
   }
 }
 
+// 给分类树每个节点加 _uid（层级前缀），避免跨层 id 冲突导致 el-tree 跳选
+function addCategoryUid(nodes: any[], level: number): any[] {
+  return nodes.map(node => ({
+    ...node,
+    _uid: `l${level}_${node.id}`,
+    children: node.children ? addCategoryUid(node.children, level + 1) : []
+  }))
+}
+
 // 加载分类
 const loadCategories = async () => {
   loadingCategories.value = true
   try {
     const result = await window.electronAPI.factor.myCategories()
     if (result.success && result.data) {
-      categories.value = result.data
+      categories.value = addCategoryUid(result.data, 1)
     }
   } catch (error: any) {
     console.error('加载分类失败:', error)
@@ -1911,7 +2221,7 @@ const loadFactors = async () => {
       // 更新状态计数
       if (result.data.status_counts) {
         statusCounts.all = result.data.status_counts.all || 0
-        statusCounts.created = result.data.status_counts.created || 0
+        statusCounts.submitted = result.data.status_counts.submitted || 0
         statusCounts.backtested = result.data.status_counts.backtested || 0
       }
     } else {
@@ -2336,11 +2646,14 @@ const selectFactor = async (factor: any) => {
   selectedFactor.value = factor
   loadingDetail.value = true
   backtestHistory.value = [] // 清空历史
+  selectedVersion.value = null
+  selectedVersionData.value = null
   
   try {
     const result = await window.electronAPI.factor.myDetail(factor.factor_id)
     if (result.success && result.data) {
       currentFactorDetail.value = result.data
+      activeDetail.value = result.data
       console.log('因子详情数据:', result.data)
       console.log('period_ic_stats:', result.data.period_ic_stats)
       console.log('period_stats:', result.data.period_stats)
@@ -2352,6 +2665,8 @@ const selectFactor = async (factor: any) => {
       }
       // 加载回测历史
       loadBacktestHistory()
+      // 加载版本历史
+      loadVersionHistory()
     }
   } catch (error: any) {
     console.error('加载因子详情失败:', error)
@@ -2457,6 +2772,122 @@ const handleFormCategoryChange = (value: number[]) => {
   }
 }
 
+// Py文件选择（仅选择文件，不上传）
+const handleSelectPyFile = async () => {
+  const result = await window.electronAPI.factor.selectPyFile()
+  if (result.success) {
+    pyFileInfo.fileName = result.fileName || ''
+    pyFileInfo.filePath = result.filePath || ''
+    pyFileInfo.fileSize = result.fileSize || 0
+  } else if (result.error !== 'cancelled') {
+    ElMessage.error(result.error || '文件选择失败')
+  }
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (!bytes) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+// 判断因子是否为 Py 文件模式
+const isPyFileFactor = (factor: any): boolean => {
+  return factor?.expression === '__py_file__'
+}
+
+// 判断因子是否有绩效数据
+const hasPerformanceData = (factor: any): boolean => {
+  if (!factor) return false
+  return !!(factor.ic_mean || factor.ic_ir || factor.rank_ic_mean || factor.rank_ic_ir || factor.sharpe_ratio || factor.max_drawdown)
+}
+
+// 版本历史
+const versionHistory = ref<any[]>([])
+const loadingVersions = ref(false)
+const selectedVersion = ref<number | null>(null)
+const selectedVersionData = ref<any>(null)
+
+const allVersions = computed(() => {
+  return versionHistory.value
+    .map((v: any) => ({ ...v, version: Number(v.version) }))
+    .sort((a: any, b: any) => b.version - a.version)
+})
+
+const activeDetail = ref<any>(null)
+
+const submittedVersions = ref<number[]>([])
+
+const loadVersionHistory = async () => {
+  if (!currentFactorDetail.value?.factor_id) return
+  loadingVersions.value = true
+  try {
+    const result = await window.electronAPI.factor.myVersions(currentFactorDetail.value.factor_id)
+    if (result.success && result.data) {
+      versionHistory.value = Array.isArray(result.data) ? result.data : (result.data.versions || [])
+    } else {
+      versionHistory.value = []
+    }
+    // 从版本历史中读取已提交的版本
+    submittedVersions.value = versionHistory.value
+      .filter((v: any) => v.plaza_submitted)
+      .map((v: any) => Number(v.version))
+  } catch {
+    versionHistory.value = []
+  } finally {
+    loadingVersions.value = false
+  }
+}
+
+const selectVersion = async (ver: any) => {
+  selectedVersion.value = Number(ver.version)
+  pySourceContent.value = ''
+  try {
+    const result = await window.electronAPI.factor.myVersionDetail(currentFactorDetail.value.factor_id, ver.version)
+    if (result.success && result.data) {
+      selectedVersionData.value = result.data
+      activeDetail.value = result.data
+    }
+  } catch {
+    selectedVersionData.value = ver
+    activeDetail.value = ver
+  }
+}
+
+const currentVersionHasSource = computed(() => {
+  const ver = selectedVersion.value || Number(currentFactorDetail.value?.version)
+  const found = allVersions.value.find((v: any) => v.version === ver)
+  if (!found) return true
+  return found.has_source !== false
+})
+
+// 查看历史版本详情（弹窗）
+const versionDetailVisible = ref(false)
+const versionDetailData = ref<any>(null)
+const loadingVersionDetail = ref(false)
+
+// 查看 Py 源码（从服务器获取，按版本）
+const pySourceContent = ref('')
+const loadingPySource = ref(false)
+const viewPySource = async () => {
+  if (!currentFactorDetail.value?.factor_id) return
+  loadingPySource.value = true
+  try {
+    const version = selectedVersion.value || Number(currentFactorDetail.value.version)
+    const result = await window.electronAPI.factor.getSourceFile(currentFactorDetail.value.factor_id, version)
+    if (result.success) {
+      pySourceContent.value = result.content || ''
+    } else {
+      pySourceContent.value = ''
+      ElMessage.warning(result.error || '源码文件未上传')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '读取源码失败')
+  } finally {
+    loadingPySource.value = false
+  }
+}
+
 // 打开新建对话框
 const openCreateDialog = async () => {
   isEdit.value = false
@@ -2471,6 +2902,26 @@ const openCreateDialog = async () => {
     description: '',
     tag_ids: []
   })
+  // 重置Py文件状态
+  pyFileInfo.fileName = ''
+  pyFileInfo.filePath = ''
+  pyFileInfo.fileSize = 0
+  Object.assign(perfForm, {
+    ic_mean: undefined,
+    ic_ir: undefined,
+    rank_ic_mean: undefined,
+    rank_ic_ir: undefined,
+    sharpe_ratio: undefined,
+    max_drawdown: undefined,
+    turnover: undefined,
+    backtest_start: '',
+    backtest_end: '',
+    backtest_period: ''
+  })
+  // 重置股票域
+  Object.assign(universeForm, { type: 'index', id: '', desc: '' })
+  Object.assign(universeFileInfo, { fileName: '', filePath: '', fileSize: 0 })
+  universeTab.value = 'index'
   // 重置数据依赖
   dataSources.value = [{ 
     mode: 'normal' as const,
@@ -2482,6 +2933,10 @@ const openCreateDialog = async () => {
     availableFields: [], 
     loadingFields: false 
   }]
+  // 加载股票池数据
+  if (!stockPoolData.value) {
+    loadStockPools()
+  }
   dialogVisible.value = true
 }
 
@@ -2490,6 +2945,7 @@ const handleEdit = async (factor: any) => {
   if (!factor) return
   isEdit.value = true
   editingId.value = factor.factor_id
+  factorMode.value = isPyFileFactor(factor) ? 'pyfile' : 'expression'
   Object.assign(form, {
     factor_code: factor.factor_code,
     factor_name: factor.factor_name,
@@ -2502,8 +2958,38 @@ const handleEdit = async (factor: any) => {
   categoryValue.value = []
   // 解析数据依赖
   parseDataSources(factor.data_sources || currentFactorDetail.value?.data_sources)
+  // 加载股票池数据
+  if (!stockPoolData.value) {
+    loadStockPools()
+  }
+  // 回填股票域
+  const detail = currentFactorDetail.value || factor
+  if (detail.universe_type) {
+    universeForm.type = detail.universe_type
+    universeForm.id = detail.universe_id || ''
+    universeForm.desc = detail.universe_desc || ''
+    if (detail.universe_type === 'custom') {
+      universeTab.value = 'custom'
+    } else if (detail.universe_type === 'industry') {
+      universeTab.value = 'industry'
+    } else {
+      universeTab.value = 'index'
+    }
+  }
+  // 回填绩效指标和回测周期
+  if (detail.ic_mean !== undefined) perfForm.ic_mean = detail.ic_mean
+  if (detail.ic_ir !== undefined) perfForm.ic_ir = detail.ic_ir
+  if (detail.rank_ic_mean !== undefined) perfForm.rank_ic_mean = detail.rank_ic_mean
+  if (detail.rank_ic_ir !== undefined) perfForm.rank_ic_ir = detail.rank_ic_ir
+  if (detail.sharpe_ratio !== undefined) perfForm.sharpe_ratio = detail.sharpe_ratio
+  if (detail.max_drawdown !== undefined) perfForm.max_drawdown = detail.max_drawdown
+  if (detail.turnover !== undefined) perfForm.turnover = detail.turnover
+  if (detail.data_start_date) perfForm.backtest_start = detail.data_start_date.split('T')[0]
+  if (detail.data_end_date) perfForm.backtest_end = detail.data_end_date.split('T')[0]
+  if (detail.backtest_period) perfForm.backtest_period = detail.backtest_period
   dialogVisible.value = true
 }
+
 
 // 提交表单
 const handleSubmit = async () => {
@@ -2513,6 +2999,74 @@ const handleSubmit = async () => {
     await formRef.value.validate()
   } catch {
     return
+  }
+  
+  // Py文件模式额外验证
+  if (factorMode.value === 'pyfile' && !isEdit.value) {
+    if (!pyFileInfo.fileName) {
+      ElMessage.error('请选择 Python 文件')
+      return
+    }
+  }
+  
+  // Py文件模式：绩效指标和回测周期必填验证
+  if (factorMode.value === 'pyfile') {
+    if (!perfForm.backtest_start || !perfForm.backtest_end) {
+      ElMessage.error('请填写回测起止日期')
+      return
+    }
+    // 周期描述为可选字段
+    if (perfForm.ic_mean === undefined || perfForm.ic_mean === null) {
+      ElMessage.error('请填写 IC 均值')
+      return
+    }
+    if (perfForm.ic_ir === undefined || perfForm.ic_ir === null) {
+      ElMessage.error('请填写 IC IR')
+      return
+    }
+    if (perfForm.rank_ic_mean === undefined || perfForm.rank_ic_mean === null) {
+      ElMessage.error('请填写 Rank IC 均值')
+      return
+    }
+    if (perfForm.rank_ic_ir === undefined || perfForm.rank_ic_ir === null) {
+      ElMessage.error('请填写 Rank IC IR')
+      return
+    }
+    if (perfForm.sharpe_ratio === undefined || perfForm.sharpe_ratio === null) {
+      ElMessage.error('请填写夏普比率')
+      return
+    }
+    if (perfForm.max_drawdown === undefined || perfForm.max_drawdown === null) {
+      ElMessage.error('请填写最大回撤')
+      return
+    }
+    if (perfForm.turnover === undefined || perfForm.turnover === null) {
+      ElMessage.error('请填写换手率')
+      return
+    }
+    // 股票域验证
+    if (!universeForm.id && universeForm.type !== 'custom') {
+      ElMessage.error('请选择股票域')
+      return
+    }
+    if (universeForm.type === 'custom') {
+      if (!universeForm.desc) {
+        ElMessage.error('请填写股票域形成逻辑')
+        return
+      }
+      if (!universeFileInfo.fileName) {
+        ElMessage.error('请上传股票列表文件')
+        return
+      }
+    }
+  }
+  
+  // 表达式模式验证
+  if (factorMode.value === 'expression' && !isEdit.value) {
+    if (!form.expression) {
+      ElMessage.error('请输入因子表达式')
+      return
+    }
   }
   
   // 验证数据依赖（必填）
@@ -2563,25 +3117,59 @@ const handleSubmit = async () => {
   submitting.value = true
   
   try {
+    const expressionValue = factorMode.value === 'pyfile' ? '__py_file__' : form.expression
     
     if (isEdit.value && editingId.value) {
-      // 使用 JSON 深拷贝确保是纯对象，避免 IPC 序列化错误
-      const updateData = JSON.parse(JSON.stringify({
+      const updatePayload: Record<string, any> = {
         factor_name: form.factor_name,
         factor_name_en: form.factor_name_en || undefined,
         category_l3_id: form.category_l3_id,
-        expression: form.expression,
+        expression: expressionValue,
         description: form.description || undefined,
         data_sources: dataSourcesObj,
         tag_ids: form.tag_ids.length > 0 ? form.tag_ids : undefined
-      }))
+      }
+      // Py文件模式：将绩效、回测周期、股票域合并到同一次 PUT
+      if (factorMode.value === 'pyfile') {
+        if (perfForm.ic_mean !== undefined) updatePayload.ic_mean = perfForm.ic_mean
+        if (perfForm.ic_ir !== undefined) updatePayload.ic_ir = perfForm.ic_ir
+        if (perfForm.rank_ic_mean !== undefined) updatePayload.rank_ic_mean = perfForm.rank_ic_mean
+        if (perfForm.rank_ic_ir !== undefined) updatePayload.rank_ic_ir = perfForm.rank_ic_ir
+        if (perfForm.sharpe_ratio !== undefined) updatePayload.sharpe_ratio = perfForm.sharpe_ratio
+        if (perfForm.max_drawdown !== undefined) updatePayload.max_drawdown = perfForm.max_drawdown
+        if (perfForm.turnover !== undefined) updatePayload.turnover = perfForm.turnover
+        if (perfForm.backtest_start) updatePayload.data_start_date = perfForm.backtest_start
+        if (perfForm.backtest_end) updatePayload.data_end_date = perfForm.backtest_end
+        if (perfForm.backtest_period) updatePayload.backtest_period = perfForm.backtest_period
+        if (universeForm.type) updatePayload.universe_type = universeForm.type
+        if (universeForm.id) updatePayload.universe_id = universeForm.id
+        if (universeForm.desc) updatePayload.universe_desc = universeForm.desc
+        updatePayload.status = 'backtested'
+      }
+      const updateData = JSON.parse(JSON.stringify(updatePayload))
       const result = await window.electronAPI.factor.myUpdate(editingId.value, updateData)
       
       if (result.success) {
-        ElMessage.success('更新成功')
+        // Py文件模式：如果重新选择了文件则上传 + 上传自定义股票域文件
+        if (factorMode.value === 'pyfile') {
+          if (pyFileInfo.filePath) {
+            const uploadResult = await window.electronAPI.factor.uploadSourceFile(String(editingId.value), pyFileInfo.filePath)
+            if (!uploadResult.success) {
+              ElMessage.warning(`更新成功，但源码上传失败: ${uploadResult.error}`)
+            }
+          }
+          if (universeForm.type === 'custom' && universeFileInfo.filePath) {
+            const uploadResult = await window.electronAPI.factor.uploadUniverseFile(String(editingId.value), universeFileInfo.filePath)
+            if (!uploadResult.success) {
+              ElMessage.warning(`股票域文件上传失败: ${uploadResult.error}`)
+            }
+          }
+        }
+        const updatedDetail = await window.electronAPI.factor.myDetail(String(editingId.value))
+        const newVer = updatedDetail?.data?.version
+        ElMessage.success(newVer ? `保存成功，版本已升级为 v${newVer}` : '更新成功')
         dialogVisible.value = false
         loadFactors()
-        // 刷新详情
         if (selectedFactor.value?.factor_id === editingId.value) {
           selectFactor(selectedFactor.value)
         }
@@ -2589,20 +3177,53 @@ const handleSubmit = async () => {
         ElMessage.error(result.error || '更新失败')
       }
     } else {
-      // 使用 JSON 深拷贝确保是纯对象，避免 IPC 序列化错误
-      const createData = JSON.parse(JSON.stringify({
+      const createPayload: Record<string, any> = {
         factor_code: form.factor_code,
         factor_name: form.factor_name,
         factor_name_en: form.factor_name_en || undefined,
         category_l3_id: form.category_l3_id,
-        expression: form.expression,
+        expression: expressionValue,
         description: form.description || undefined,
         data_sources: dataSourcesObj,
         tag_ids: form.tag_ids.length > 0 ? form.tag_ids : undefined
-      }))
+      }
+      // Py文件模式：将绩效、回测周期、股票域合并到创建请求
+      if (factorMode.value === 'pyfile') {
+        if (perfForm.ic_mean !== undefined) createPayload.ic_mean = perfForm.ic_mean
+        if (perfForm.ic_ir !== undefined) createPayload.ic_ir = perfForm.ic_ir
+        if (perfForm.rank_ic_mean !== undefined) createPayload.rank_ic_mean = perfForm.rank_ic_mean
+        if (perfForm.rank_ic_ir !== undefined) createPayload.rank_ic_ir = perfForm.rank_ic_ir
+        if (perfForm.sharpe_ratio !== undefined) createPayload.sharpe_ratio = perfForm.sharpe_ratio
+        if (perfForm.max_drawdown !== undefined) createPayload.max_drawdown = perfForm.max_drawdown
+        if (perfForm.turnover !== undefined) createPayload.turnover = perfForm.turnover
+        if (perfForm.backtest_start) createPayload.data_start_date = perfForm.backtest_start
+        if (perfForm.backtest_end) createPayload.data_end_date = perfForm.backtest_end
+        if (perfForm.backtest_period) createPayload.backtest_period = perfForm.backtest_period
+        if (universeForm.type) createPayload.universe_type = universeForm.type
+        if (universeForm.id) createPayload.universe_id = universeForm.id
+        if (universeForm.desc) createPayload.universe_desc = universeForm.desc
+        createPayload.status = 'backtested'
+      }
+      const createData = JSON.parse(JSON.stringify(createPayload))
       const result = await window.electronAPI.factor.myCreate(createData)
       
       if (result.success) {
+        const factorId = result.data?.factor_id ? String(result.data.factor_id) : ''
+        // Py文件模式：上传源码文件 + 自定义股票域文件
+        if (factorMode.value === 'pyfile' && factorId) {
+          if (pyFileInfo.filePath) {
+            const uploadResult = await window.electronAPI.factor.uploadSourceFile(factorId, pyFileInfo.filePath)
+            if (!uploadResult.success) {
+              ElMessage.warning(`因子已创建，但源码上传失败: ${uploadResult.error}`)
+            }
+          }
+          if (universeForm.type === 'custom' && universeFileInfo.filePath) {
+            const uploadResult = await window.electronAPI.factor.uploadUniverseFile(factorId, universeFileInfo.filePath)
+            if (!uploadResult.success) {
+              ElMessage.warning(`股票域文件上传失败: ${uploadResult.error}`)
+            }
+          }
+        }
         ElMessage.success(result.message || '创建成功')
         dialogVisible.value = false
         loadFactors()
@@ -2654,27 +3275,76 @@ const handleBatchDelete = async () => {
 }
 
 // 删除因子
-const handleDelete = async (factor: any) => {
+// 提交到因子广场
+const handleSubmitPlaza = async (factor: any) => {
   if (!factor) return
-  
+  const submitVersion = selectedVersion.value || Number(factor.version)
+
+  if (submittedVersions.value.includes(submitVersion)) {
+    ElMessage.warning(`v${submitVersion} 已经提交过了`)
+    return
+  }
+
   try {
-    await ElMessageBox.confirm(
-      `确定删除因子「${factor.factor_name}」吗？此操作不可恢复。`,
-      '删除确认',
-      { type: 'warning' }
+    const { value: remark } = await ElMessageBox.prompt(
+      `确认将因子「${factor.factor_name}」(v${submitVersion}) 提交到因子广场？`,
+      '提交到因子广场',
+      {
+        confirmButtonText: '提交',
+        cancelButtonText: '取消',
+        inputPlaceholder: '填写提交备注（如：优化了因子逻辑，IC提升20%）',
+        inputType: 'textarea'
+      }
     )
-    
-    const result = await window.electronAPI.factor.myDelete(factor.factor_id)
+
+    const result = await window.electronAPI.factor.submitPlaza(factor.factor_id, remark || '', submitVersion)
     if (result.success) {
-      ElMessage.success('删除成功')
-      selectedFactor.value = null
-      currentFactorDetail.value = null
-      loadFactors()
+      ElMessage.success(`提交成功，版本 v${result.data?.version || submitVersion}`)
+      submittedVersions.value = [...submittedVersions.value, submitVersion]
+      selectFactor(factor)
+    } else {
+      ElMessage.error(result.error || '提交失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+const handleDeleteVersion = async (version: number) => {
+  if (!currentFactorDetail.value?.factor_id) return
+
+  const factorName = currentFactorDetail.value.factor_name
+  const isLastVersion = allVersions.value.length <= 1
+  const confirmMsg = isLastVersion
+    ? `这是「${factorName}」的最后一个版本，删除后将整体删除该因子。确定继续？`
+    : `确定删除「${factorName}」的 v${version} 吗？此操作不可恢复。`
+
+  try {
+    await ElMessageBox.confirm(confirmMsg, '删除确认', { type: 'warning' })
+
+    const result = await window.electronAPI.factor.deleteVersion(
+      currentFactorDetail.value.factor_id,
+      version
+    )
+    if (result.success) {
+      const factorDeleted = result.factor_deleted || result.data?.factor_deleted
+      if (factorDeleted) {
+        ElMessage.success('因子已整体删除')
+        selectedFactor.value = null
+        currentFactorDetail.value = null
+        loadFactors()
+      } else {
+        ElMessage.success(`v${version} 已删除`)
+        selectedVersion.value = null
+        pySourceContent.value = ''
+        loadFactors()
+        selectFactor(selectedFactor.value)
+      }
     } else {
       ElMessage.error(result.error || '删除失败')
     }
   } catch {
-    // 取消删除
+    // 取消
   }
 }
 
@@ -2926,24 +3596,6 @@ const handleSelectAll = async (checked: boolean) => {
 const clearSelection = () => {
   selectedFactorIds.value = []
   selectedFactorsData.value = []
-}
-
-// 单个因子回测
-const goToBacktest = async (factor: any) => {
-  if (!factor) return
-  backtestFactor.value = factor
-  backtestFactors.value = [factor]
-  // 确保选项已加载
-  if (standardIndexes.value.length === 0) {
-    await loadPriceTypeOptions()
-  }
-  if (!stockPoolData.value) {
-    await loadStockPools()
-  }
-  // 重置选择
-  selectedBenchmarks.value = []
-  stockPoolTab.value = 'index'
-  backtestDialogVisible.value = true
 }
 
 // 批量回测
@@ -3566,7 +4218,7 @@ onMounted(() => {
 // 三栏布局
 .content-layout {
   display: grid;
-  grid-template-columns: 260px 1fr 420px;
+  grid-template-columns: 240px 1fr 500px;
   gap: 16px;
   flex: 1;
   min-height: 0;
@@ -4582,5 +5234,91 @@ onMounted(() => {
       }
     }
   }
+}
+
+// Py文件上传区域
+.py-file-upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  
+  .upload-hint {
+    color: #909399;
+    font-size: 12px;
+  }
+  
+  .py-file-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    .file-size {
+      color: #909399;
+      font-size: 12px;
+    }
+  }
+}
+
+// 绩效指标区域
+.performance-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    color: #303133;
+  }
+}
+
+// 版本历史
+.version-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  .version-desc {
+    font-size: 12px;
+    color: #606266;
+  }
+}
+
+.version-clickable {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #f0f9ff;
+  }
+
+  &.version-selected {
+    background: #ecf5ff;
+    border: 1px solid #b3d8ff;
+  }
+}
+
+// Py源码查看
+.py-source-actions {
+  margin-bottom: 12px;
+}
+
+.py-source-code {
+  max-height: 400px;
+  overflow: auto;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 </style>

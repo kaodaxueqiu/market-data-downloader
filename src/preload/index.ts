@@ -209,6 +209,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     myBacktest: (data: any) => ipcRenderer.invoke('factor:myBacktest', data),
     // 因子回测历史
     myBacktestHistory: (factorId: string | number) => ipcRenderer.invoke('factor:myBacktestHistory', factorId),
+    // Py文件源码（远程MinIO存储）
+    selectPyFile: () => ipcRenderer.invoke('factor:selectPyFile'),
+    uploadSourceFile: (factorId: string, filePath: string) => ipcRenderer.invoke('factor:uploadSourceFile', factorId, filePath),
+    getSourceFile: (factorId: string, version?: number) => ipcRenderer.invoke('factor:getSourceFile', factorId, version),
+    deleteSourceFile: (factorId: string, version?: number) => ipcRenderer.invoke('factor:deleteSourceFile', factorId, version),
+    // 自定义股票域文件
+    selectUniverseFile: () => ipcRenderer.invoke('factor:selectUniverseFile'),
+    uploadUniverseFile: (factorId: string, filePath: string) => ipcRenderer.invoke('factor:uploadUniverseFile', factorId, filePath),
+    getUniverseFile: (factorId: string, version?: number) => ipcRenderer.invoke('factor:getUniverseFile', factorId, version),
+    // 版本与广场
+    myVersions: (factorId: string) => ipcRenderer.invoke('factor:myVersions', factorId),
+    myVersionDetail: (factorId: string, version: number) => ipcRenderer.invoke('factor:myVersionDetail', factorId, version),
+    deleteVersion: (factorId: string, version: number) => ipcRenderer.invoke('factor:deleteVersion', factorId, version),
+    submitPlaza: (factorId: string, remark: string, version?: number) => ipcRenderer.invoke('factor:submitPlaza', factorId, remark, version),
+    plazaCategories: () => ipcRenderer.invoke('factor:plazaCategories'),
+    plazaSubmissions: (params?: any) => ipcRenderer.invoke('factor:plazaSubmissions', params),
+    plazaList: (params?: any) => ipcRenderer.invoke('factor:plazaList', params),
+    plazaDetail: (plazaId: number) => ipcRenderer.invoke('factor:plazaDetail', plazaId),
+    plazaSource: (plazaId: string, version?: number) => ipcRenderer.invoke('factor:plazaSource', plazaId, version),
+    plazaVersions: (factorId: string) => ipcRenderer.invoke('factor:plazaVersions', factorId),
     // 表达式字典
     getExpressionFunctions: (category?: string) => ipcRenderer.invoke('factor:getExpressionFunctions', category),
     getExpressionFunctionList: () => ipcRenderer.invoke('factor:getExpressionFunctionList')
@@ -717,6 +737,26 @@ declare global {
         myBacktest: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         // 因子回测历史
         myBacktestHistory: (factorId: string | number) => Promise<{ success: boolean; data?: any; error?: string }>
+        // Py文件源码（远程MinIO存储）
+        selectPyFile: () => Promise<{ success: boolean; filePath?: string; fileName?: string; fileSize?: number; error?: string }>
+        uploadSourceFile: (factorId: string, filePath: string) => Promise<{ success: boolean; fileName?: string; fileSize?: number; uploadedAt?: string; error?: string }>
+        getSourceFile: (factorId: string, version?: number) => Promise<{ success: boolean; content?: string; fileName?: string; fileSize?: number; uploadedAt?: string; error?: string }>
+        deleteSourceFile: (factorId: string, version?: number) => Promise<{ success: boolean; error?: string }>
+        // 自定义股票域文件
+        selectUniverseFile: () => Promise<{ success: boolean; filePath?: string; fileName?: string; fileSize?: number; error?: string }>
+        uploadUniverseFile: (factorId: string, filePath: string) => Promise<{ success: boolean; fileName?: string; fileSize?: number; uploadedAt?: string; error?: string }>
+        getUniverseFile: (factorId: string, version?: number) => Promise<{ success: boolean; content?: string; fileName?: string; fileSize?: number; error?: string }>
+        // 版本与广场
+        myVersions: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        myVersionDetail: (factorId: string, version: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        deleteVersion: (factorId: string, version: number) => Promise<{ success: boolean; data?: any; factor_deleted?: boolean; error?: string }>
+        submitPlaza: (factorId: string, remark: string, version?: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        plazaCategories: () => Promise<{ success: boolean; data?: any; error?: string }>
+        plazaSubmissions: (params?: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        plazaList: (params?: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        plazaDetail: (plazaId: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        plazaSource: (plazaId: string, version?: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        plazaVersions: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         // 表达式字典
         getExpressionFunctions: (category?: string) => Promise<{ success: boolean; data?: any; error?: string }>
         getExpressionFunctionList: () => Promise<{ success: boolean; data?: any[]; error?: string }>
