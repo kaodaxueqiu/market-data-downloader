@@ -1876,7 +1876,8 @@ const doDialogSearch = async () => {
   
   dialogSearchLoading.value = true
   try {
-    const result = await window.electronAPI.dbdict.search(dialogSearchKeyword.value, 'clickhouse')
+    // 不指定数据源，由后端自适应在 postgresql / clickhouse / clickhouse_data(行情镜像库) 中搜索
+    const result = await window.electronAPI.dbdict.search(dialogSearchKeyword.value)
     if (result.code === 200) {
       dialogSearchResults.value = result.data || []
     }
@@ -1892,7 +1893,6 @@ const doDialogSearch = async () => {
 const selectSearchResult = async (item: any) => {
   const source = dataSources.value[currentSearchIndex.value]
   source.table = item.table_name
-  source.database = item.database || 'clickhouse'
   source.fields = []
   source.date_field = ''
   source.code_field = ''
@@ -1928,8 +1928,8 @@ const handleTableChange = async (index: number) => {
   source.loadingFields = true
   
   try {
-    const datasource = source.database === 'postgresql' ? 'postgresql' : 'clickhouse'
-    const result = await window.electronAPI.dbdict.getTableFields(source.table, datasource)
+    // 不指定数据源，由后端自适应定位表所在的库
+    const result = await window.electronAPI.dbdict.getTableFields(source.table)
     if (result.code === 200) {
       source.availableFields = result.data || []
     }
