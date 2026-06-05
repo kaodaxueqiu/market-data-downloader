@@ -257,7 +257,7 @@
             </div>
             <div class="header-right" v-if="selectedFactorIds.length > 0">
               <el-tag type="primary" size="small">已选 {{ selectedFactorIds.length }} 个</el-tag>
-              <el-button type="success" size="small" :icon="DataAnalysis" @click="openBatchBacktest">
+              <el-button v-if="hasPermission(FACTOR_BACKTEST_PERMISSION)" type="success" size="small" :icon="DataAnalysis" @click="openBatchBacktest">
                 批量回测
               </el-button>
               <el-button type="danger" size="small" :icon="Delete" @click="handleBatchDelete" :loading="batchDeleting">
@@ -670,7 +670,15 @@
                 >
                   版本升级
                 </el-button>
-                <!-- 表达式因子发起回测（暂时隐藏） -->
+                <!-- 单因子发起回测（受菜单权限 my_factor_backtest 控制；Py 文件因子不提供回测，仅表达式因子可见） -->
+                <el-button 
+                  v-if="hasPermission(FACTOR_BACKTEST_PERMISSION) && !isPyFileFactor(currentFactorDetail)"
+                  type="success" 
+                  :icon="DataAnalysis"
+                  @click="openBacktest(currentFactorDetail)"
+                >
+                  发起回测
+                </el-button>
                 <el-button 
                   type="warning" 
                   :icon="Upload"
@@ -707,7 +715,7 @@
         <el-form-item v-if="!isEdit" label="因子类型">
           <el-radio-group v-model="factorMode">
             <el-radio value="pyfile">Py 文件（上传本地 Python 脚本）</el-radio>
-            <el-radio value="expression" disabled>表达式（开发中，敬请期待）</el-radio>
+            <el-radio value="expression">表达式（输入因子表达式）</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -1638,7 +1646,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
@@ -1647,6 +1655,19 @@ import {
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
+
+// 菜单权限（从 App.vue 注入），用于控制回测相关按钮的显示
+const menuPermissions = inject<{ value: string[] }>('menuPermissions', { value: [] })
+
+// 权限检查：权限列表为空时默认全部显示（兼容旧用户）
+const hasPermission = (menuId: string): boolean => {
+  const permissions = menuPermissions.value || []
+  if (permissions.length === 0) return true
+  return permissions.includes(menuId)
+}
+
+// 回测功能菜单权限 id（中文名「回测引擎」，后端需在菜单注册表中同步添加同名 id）
+const FACTOR_BACKTEST_PERMISSION = 'my_factor_backtest'
 
 // 页面状态
 const factorMode = ref<'expression' | 'pyfile'>('pyfile')
@@ -3606,8 +3627,53 @@ const openBatchBacktest = async () => {
     ElMessage.warning('请先选择要回测的因子')
     return
   }
+  // Py 文件因子不提供回测，自动过滤，仅回测表达式因子
+  const expressionFactors = selectedFactorsData.value.filter(f => !isPyFileFactor(f))
+  const pyFactors = selectedFactorsData.value.filter(f => isPyFileFactor(f))
+  const pyCount = pyFactors.length
+  if (expressionFactors.length === 0) {
+    ElMessage.warning('所选因子均为 Py 文件因子，暂不支持回测')
+    return
+  }
+  if (pyCount > 0) {
+    // 混选场景：明确提示哪些 Py 因子会被跳过，确认后再继续
+    const pyNames = pyFactors.map(f => f.factor_name || f.factor_code).join('、')
+    try {
+      await ElMessageBox.confirm(
+        `已选 ${selectedFactorsData.value.length} 个因子，其中 ${pyCount} 个为 Py 文件因子（不支持回测）：<br/><span style="color:#E6A23C;">${pyNames}</span><br/><br/>将自动跳过这些因子，仅回测 ${expressionFactors.length} 个表达式因子，是否继续？`,
+        '部分因子不支持回测',
+        {
+          confirmButtonText: `继续回测 ${expressionFactors.length} 个`,
+          cancelButtonText: '取消',
+          type: 'warning',
+          dangerouslyUseHTMLString: true
+        }
+      )
+    } catch {
+      // 用户取消
+      return
+    }
+  }
   backtestFactor.value = null
-  backtestFactors.value = [...selectedFactorsData.value]
+  backtestFactors.value = [...expressionFactors]
+  // 确保选项已加载
+  if (standardIndexes.value.length === 0) {
+    await loadPriceTypeOptions()
+  }
+  if (!stockPoolData.value) {
+    await loadStockPools()
+  }
+  // 重置选择
+  selectedBenchmarks.value = []
+  stockPoolTab.value = 'index'
+  backtestDialogVisible.value = true
+}
+
+// 单因子发起回测（详情卡片入口）
+const openBacktest = async (factor: any) => {
+  if (!factor) return
+  backtestFactor.value = factor
+  backtestFactors.value = [factor]
   // 确保选项已加载
   if (standardIndexes.value.length === 0) {
     await loadPriceTypeOptions()
