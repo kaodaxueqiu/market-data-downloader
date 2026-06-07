@@ -161,6 +161,7 @@ extern __declspec(dllexport) void find_message_list(CB_S_I_S_S cCallback, char* 
 extern __declspec(dllexport) void get_advanced_history_message_list(CB_S_I_S_S cCallback, char* operationID, char* getMessageOptions);
 extern __declspec(dllexport) void get_advanced_history_message_list_reverse(CB_S_I_S_S cCallback, char* operationID, char* getMessageOptions);
 extern __declspec(dllexport) void get_all_history_messages(CB_S_I_S_S_I cCallback, char* operationID, char* req);
+extern __declspec(dllexport) void get_local_all_history_messages(CB_S_I_S_S_I cCallback, char* operationID, char* req);
 extern __declspec(dllexport) void revoke_message(CB_S_I_S_S cCallback, char* operationID, char* conversationID, char* clientMsgID);
 extern __declspec(dllexport) void typing_status_update(CB_S_I_S_S cCallback, char* operationID, char* recvID, char* msgTip);
 extern __declspec(dllexport) void mark_conversation_message_as_read(CB_S_I_S_S cCallback, char* operationID, char* conversationID);

@@ -25,8 +25,16 @@ const WindowControlBar = () => {
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(checkMaximized, 300);
-    return () => clearInterval(interval);
+    // 旧 webview 控制路径：轮询
+    if (imCtrl) {
+      const interval = setInterval(checkMaximized, 300);
+      return () => clearInterval(interval);
+    }
+    // 标准 Electron 路径：监听主进程广播的最大化/全屏状态
+    const unsub = window.electronAPI?.onWindowMaximizedChange?.((val) =>
+      setMaximized(Boolean(val)),
+    );
+    return () => unsub?.();
   }, [checkMaximized]);
 
   useKeyPress("esc", () => {

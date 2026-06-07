@@ -36,6 +36,7 @@ const eventListeners = {
   onEventTransfer: buildListener(IpcMainToRender.eventTransfer),
   onAppResume: buildListener(IpcMainToRender.appResume),
   onOpenConversation: buildListener(IpcMainToRender.openConversation),
+  onWindowMaximizedChange: buildListener(IpcMainToRender.windowMaximizedChange),
 };
 
 const invokeChannels: Record<string, string> = {
@@ -257,10 +258,20 @@ const writeVersionFile = (version: string) => {
   }
 };
 
+const openclaw = {
+  start: (agentName: string) =>
+    ipcRenderer.invoke(IpcRenderToMain.openclawStart, agentName),
+  stop: () => ipcRenderer.invoke(IpcRenderToMain.openclawStop),
+  getStatus: () => ipcRenderer.invoke(IpcRenderToMain.openclawGetStatus),
+  getConfig: () => ipcRenderer.invoke(IpcRenderToMain.openclawGetConfig),
+  onStatusChange: buildListener(IpcMainToRender.openclawStatusChanged),
+};
+
 const Api: IElectronAPI = {
   ...eventListeners,
   ...buildInvokeApi(invokeChannels),
   ...buildSyncApi(syncChannels),
+  openclaw,
   getDataPath,
   getVersion: () => process.version,
   getPlatform,

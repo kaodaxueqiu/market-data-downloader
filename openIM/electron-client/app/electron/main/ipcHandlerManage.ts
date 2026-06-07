@@ -27,6 +27,7 @@ import { notificationManager } from "./notificationManage";
 import { mainLogger as logger } from "../utils/log";
 import { windowManager } from "./windowManage";
 import { downloadManager } from "./downloadManage";
+import { openclawManager } from "./openclawManage";
 
 class IpcHandlerManager {
   private store = getStore();
@@ -448,6 +449,7 @@ class IpcHandlerManager {
     this.registerDownloadHandlers();
     this.registerUpdateHandlers();
     this.registerPathHandlers();
+    openclawManager.register();
   }
 }
 

@@ -61,6 +61,8 @@ export default defineConfig(({ command, mode }) => {
         : []),
     ],
     server: {
+      port: 5273,
+      strictPort: true,
       watch: {
         ignored: ["**/open-im-sdk-core*", "**/OpenIM_v3_*", "**/logs/**"],
       },

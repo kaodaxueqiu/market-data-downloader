@@ -33,6 +33,7 @@ export interface SessionStore {
   createNewSession: (agentId: string) => Promise<string | undefined>;
   switchSession: (sessionId: string) => void;
   addToTabs: (sessionId: string) => void;
+  reopenSession: (sessionId: string) => Promise<void>;
   removeFromTabs: (sessionId: string) => void;
   renameSession: (sessionId: string, title: string) => Promise<void>;
   updateRemark: (sessionId: string, remark: string) => Promise<void>;
@@ -89,6 +90,14 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       let targetId = "";
       if (activeId && restoredTabs.includes(activeId)) {
         targetId = activeId;
+      } else if (activeId && sessions.some((s) => s.sessionId === activeId)) {
+        // 最新一条消息所在的 session 即使被叉掉(isOpen=false)，进入会话时也强制拉回标签栏，
+        // 覆盖「定时任务/他人消息到达时用户不在该会话」导致的隐藏 session 收不到提示问题
+        restoredTabs = [...restoredTabs, activeId];
+        targetId = activeId;
+        if (activeId !== LEGACY_SESSION_ID) {
+          apiUpdateSession(agentId, activeId, { isOpen: true }).catch(console.error);
+        }
       } else if (restoredTabs.length > 0) {
         targetId = restoredTabs[0];
       }
@@ -171,6 +180,41 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       }
       return { tabSessionIds: [...state.tabSessionIds, sessionId] };
     });
+  },
+
+  reopenSession: async (sessionId: string) => {
+    if (!sessionId) return;
+    const state = get();
+    const alreadyOpen = state.tabSessionIds.includes(sessionId);
+    const existsLocally = state.sessions.some((s) => s.sessionId === sessionId);
+
+    // 本地没有这个 session（可能是后端/定时任务新建的），先刷新列表
+    if (!existsLocally && state.agentId) {
+      try {
+        const resp = await apiGetSessions(state.agentId);
+        const data = resp.data as unknown as { sessions: SessionItem[] };
+        let sessions = sortSessions(data?.sessions ?? []);
+        sessions = [
+          ...get().sessions.filter((s) => s.sessionId === LEGACY_SESSION_ID),
+          ...sessions.filter((s) => s.sessionId !== LEGACY_SESSION_ID),
+        ];
+        set({ sessions });
+      } catch (error) {
+        console.error("[Session] reopenSession 刷新列表失败:", error);
+      }
+    }
+
+    if (alreadyOpen) return;
+
+    if (sessionId !== LEGACY_SESSION_ID) {
+      apiUpdateSession(get().agentId, sessionId, { isOpen: true }).catch(console.error);
+    }
+
+    set((s) => ({
+      tabSessionIds: s.tabSessionIds.includes(sessionId)
+        ? s.tabSessionIds
+        : [...s.tabSessionIds, sessionId],
+    }));
   },
 
   removeFromTabs: (sessionId: string) => {

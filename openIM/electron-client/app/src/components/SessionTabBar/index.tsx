@@ -67,8 +67,16 @@ const SessionTabBar: FC<SessionTabBarProps> = ({ agentId }) => {
     tabSessionIds.includes(s.sessionId),
   );
 
-  const handleCreate = useCallback(async () => {
-    await createNewSession(agentId);
+  const handleCreate = useCallback(() => {
+    Modal.confirm({
+      title: "新建会话",
+      content: "确定要新建一个会话吗？会话创建后无法删除。",
+      okText: "确定新建",
+      cancelText: "取消",
+      onOk: async () => {
+        await createNewSession(agentId);
+      },
+    });
   }, [agentId, createNewSession]);
 
   return (

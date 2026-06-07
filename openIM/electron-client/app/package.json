@@ -1,6 +1,6 @@
 {
   "name": "G-Snowball-IM",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "main": "dist-electron/main/index.js",
   "description": "G-Snowball IM Client.",
   "author": "ZiZhou",
@@ -15,7 +15,8 @@
   "homepage": "",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "vite --force --host",
+    "dev": "vite --host",
+    "dev:force": "vite --force --host",
     "setup:ffi": "pnpm --filter @openim/build-tooling run install-ffi-assets",
     "build:packages": "pnpm -r --filter \"./packages/*\" --if-present run build",
     "dev:packages": "pnpm -r --filter \"./packages/*\" --if-present run dev",

@@ -1007,6 +1007,12 @@ func get_all_history_messages(cCallback C.CB_S_I_S_S_I, operationID, req *C.char
 	open_im_sdk.GetAllHistoryMessages(callback, C.GoString(operationID), C.GoString(req))
 }
 
+//export get_local_all_history_messages
+func get_local_all_history_messages(cCallback C.CB_S_I_S_S_I, operationID, req *C.char) {
+	callback := NewSendMessageCallback(cCallback, operationID)
+	open_im_sdk.GetLocalAllHistoryMessages(callback, C.GoString(operationID), C.GoString(req))
+}
+
 //export revoke_message
 func revoke_message(cCallback C.CB_S_I_S_S, operationID *C.char, conversationID *C.char, clientMsgID *C.char) {
 	baseCallback := NewBaseCallback(cCallback, operationID)

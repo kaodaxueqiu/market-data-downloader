@@ -71,7 +71,6 @@ export const allMenus: MenuItem[] = [
         name: '因子回测', 
         path: '/factor-library/backtest/submit', 
         icon: null,
-        hidden: true,
         children: [
           { id: 'backtest_submit', name: '单因子回测', path: '/factor-library/backtest/submit', icon: null },
           { id: 'backtest_tasks', name: '回测任务', path: '/factor-library/backtest/tasks', icon: null },

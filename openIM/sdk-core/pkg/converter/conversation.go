@@ -66,9 +66,6 @@ func MsgDataToLocalChatLog(info *sdkws.MsgData) *model_struct.LocalChatLog {
 	if info == nil {
 		return nil
 	}
-	if info.Seq != 0 {
-		println("[GO-DEBUG] MsgDataToLocalChatLog seq=", info.Seq, "sessionId=", info.SessionId)
-	}
 	local := &model_struct.LocalChatLog{
 		ClientMsgID:      info.ClientMsgID,
 		ServerMsgID:      info.ServerMsgID,

@@ -68,7 +68,24 @@ class WindowManager {
   private loadWindowEntry(targetWindow: BrowserWindow, arg?: string, search?: string) {
     if (!app.isPackaged) {
       const hashPath = arg ? `/#/${arg}${search ? `?${search}` : ""}` : "";
-      targetWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}${hashPath}`);
+      const devUrl = `${process.env.VITE_DEV_SERVER_URL}${hashPath}`;
+      // dev 下 vite 可能比 electron 晚就绪，加载失败时自动重试，避免卡在闪屏
+      let attempts = 0;
+      const onFail = (
+        _e: unknown,
+        _code: number,
+        _desc: string,
+        _url: string,
+        isMainFrame: boolean,
+      ) => {
+        if (!isMainFrame || attempts >= 30 || targetWindow.isDestroyed()) return;
+        attempts += 1;
+        setTimeout(() => {
+          if (!targetWindow.isDestroyed()) targetWindow.loadURL(devUrl).catch(() => {});
+        }, 500);
+      };
+      targetWindow.webContents.on("did-fail-load", onFail);
+      targetWindow.loadURL(devUrl).catch(() => {});
       return;
     }
     const basePath = this.getRendererBasePath();
@@ -97,6 +114,14 @@ class WindowManager {
     targetWindow.webContents.on("did-finish-load", () => {
       targetWindow.webContents.send("main-process-message", new Date().toLocaleString());
     });
+
+    // 窗口最大化 / 还原 / 全屏状态变化，通知渲染端切换图标
+    const notifyMaximized = (val: boolean) =>
+      this.sendEvent(IpcMainToRender.windowMaximizedChange, val);
+    targetWindow.on("maximize", () => notifyMaximized(true));
+    targetWindow.on("unmaximize", () => notifyMaximized(false));
+    targetWindow.on("enter-full-screen", () => notifyMaximized(true));
+    targetWindow.on("leave-full-screen", () => notifyMaximized(false));
 
     targetWindow.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith("https:") || url.startsWith("http:")) shell.openExternal(url);

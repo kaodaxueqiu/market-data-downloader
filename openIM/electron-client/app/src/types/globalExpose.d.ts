@@ -76,6 +76,7 @@ export interface IElectronAPI {
   onEventTransfer: (cb: (payload: any) => void) => Unsubscribe;
   onAppResume: (cb: () => void) => Unsubscribe;
   onOpenConversation: (cb: (conversationId: string | null) => void) => Unsubscribe;
+  onWindowMaximizedChange: (cb: (maximized: boolean) => void) => Unsubscribe;
 
   // render -> main actions
   changeLanguage: (locale: string) => Promise<void>;
@@ -170,6 +171,20 @@ export interface IElectronAPI {
   deleteFile: (filePath: string) => Promise<boolean>;
   writeVersionFile: (version: string) => boolean;
   enableCLib: boolean;
+  openclaw: {
+    start: (agentName: string) => Promise<{ success: boolean; error?: string }>;
+    stop: () => Promise<{ success: boolean; error?: string }>;
+    getStatus: () => Promise<{
+      status: string;
+      agentName?: string;
+      message?: string;
+      error?: string;
+    }>;
+    getConfig: () => Promise<{ agentName: string; agentHistory: string[] }>;
+    onStatusChange: (
+      cb: (data: { status: string; message?: string; error?: string }) => void,
+    ) => Unsubscribe;
+  };
 }
 
 export interface CachePathInfo {

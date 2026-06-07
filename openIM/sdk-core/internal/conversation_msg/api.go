@@ -1020,12 +1020,23 @@ func (c *Conversation) GetAllHistoryMessages(ctx context.Context, req sdk_params
 		}
 	}
 
-	log.ZDebug(ctx, "GetAllHistoryMessages DB write done, reading back from DB",
-		"conversationID", req.ConversationID)
+	// 职责到此为止：只负责把消息下载并写入本地 DB。
+	// 不再回读/排序/返回完整列表（那是「构建内存 map」第四步的事，见 GetLocalAllHistoryMessages）。
+	log.ZDebug(ctx, "GetAllHistoryMessages download done (write-only)",
+		"conversationID", req.ConversationID, "total", len(allMessages))
 
-	dbMessages, err := c.db.GetMessageList(ctx, req.ConversationID, int(maxSeq), 0, 0, "", false)
+	return &sdk_params_callback.GetAllHistoryMessagesCallback{
+		MessageList: make([]*sdk_struct.MsgStruct, 0),
+		TotalCount:  len(allMessages),
+	}, nil
+}
+
+// GetLocalAllHistoryMessages 只从本地 DB 读取该会话的全部消息（不联网），
+// 用于「构建内存 map」第四步。下载由 GetAllHistoryMessages 负责。
+func (c *Conversation) GetLocalAllHistoryMessages(ctx context.Context, req sdk_params_callback.GetAllHistoryMessagesParams) (*sdk_params_callback.GetAllHistoryMessagesCallback, error) {
+	dbMessages, err := c.db.GetMessageList(ctx, req.ConversationID, 1<<30, 0, 0, "", false)
 	if err != nil {
-		log.ZError(ctx, "GetAllHistoryMessages read back from DB failed", err, "conversationID", req.ConversationID)
+		log.ZError(ctx, "GetLocalAllHistoryMessages read from DB failed", err, "conversationID", req.ConversationID)
 		return nil, err
 	}
 

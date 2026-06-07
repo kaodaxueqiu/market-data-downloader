@@ -250,6 +250,43 @@ func GetAllHistoryMessages(callback open_im_sdk_callback.SendMsgCallBack, operat
 	}()
 }
 
+func GetLocalAllHistoryMessages(callback open_im_sdk_callback.SendMsgCallBack, operationID string, req string) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				callback.OnError(sdkerrs.SdkInternalError, fmt.Sprintf("recover: %+v", r))
+			}
+		}()
+		if err := CheckResourceLoad(IMUserContext, ""); err != nil {
+			if code, ok := errs.Unwrap(err).(errs.CodeError); ok {
+				callback.OnError(int32(code.Code()), err.Error())
+			} else {
+				callback.OnError(sdkerrs.UnknownCode, err.Error())
+			}
+			return
+		}
+		ctx := ccontext.WithOperationID(IMUserContext.Context(), operationID)
+
+		var params sdk_params_callback.GetAllHistoryMessagesParams
+		if err := json.Unmarshal([]byte(req), &params); err != nil {
+			callback.OnError(sdkerrs.ArgsError, err.Error())
+			return
+		}
+
+		result, err := IMUserContext.Conversation().GetLocalAllHistoryMessages(ctx, params)
+		if err != nil {
+			if code, ok := errs.Unwrap(err).(errs.CodeError); ok {
+				callback.OnError(int32(code.Code()), err.Error())
+			} else {
+				callback.OnError(sdkerrs.UnknownCode, err.Error())
+			}
+			return
+		}
+		data, _ := json.Marshal(result)
+		callback.OnSuccess(string(data))
+	}()
+}
+
 func RevokeMessage(callback open_im_sdk_callback.Base, operationID string, conversationID, clientMsgID string) {
 	call(callback, operationID, IMUserContext.Conversation().RevokeMessage, conversationID, clientMsgID)
 }

@@ -48,9 +48,12 @@ export async function preloadAllConversations(
 
   const tasks = pending.map((convID) => async () => {
     try {
-      const { data } = await (IMSDK as any).getAllHistoryMessages(
-        { conversationID: convID },
-      );
+      // 第三步：下载到本地（联网，写入本地 DB）
+      await (IMSDK as any).getAllHistoryMessages({ conversationID: convID });
+      // 第四步：从本地 DB 读取，构建内存 map（不联网）
+      const { data } = await (IMSDK as any).getLocalAllHistoryMessages({
+        conversationID: convID,
+      });
       const messages = (data.messageList ?? []) as ExMessageItem[];
       conversationMessageCache.set(convID, {
         allMessages: messages,

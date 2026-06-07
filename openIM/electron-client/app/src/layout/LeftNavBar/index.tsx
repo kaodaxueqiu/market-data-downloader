@@ -1,4 +1,4 @@
-import { RightOutlined } from "@ant-design/icons";
+import { ProfileOutlined, RightOutlined, ScheduleOutlined } from "@ant-design/icons";
 import { useMutation } from "@tanstack/react-query";
 import { Badge, Divider, Layout, Popover, Upload } from "antd";
 import clsx from "clsx";
@@ -15,8 +15,11 @@ import nav_bar_favorites from "@/assets/images/nav/nav_bar_favorites.png";
 import nav_bar_favorites_active from "@/assets/images/nav/nav_bar_favorites_active.png";
 import message_icon from "@/assets/images/nav/nav_bar_message.png";
 import message_icon_active from "@/assets/images/nav/nav_bar_message_active.png";
+import nav_bar_workbench from "@/assets/images/nav/nav_bar_workbench.png";
+import nav_bar_workbench_active from "@/assets/images/nav/nav_bar_workbench_active.png";
 import change_avatar from "@/assets/images/profile/change_avatar.png";
 import OIMAvatar from "@/components/OIMAvatar";
+import OpenclawControl from "@/components/OpenclawControl";
 import { useConversationUnreadCount } from "@/hooks/useConversationUnreadCount";
 import { useContactStore, useUserStore } from "@/store";
 import { feedbackToast } from "@/utils/feedback";
@@ -33,8 +36,9 @@ import PersonalSettings from "./PersonalSettings";
 const { Sider } = Layout;
 
 type NavItemType = {
-  icon: string;
-  icon_active: string;
+  icon?: string;
+  icon_active?: string;
+  iconNode?: React.ReactNode;
   title: string;
   path: string;
 };
@@ -55,7 +59,7 @@ const resizeFile = (file: File): Promise<File> =>
     );
   });
 
-const NavItem = ({ nav: { icon, icon_active, title, path } }: { nav: NavItemType }) => {
+const NavItem = ({ nav: { icon, icon_active, iconNode, title, path } }: { nav: NavItemType }) => {
   const resolvedPath = useResolvedPath(path);
   const { navigator } = React.useContext(UNSAFE_NavigationContext);
   const toPathname = navigator.encodeLocation
@@ -133,13 +137,21 @@ const NavItem = ({ nav: { icon, icon_active, title, path } }: { nav: NavItemType
       >
         <div
           className={clsx(
-            "mb-3 flex h-13 w-12 cursor-pointer flex-col items-center justify-center rounded-md",
+            "mb-3 flex h-13 w-16 cursor-pointer flex-col items-center justify-center rounded-md",
             { "bg-[#e9e9eb]": isActive },
           )}
           onClick={tryNavigate}
         >
-          <img width={20} src={isActive ? icon_active : icon} alt="" />
-          <div className="mt-1 text-xs text-gray-500">{title}</div>
+          {iconNode ? (
+            <span
+              style={{ fontSize: 20, color: isActive ? "#0289FA" : "#8a8a8a" }}
+            >
+              {iconNode}
+            </span>
+          ) : (
+            <img width={20} src={isActive ? icon_active : icon} alt="" />
+          )}
+          <div className="mt-1 text-xs whitespace-nowrap text-gray-500">{title}</div>
         </div>
       </Popover>
     </Badge>
@@ -177,6 +189,22 @@ const LeftNavBar = memo(() => {
       icon_active: nav_bar_favorites_active,
       title: t("common.text.favorites"),
       path: "/favorites",
+    },
+    {
+      icon: nav_bar_workbench,
+      icon_active: nav_bar_workbench_active,
+      title: "技能",
+      path: "/skills",
+    },
+    {
+      iconNode: <ProfileOutlined />,
+      title: "配置/人设",
+      path: "/agent-profile",
+    },
+    {
+      iconNode: <ScheduleOutlined />,
+      title: "任务清单",
+      path: "/task-list",
     },
   ];
 
@@ -327,7 +355,7 @@ const LeftNavBar = memo(() => {
   return (
     <Sider
       className="no-mobile border-r border-(--gap-text) bg-[#F4F4F4]!"
-      width={60}
+      width={72}
       theme="light"
     >
       <div className="mt-6 flex flex-col items-center">
@@ -351,6 +379,7 @@ const LeftNavBar = memo(() => {
         {navList.map((nav) => (
           <NavItem nav={nav} key={nav.path} />
         ))}
+        <OpenclawControl />
       </div>
       <PersonalSettings
         ref={personalSettingsRef}

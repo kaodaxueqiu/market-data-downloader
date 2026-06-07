@@ -51,6 +51,27 @@ const router = createHashRouter([
               return { Component: Favorites };
             },
           },
+          {
+            path: "skills",
+            async lazy() {
+              const { Skills } = await import("@/pages/skills");
+              return { Component: Skills };
+            },
+          },
+          {
+            path: "agent-profile",
+            async lazy() {
+              const { AgentProfile } = await import("@/pages/agentProfile");
+              return { Component: AgentProfile };
+            },
+          },
+          {
+            path: "task-list",
+            async lazy() {
+              const { TaskList } = await import("@/pages/taskList");
+              return { Component: TaskList };
+            },
+          },
         ],
       },
       {

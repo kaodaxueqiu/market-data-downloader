@@ -611,6 +611,9 @@ function setupMessageModule(openIMSDK) {
         getAllHistoryMessages: (params, opid = v4()) => new Promise((resolve, reject) => {
             openIMSDK.libOpenIMSDK.get_all_history_messages(openIMSDK.sendMessageCallbackWrap('', resolve, reject), opid, JSON.stringify(params));
         }),
+        getLocalAllHistoryMessages: (params, opid = v4()) => new Promise((resolve, reject) => {
+            openIMSDK.libOpenIMSDK.get_local_all_history_messages(openIMSDK.sendMessageCallbackWrap('', resolve, reject), opid, JSON.stringify(params));
+        }),
         fetchSurroundingMessages: (params, opid = v4()) => new Promise((resolve, reject) => {
             openIMSDK.libOpenIMSDK.fetch_surrounding_messages(openIMSDK.baseCallbackWrap(resolve, reject), opid, JSON.stringify(params));
         }),
@@ -771,6 +774,7 @@ class OpenIMSDK extends Emitter {
             this.libOpenIMSDK.get_advanced_history_message_list = this.lib.func('__stdcall', 'get_advanced_history_message_list', 'void', ['baseCallback *', 'str', 'str']);
             this.libOpenIMSDK.get_advanced_history_message_list_reverse = this.lib.func('__stdcall', 'get_advanced_history_message_list_reverse', 'void', ['baseCallback *', 'str', 'str']);
             this.libOpenIMSDK.get_all_history_messages = this.lib.func('__stdcall', 'get_all_history_messages', 'void', ['sendMessageCallback *', 'str', 'str']);
+            this.libOpenIMSDK.get_local_all_history_messages = this.lib.func('__stdcall', 'get_local_all_history_messages', 'void', ['sendMessageCallback *', 'str', 'str']);
             this.libOpenIMSDK.revoke_message = this.lib.func('__stdcall', 'revoke_message', 'void', ['baseCallback *', 'str', 'str', 'str']);
             this.libOpenIMSDK.typing_status_update = this.lib.func('__stdcall', 'typing_status_update', 'void', ['baseCallback *', 'str', 'str', 'str']);
             this.libOpenIMSDK.mark_conversation_message_as_read = this.lib.func('__stdcall', 'mark_conversation_message_as_read', 'void', ['baseCallback *', 'str', 'str']);

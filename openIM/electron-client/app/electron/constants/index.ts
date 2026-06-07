@@ -14,6 +14,8 @@ export const IpcMainToRender = {
   eventTransfer: "eventTransfer",
   appResume: "appResume",
   openConversation: "openConversation",
+  openclawStatusChanged: "openclaw:status-changed",
+  windowMaximizedChange: "windowMaximizedChange",
 };
 
 export const IpcRenderToMain = {
@@ -58,4 +60,8 @@ export const IpcRenderToMain = {
   oauthLogin: "oauthLogin",
   showSaveDialog: "showSaveDialog",
   clearSdkData: "clearSdkData",
+  openclawStart: "openclaw:start",
+  openclawStop: "openclaw:stop",
+  openclawGetStatus: "openclaw:getStatus",
+  openclawGetConfig: "openclaw:getConfig",
 };

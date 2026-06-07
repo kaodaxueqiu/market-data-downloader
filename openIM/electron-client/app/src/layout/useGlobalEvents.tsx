@@ -46,6 +46,7 @@ import {
   useSessionStore,
   useUserStore,
 } from "@/store";
+import { updateSession } from "@/api/services/session";
 import { useContactStore } from "@/store/contact";
 import { isBot, loadBotMap } from "@/store/botMap";
 import { feedbackToast } from "@/utils/feedback";
@@ -668,6 +669,28 @@ export function useGlobalEvent() {
     }
   };
 
+  // 收到任意消息时：比对其所属 session 的状态，若该 session 被用户叉掉(隐藏)则自动改回 isOpen。
+  // 不关心用户当前在哪个界面——隐藏的会话被重新激活后，配合未读提醒，用户进入即可看到。
+  const ensureSessionVisible = (msg: ExMessageItem) => {
+    if (isGroupSession(msg.sessionType)) return; // 仅处理单聊(人↔智能体)
+    const sessionId = parseSessionId(msg);
+    if (!sessionId) return;
+    const selfID = useUserStore.getState().selfInfo.userID;
+    const agentUserID = msg.sendID === selfID ? msg.recvID : msg.sendID;
+    if (!isBot(agentUserID)) return; // 仅针对智能体会话
+
+    const store = useSessionStore.getState();
+    if (store.agentId === agentUserID) {
+      // 正打开这个智能体：已在标签栏 → 不动；隐藏 → 实时拉回(内存+持久化)
+      if (store.tabSessionIds.includes(sessionId)) return;
+      void store.reopenSession(sessionId);
+    } else {
+      // 非当前打开的智能体：内存没有它的会话列表，直接幂等持久化 isOpen=true，
+      // 用户之后进入该智能体时 initSessions 会自动把它恢复成标签
+      void updateSession(agentUserID, sessionId, { isOpen: true }).catch(() => {});
+    }
+  };
+
   const handleNewMessage = (newServerMsg: ExMessageItem) => {
     const needNotification =
       !notPushType.includes(newServerMsg.contentType) &&
@@ -681,6 +704,9 @@ export function useGlobalEvent() {
         newMessageNotify(newServerMsg);
       }
     }
+
+    // 任意来源的消息都先做一次「隐藏会话自动激活」处理
+    ensureSessionVisible(newServerMsg);
 
     if (!inCurrentConversation(newServerMsg)) {
       writeCacheForMessage(newServerMsg);
