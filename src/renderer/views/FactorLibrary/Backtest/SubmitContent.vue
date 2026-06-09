@@ -402,6 +402,70 @@
             </div>
           </div>
 
+          <!-- 回测模式 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><Operation /></el-icon>
+              <span>回测模式</span>
+            </div>
+            <div class="section-body">
+              <el-form-item label="研究模式">
+                <el-radio-group v-model="researchMode" class="research-mode-group">
+                  <el-radio-button value="quick">快速初筛</el-radio-button>
+                  <el-radio-button value="deep">深度研究</el-radio-button>
+                  <el-radio-button value="admission">入库审核</el-radio-button>
+                </el-radio-group>
+
+                <!-- 递进包含关系可视化 -->
+                <div class="research-tiers">
+                  <div class="tiers-note">
+                    <el-icon><InfoFilled /></el-icon>
+                    三档为递进包含：选高档自动包含低档全部能力，无需多选
+                  </div>
+                  <div
+                    v-for="(tier, i) in researchTiers"
+                    :key="tier.mode"
+                    class="tier-row"
+                    :class="{ included: i <= currentModeIndex, current: tier.mode === researchMode }"
+                  >
+                    <el-icon class="tier-mark">
+                      <CircleCheck v-if="i <= currentModeIndex" />
+                      <Minus v-else />
+                    </el-icon>
+                    <span class="tier-label">{{ tier.label }}</span>
+                    <span class="tier-adds">
+                      <span v-if="i > 0" class="plus">+</span>{{ tier.adds.join('、') }}
+                    </span>
+                  </div>
+                  <div class="tiers-hint">{{ researchModeHint }}</div>
+                </div>
+              </el-form-item>
+
+              <!-- walk-forward 高级选项（仅 deep / admission 显示） -->
+              <el-form-item v-if="researchMode !== 'quick'" label="walk-forward">
+                <el-switch v-model="walkForward.enabled" active-text="开启滚动验证" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  开启 walk-forward 会多次重算因子和回测，耗时明显增加
+                </div>
+                <el-row v-if="walkForward.enabled" :gutter="12" style="margin-top: 8px; width: 100%;">
+                  <el-col :span="8">
+                    <span class="wf-label">折数</span>
+                    <el-input-number v-model="walkForward.max_folds" :min="2" :max="10" :step="1" controls-position="right" style="width: 100%;" />
+                  </el-col>
+                  <el-col :span="8">
+                    <span class="wf-label">训练占比</span>
+                    <el-input-number v-model="walkForward.train_fraction" :min="0.5" :max="0.95" :step="0.05" :precision="2" controls-position="right" style="width: 100%;" />
+                  </el-col>
+                  <el-col :span="8">
+                    <span class="wf-label">最小测试天数</span>
+                    <el-input-number v-model="walkForward.min_test_days" :min="5" :max="120" :step="5" controls-position="right" style="width: 100%;" />
+                  </el-col>
+                </el-row>
+              </el-form-item>
+            </div>
+          </div>
+
           <!-- 回测参数 -->
           <div class="form-section">
             <div class="section-header">
@@ -409,7 +473,7 @@
               <span>回测参数</span>
             </div>
             <div class="section-body">
-              <el-row :gutter="16">
+              <el-row :gutter="16" class="param-row">
                 <el-col :span="12">
                   <el-form-item label="分组数">
                     <el-input-number v-model="formData.backtest_params.num_groups" :min="2" :max="20" style="width: 100%;" />
@@ -418,7 +482,6 @@
                 <el-col :span="12">
                   <el-form-item label="因子方向">
                     <el-select v-model="formData.backtest_params.factor_direction" style="width: 100%;">
-                      <el-option label="自动判断" value="auto" />
                       <el-option label="正向（值大=好）" value="positive" />
                       <el-option label="负向（值小=好）" value="negative" />
                     </el-select>
@@ -440,7 +503,7 @@
                 </div>
               </el-form-item>
               
-              <el-row :gutter="16">
+              <el-row :gutter="16" class="param-row">
                 <el-col :span="12">
                   <el-form-item label="买入价格">
                     <el-select v-model="formData.backtest_params.buy_price_type" style="width: 100%;">
@@ -729,7 +792,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { 
   Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts,
   Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, CopyDocument, Check,
-  Warning, CircleCheck, CircleClose, Close, Folder, Clock
+  Warning, CircleCheck, CircleClose, Close, Folder, Clock, Minus
 } from '@element-plus/icons-vue'
 
 const emit = defineEmits<{
@@ -926,11 +989,37 @@ const formData = reactive({
   backtest_params: {
     num_groups: 10,
     forward_periods: [1, 5, 10, 20],
-    factor_direction: 'auto',
+    factor_direction: 'positive',
     buy_price_type: 'daily_open',
     sell_price_type: 'daily_close',
     benchmarks: [] as string[]
   }
+})
+
+// 研究模式（顶层字段，非 backtest_params）
+const researchMode = ref<'quick' | 'deep' | 'admission'>('quick')
+const researchModeHints: Record<string, string> = {
+  quick: '快速初筛，仅用于调参/筛选，不可直接入库或实盘',
+  deep: '深度研究：含 CNE6 风格中性化、泛化性诊断',
+  admission: '入库审核：含前视快照、库级共线性/正交、治理结论（最慢）'
+}
+const researchModeHint = computed(() => researchModeHints[researchMode.value] || '')
+
+// 三档递进包含：每档展示「新增」能力
+const researchModeOrder = ['quick', 'deep', 'admission']
+const researchTiers = [
+  { mode: 'quick', label: '快速初筛', adds: ['核心：IC / 分层 / 样本外摘要'] },
+  { mode: 'deep', label: '深度研究', adds: ['CNE6 风格中性化', '泛化诊断'] },
+  { mode: 'admission', label: '入库审核', adds: ['前视快照', '库级共线性 / 正交', '治理结论'] }
+]
+const currentModeIndex = computed(() => researchModeOrder.indexOf(researchMode.value))
+
+// walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
+const walkForward = reactive({
+  enabled: false,
+  max_folds: 3,
+  train_fraction: 0.8,
+  min_test_days: 20
 })
 
 const formRules: FormRules = {
@@ -1550,6 +1639,7 @@ const handleSubmit = async () => {
         task_name: formData.task_name,
         start_date: dateRange.value[0],
         end_date: dateRange.value[1],
+        research_mode: researchMode.value,
         data_sources: processedDataSources,
         universe: formData.universe,
         backtest_params: {
@@ -1571,6 +1661,16 @@ const handleSubmit = async () => {
         requestData.factor_expression = formData.factor_expression
       } else if (factorSource.value === 'code') {
         requestData.factor_code = formData.factor_code
+      }
+
+      // walk-forward（顶层，仅 deep / admission 且开启时传）
+      if (researchMode.value !== 'quick' && walkForward.enabled) {
+        requestData.walk_forward = {
+          enabled: true,
+          max_folds: walkForward.max_folds,
+          train_fraction: walkForward.train_fraction,
+          min_test_days: walkForward.min_test_days
+        }
       }
       
       const result = await window.electronAPI.backtest.submit(requestData)
@@ -1937,6 +2037,105 @@ const initApiKey = async () => {
       .selected-count {
         color: #409eff;
         font-weight: 500;
+      }
+    }
+    
+    // 回测参数行间距（el-row 不是 form-item，需手动留白）
+    .param-row {
+      margin-bottom: 18px;
+
+      :deep(.el-form-item) {
+        margin-bottom: 0;
+      }
+    }
+
+    // 研究模式 / walk-forward
+    .research-mode-group {
+      width: 100%;
+    }
+    .wf-label {
+      display: block;
+      font-size: 12px;
+      color: #606266;
+      margin-bottom: 4px;
+    }
+
+    // 三档递进包含可视化
+    .research-tiers {
+      margin-top: 10px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+
+      .tiers-note {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: #64748b;
+        margin-bottom: 10px;
+      }
+
+      .tier-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #94a3b8;
+        position: relative;
+
+        // 连接线，体现层层叠加
+        &:not(:last-of-type)::after {
+          content: '';
+          position: absolute;
+          left: 15px;
+          top: 26px;
+          width: 2px;
+          height: 8px;
+          background: #e2e8f0;
+        }
+
+        .tier-mark {
+          font-size: 16px;
+          color: #cbd5e1;
+        }
+
+        .tier-label {
+          font-weight: 600;
+          min-width: 64px;
+        }
+
+        .tier-adds {
+          color: #94a3b8;
+          .plus {
+            color: #0284c7;
+            font-weight: 700;
+            margin-right: 4px;
+          }
+        }
+
+        &.included {
+          color: #334155;
+          .tier-mark { color: #16a34a; }
+          .tier-adds { color: #475569; }
+          &:not(:last-of-type)::after { background: #86efac; }
+        }
+
+        &.current {
+          background: #e0f2fe;
+          .tier-label { color: #0284c7; }
+        }
+      }
+
+      .tiers-hint {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed #e2e8f0;
+        font-size: 12px;
+        color: #b45309;
       }
     }
     

@@ -221,6 +221,194 @@
 
         <!-- 结果展示 -->
         <template v-if="task.status === 'completed' && result">
+          <!-- ========== 研究分析（回测三模式） ========== -->
+          <div v-if="summary" class="research-analysis">
+            <!-- 配置告警（红字置顶） -->
+            <el-alert
+              v-if="configWarnings.length"
+              type="error"
+              :closable="false"
+              show-icon
+              class="research-alert"
+            >
+              <template #title>参数告警（部分参数被回退/忽略）</template>
+              <ul class="warning-list">
+                <li v-for="(w, i) in configWarnings" :key="i">{{ w }}</li>
+              </ul>
+            </el-alert>
+
+            <!-- quick 安全提示 -->
+            <el-alert
+              v-if="isQuickScreeningOnly"
+              type="warning"
+              :closable="false"
+              show-icon
+              class="research-alert"
+              title="当前为快速初筛结果，不可直接入库或用于实盘。"
+            />
+
+            <!-- 顶部状态区：mode_budget -->
+            <div v-if="modeBudget" class="analysis-card">
+              <div class="analysis-card-header">
+                <span>研究模式</span>
+                <el-tag :type="getStatusTagType(currentResearchMode)" effect="dark" size="small">
+                  {{ getResearchModeName(currentResearchMode) }}
+                </el-tag>
+                <span v-if="modeBudget.expected_latency" class="latency-text">
+                  预计算路径：{{ modeBudget.expected_latency }}
+                </span>
+              </div>
+              <div class="analysis-flags">
+                <el-tag size="small" :type="modeBudget.runs_snapshot_test ? 'success' : 'info'" effect="plain">
+                  快照前视 {{ modeBudget.runs_snapshot_test ? '✓' : '—' }}
+                </el-tag>
+                <el-tag size="small" :type="modeBudget.runs_library_diagnostics ? 'success' : 'info'" effect="plain">
+                  库级诊断 {{ modeBudget.runs_library_diagnostics ? '✓' : '—' }}
+                </el-tag>
+                <el-tag size="small" :type="modeBudget.runs_cne6_neutral ? 'success' : 'info'" effect="plain">
+                  CNE6中性化 {{ modeBudget.runs_cne6_neutral ? '✓' : '—' }}
+                </el-tag>
+                <el-tag size="small" :type="holdoutValidation ? 'success' : 'info'" effect="plain">
+                  样本外黑盒 {{ holdoutValidation ? '✓' : '—' }}
+                </el-tag>
+              </div>
+            </div>
+
+            <!-- 入库审核结论（admission） -->
+            <div v-if="currentResearchMode === 'admission'" class="analysis-card">
+              <div class="analysis-card-header">
+                <span>入库审核</span>
+                <el-tag :type="admissionPending ? 'warning' : 'success'" effect="dark" size="small">
+                  {{ admissionPending ? '待复核' : '通过' }}
+                </el-tag>
+              </div>
+              <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="前视快照">
+                  <el-tag size="small" :type="getStatusTagType(summary.factor_snapshot_test?.status)">
+                    {{ summary.factor_snapshot_test?.status || '缺失' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="库级共线性">
+                  <el-tag size="small" :type="getStatusTagType(summary.factor_collinearity?.status)">
+                    {{ summary.factor_collinearity?.status || '缺失' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="正交性">
+                  <el-tag size="small" :type="getStatusTagType(summary.factor_orthogonality?.status)">
+                    {{ summary.factor_orthogonality?.status || '缺失' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="CNE6中性化">
+                  <el-tag size="small" :type="getStatusTagType(cne6NeutralIc?.status)">
+                    {{ cne6NeutralIc?.status || '缺失' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="泛化性">
+                  <el-tag size="small" :type="getStatusTagType(generalization?.status)">
+                    {{ generalization?.status || '缺失' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="治理结论" v-if="summary.governance">
+                  <el-tag size="small" :type="getStatusTagType(summary.governance?.status)">
+                    {{ summary.governance?.status || '-' }}
+                  </el-tag>
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+
+            <!-- 样本外黑盒（所有模式） -->
+            <div v-if="holdoutValidation" class="analysis-card">
+              <div class="analysis-card-header">
+                <span>样本外黑盒验证</span>
+                <el-tag :type="getStatusTagType(holdoutValidation.status)" size="small">
+                  {{ holdoutValidation.status || '-' }}
+                </el-tag>
+              </div>
+              <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="样本内截止">{{ holdoutValidation.train_end_date || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="样本外开始">{{ holdoutValidation.holdout_start_date || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="样本内 IC">{{ formatNumber(holdoutValidation.train?.ic_mean ?? holdoutValidation.train_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="样本外 IC">{{ formatNumber(holdoutValidation.holdout?.ic_mean ?? holdoutValidation.holdout_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="样本内 RankIC">{{ formatNumber(holdoutValidation.train?.rank_ic_mean ?? holdoutValidation.train_rank_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="样本外 RankIC">{{ formatNumber(holdoutValidation.holdout?.rank_ic_mean ?? holdoutValidation.holdout_rank_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="RankIC 方向一致">
+                  <el-tag size="small" :type="holdoutValidation.stability?.rank_ic_sign_consistent ? 'success' : 'danger'">
+                    {{ holdoutValidation.stability?.rank_ic_sign_consistent ? '一致' : '不一致' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="RankIC 差异">{{ formatNumber(holdoutValidation.stability?.rank_ic_diff, 4) }}</el-descriptions-item>
+              </el-descriptions>
+            </div>
+
+            <!-- 泛化性诊断（所有模式） -->
+            <div v-if="generalization" class="analysis-card">
+              <div class="analysis-card-header">
+                <span>泛化性诊断</span>
+                <el-tag :type="getStatusTagType(generalization.status)" size="small">
+                  {{ generalization.status || '-' }}
+                </el-tag>
+              </div>
+              <div v-if="generalization.findings?.length" class="findings-list">
+                <div v-for="(f, i) in generalization.findings" :key="i" class="finding-item">
+                  <el-tag size="small" :type="getSeverityTagType(f.severity)">{{ f.severity || 'info' }}</el-tag>
+                  <span class="finding-msg">{{ f.message || f.code }}</span>
+                </div>
+              </div>
+              <el-empty v-else description="无诊断项" :image-size="48" />
+            </div>
+
+            <!-- CNE6 风格中性化（deep / admission） -->
+            <div v-if="cne6NeutralIc" class="analysis-card">
+              <div class="analysis-card-header">
+                <span>CNE6 风格中性化</span>
+              </div>
+              <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="Raw IC">{{ formatNumber(cne6NeutralIc.raw_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="Neutral IC">{{ formatNumber(cne6NeutralIc.neutral_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="Raw RankIC">{{ formatNumber(cne6NeutralIc.raw_rank_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="Neutral RankIC">{{ formatNumber(cne6NeutralIc.neutral_rank_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="平均暴露 R²" :span="2">{{ formatNumber(cne6NeutralIc.avg_exposure_r_squared, 4) }}</el-descriptions-item>
+              </el-descriptions>
+              <el-alert
+                v-if="cne6NeutralIc.avg_exposure_r_squared > 0.5 && (cne6NeutralIc.neutral_ic ?? 0) < (cne6NeutralIc.raw_ic ?? 0) * 0.6"
+                type="warning"
+                :closable="false"
+                show-icon
+                style="margin-top: 8px;"
+                title="该因子可能主要来自 CNE6 风格暴露，独立 alpha 待确认。"
+              />
+            </div>
+
+            <!-- walk-forward（开启时） -->
+            <div v-if="walkForwardValidation" class="analysis-card">
+              <div class="analysis-card-header">
+                <span>walk-forward 滚动验证</span>
+              </div>
+              <el-table :data="walkForwardValidation.folds || []" size="small" border>
+                <el-table-column label="折" type="index" width="50" />
+                <el-table-column label="训练区间" min-width="180">
+                  <template #default="{ row }">{{ row.train_start || row.train_start_date }} ~ {{ row.train_end || row.train_end_date }}</template>
+                </el-table-column>
+                <el-table-column label="测试区间" min-width="180">
+                  <template #default="{ row }">{{ row.test_start || row.test_start_date }} ~ {{ row.test_end || row.test_end_date }}</template>
+                </el-table-column>
+                <el-table-column label="测试 RankIC 均值" width="140">
+                  <template #default="{ row }">{{ formatNumber(row.rank_ic_mean ?? row.test?.rank_ic_mean, 4) }}</template>
+                </el-table-column>
+                <el-table-column label="测试正比例" width="120">
+                  <template #default="{ row }">{{ formatPercent(row.positive_ratio ?? row.test?.positive_ratio) }}</template>
+                </el-table-column>
+              </el-table>
+              <div v-if="walkForwardValidation.aggregate" class="wf-aggregate">
+                <span>聚合：</span>
+                <el-tag size="small" type="info">RankIC 均值 {{ formatNumber(walkForwardValidation.aggregate.rank_ic_mean, 4) }}</el-tag>
+                <el-tag size="small" type="info" v-if="walkForwardValidation.aggregate.positive_ratio != null">
+                  正比例 {{ formatPercent(walkForwardValidation.aggregate.positive_ratio) }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+
           <!-- 遍历因子结果 -->
           <div v-for="(factor, index) in result.factor_results" :key="index" class="factor-result-section">
             <!-- 因子标题 -->
@@ -669,6 +857,74 @@ const pageSize = ref(12)
 const detailLoading = ref(false)
 const task = ref<any>(null)
 const result = ref<any>(null)
+
+// ========== 回测三模式：研究分析（summary.*） ==========
+// summary 位置兼容：result.summary（任务级）或单因子 factor_results[0].summary
+const summary = computed<any>(() => {
+  return result.value?.summary ?? result.value?.factor_results?.[0]?.summary ?? null
+})
+const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
+const currentResearchMode = computed<string>(() =>
+  modeBudget.value?.mode ?? task.value?.task_config?.research_mode ?? ''
+)
+const configWarnings = computed<string[]>(() => {
+  const w = summary.value?.config_warnings
+  return Array.isArray(w) ? w : []
+})
+const generalization = computed<any>(() => summary.value?.generalization ?? null)
+const isQuickScreeningOnly = computed<boolean>(() =>
+  (generalization.value?.findings || []).some((f: any) => f?.code === 'quick_mode_screening_only')
+)
+const holdoutValidation = computed<any>(() => summary.value?.holdout_validation ?? null)
+const cne6NeutralIc = computed<any>(() => summary.value?.cne6_neutral_ic ?? null)
+const walkForwardValidation = computed<any>(() => summary.value?.walk_forward_validation ?? null)
+
+// 模式展示名
+const getResearchModeName = (mode: string) => {
+  const map: Record<string, string> = {
+    quick: '快速初筛',
+    deep: '深度研究',
+    admission: '入库审核'
+  }
+  return map[mode] || mode || '-'
+}
+// finding 严重度 → el-tag 类型
+const getSeverityTagType = (severity: string) => {
+  const map: Record<string, string> = {
+    info: 'info',
+    warning: 'warning',
+    warn: 'warning',
+    error: 'danger',
+    critical: 'danger',
+    pass: 'success',
+    ok: 'success'
+  }
+  return map[severity] || 'info'
+}
+// status → el-tag 类型
+const getStatusTagType = (status: string) => {
+  if (!status) return 'info'
+  if (['ok', 'pass', 'initial_pass', 'passed'].includes(status)) return 'success'
+  if (['warning', 'review', 'pending'].includes(status)) return 'warning'
+  if (['fail', 'failed', 'error', 'reject', 'rejected'].includes(status)) return 'danger'
+  return 'info'
+}
+
+// 入库审核：任一缺失/失败 → 待复核
+const admissionPending = computed<boolean>(() => {
+  const s = summary.value
+  if (!s) return true
+  const failed =
+    (s.factor_snapshot_test?.status && s.factor_snapshot_test.status !== 'pass') ||
+    (s.factor_collinearity?.status && s.factor_collinearity.status !== 'ok') ||
+    (s.factor_orthogonality?.status && s.factor_orthogonality.status !== 'ok') ||
+    (s.cne6_neutral_ic?.status && s.cne6_neutral_ic.status !== 'ok') ||
+    (s.generalization?.status && s.generalization.status !== 'initial_pass')
+  const missing =
+    !s.factor_snapshot_test || !s.factor_collinearity ||
+    !s.factor_orthogonality || !s.cne6_neutral_ic || !s.generalization
+  return Boolean(failed || missing)
+})
 
 // 下载状态
 const downloading = ref(false)
@@ -1167,7 +1423,20 @@ const loadBenchmarkMapping = async () => {
     const result = await window.electronAPI.backtest.getPriceTypeOptions()
     if (result.success && result.data?.benchmarks) {
       const cache = new Map<string, string>()
-      result.data.benchmarks.forEach((b: any) => cache.set(b.value, b.label))
+      const bm: any = result.data.benchmarks
+      const addAll = (arr: any) => {
+        if (Array.isArray(arr)) {
+          arr.forEach((b: any) => { if (b && b.value) cache.set(b.value, b.label) })
+        }
+      }
+      if (Array.isArray(bm)) {
+        // 兼容旧格式：数组
+        addAll(bm)
+      } else if (bm && typeof bm === 'object') {
+        // 新格式：{ standard_indexes, index_list, index_industries }
+        addAll(bm.standard_indexes)
+        Object.values(bm.index_industries || {}).forEach((arr: any) => addAll(arr))
+      }
       benchmarkCache.value = cache
     }
   } catch (error) {
@@ -1521,6 +1790,78 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 .result-content {
   background: $bg-page;
   min-height: 100%;
+
+  // ===== 研究分析（回测三模式） =====
+  .research-analysis {
+    margin-bottom: 20px;
+
+    .research-alert {
+      margin-bottom: 12px;
+
+      .warning-list {
+        margin: 4px 0 0;
+        padding-left: 18px;
+        font-size: 13px;
+      }
+    }
+
+    .analysis-card {
+      background: #fff;
+      border: 1px solid #ebeef5;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+
+      .analysis-card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        font-size: 14px;
+        color: #1f2937;
+        margin-bottom: 12px;
+
+        .latency-text {
+          margin-left: auto;
+          font-weight: 400;
+          font-size: 12px;
+          color: #909399;
+        }
+      }
+
+      .analysis-flags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .findings-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .finding-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .finding-msg {
+            font-size: 13px;
+            color: #4b5563;
+          }
+        }
+      }
+
+      .wf-aggregate {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        font-size: 13px;
+        color: #606266;
+      }
+    }
+  }
   
   .section-header {
     display: flex;

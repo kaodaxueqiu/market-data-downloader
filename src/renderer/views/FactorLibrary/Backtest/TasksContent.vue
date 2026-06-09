@@ -118,10 +118,14 @@
                 />
                 <span class="progress-percent">{{ row.progress || 0 }}%</span>
               </div>
-              <div class="stage-info" v-if="row.current_stage">
-                {{ getStageName(row.current_stage) }}
+              <div class="stage-info">
+                {{ getProgressText(row) }}
               </div>
             </template>
+            <!-- 等待中：疑似排队卡住提示 -->
+            <div v-else-if="row.status === 'pending' && isPendingStuck(row)" class="stage-info stage-warn">
+              排队中 / worker 未消费
+            </div>
           </div>
         </template>
       </el-table-column>
@@ -536,6 +540,38 @@ const getStageName = (stage: string) => {
   return map[stage] || stage
 }
 
+// 按百分比兜底的阶段文案（含义见引擎契约）
+// 0%=等待worker, 30%=数据加载, 60%=因子计算, 90%=写daily metrics, 96%=写factor values, 99%=收尾, 100%=完成
+const getProgressStageText = (progress: number) => {
+  const p = progress || 0
+  if (p >= 100) return '完成'
+  if (p >= 99) return '收尾'
+  if (p >= 96) return '写 factor values'
+  if (p >= 90) return '写 daily metrics'
+  if (p >= 60) return '因子计算'
+  if (p >= 30) return '数据加载'
+  return '等待 worker'
+}
+
+// 进度文案：优先 progress_detail.step，其次 current_stage，最后按百分比兜底
+const getProgressText = (row: any) => {
+  const step = row?.progress_detail?.step
+  if (step !== undefined && step !== null && step !== '') {
+    return typeof step === 'string' ? step : String(step)
+  }
+  if (row?.current_stage) return getStageName(row.current_stage)
+  return getProgressStageText(row?.progress)
+}
+
+// pending 超过阈值疑似排队卡住（worker 未消费）
+const PENDING_WARN_MS = 60 * 1000
+const isPendingStuck = (row: any) => {
+  if (row?.status !== 'pending') return false
+  const created = row?.created_at ? new Date(row.created_at).getTime() : 0
+  if (!created) return false
+  return Date.now() - created > PENDING_WARN_MS
+}
+
 // 筛选变更处理
 const handleFilterChange = () => {
   currentPage.value = 1
@@ -769,7 +805,20 @@ const loadBenchmarkMapping = async () => {
     const result = await window.electronAPI.backtest.getPriceTypeOptions()
     if (result.success && result.data?.benchmarks) {
       const cache = new Map<string, string>()
-      result.data.benchmarks.forEach((b: any) => cache.set(b.value, b.label))
+      const bm: any = result.data.benchmarks
+      const addAll = (arr: any) => {
+        if (Array.isArray(arr)) {
+          arr.forEach((b: any) => { if (b && b.value) cache.set(b.value, b.label) })
+        }
+      }
+      if (Array.isArray(bm)) {
+        // 兼容旧格式：数组
+        addAll(bm)
+      } else if (bm && typeof bm === 'object') {
+        // 新格式：{ standard_indexes, index_list, index_industries }
+        addAll(bm.standard_indexes)
+        Object.values(bm.index_industries || {}).forEach((arr: any) => addAll(arr))
+      }
       benchmarkCache.value = cache
     }
   } catch (error) {
@@ -1067,6 +1116,11 @@ onUnmounted(() => stopPolling())
         background: #f1f5f9;
         padding: 2px 6px;
         border-radius: 3px;
+
+        &.stage-warn {
+          color: #d97706;
+          background: #fef3c7;
+        }
       }
     }
     

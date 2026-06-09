@@ -1199,7 +1199,8 @@
     <el-dialog
       v-model="backtestDialogVisible"
       :title="backtestFactors.length > 1 ? `批量回测（${backtestFactors.length}个因子）` : '发起因子回测'"
-      width="650px"
+      width="900px"
+      top="5vh"
       destroy-on-close
     >
       <div class="backtest-dialog-content">
@@ -1296,13 +1297,65 @@
             <el-col :span="12">
               <el-form-item label="因子方向">
                 <el-select v-model="backtestForm.factor_direction" style="width: 100%">
-                  <el-option label="自动判断" value="auto" />
                   <el-option label="正向（值大=好）" value="positive" />
                   <el-option label="负向（值小=好）" value="negative" />
                 </el-select>
               </el-form-item>
             </el-col>
           </el-row>
+
+          <el-form-item label="研究模式">
+            <el-radio-group v-model="researchMode" style="width: 100%">
+              <el-radio-button value="quick">快速初筛</el-radio-button>
+              <el-radio-button value="deep">深度研究</el-radio-button>
+              <el-radio-button value="admission">入库审核</el-radio-button>
+            </el-radio-group>
+
+            <!-- 递进包含关系可视化 -->
+            <div class="research-tiers">
+              <div class="tiers-note">
+                <el-icon><InfoFilled /></el-icon>
+                三档为递进包含：选高档自动包含低档全部能力，无需多选
+              </div>
+              <div
+                v-for="(tier, i) in researchTiers"
+                :key="tier.mode"
+                class="tier-row"
+                :class="{ included: i <= currentModeIndex, current: tier.mode === researchMode }"
+              >
+                <el-icon class="tier-mark">
+                  <CircleCheck v-if="i <= currentModeIndex" />
+                  <Minus v-else />
+                </el-icon>
+                <span class="tier-label">{{ tier.label }}</span>
+                <span class="tier-adds">
+                  <span v-if="i > 0" class="plus">+</span>{{ tier.adds.join('、') }}
+                </span>
+              </div>
+              <div class="tiers-hint">{{ researchModeHint }}</div>
+            </div>
+          </el-form-item>
+
+          <el-form-item v-if="researchMode !== 'quick'" label="walk-forward">
+            <el-switch v-model="walkForward.enabled" active-text="开启滚动验证" />
+            <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+              开启 walk-forward 会多次重算因子和回测，耗时明显增加
+            </div>
+            <el-row v-if="walkForward.enabled" :gutter="12" style="margin-top: 8px; width: 100%">
+              <el-col :span="8">
+                <span style="font-size: 12px; color: #606266;">折数</span>
+                <el-input-number v-model="walkForward.max_folds" :min="2" :max="10" controls-position="right" style="width: 100%" />
+              </el-col>
+              <el-col :span="8">
+                <span style="font-size: 12px; color: #606266;">训练占比</span>
+                <el-input-number v-model="walkForward.train_fraction" :min="0.5" :max="0.95" :step="0.05" :precision="2" controls-position="right" style="width: 100%" />
+              </el-col>
+              <el-col :span="8">
+                <span style="font-size: 12px; color: #606266;">最小测试天数</span>
+                <el-input-number v-model="walkForward.min_test_days" :min="5" :max="120" :step="5" controls-position="right" style="width: 100%" />
+              </el-col>
+            </el-row>
+          </el-form-item>
           
           <el-form-item label="预测周期">
             <el-select v-model="backtestForm.forward_periods" multiple style="width: 100%">
@@ -1651,7 +1704,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
   Loading, Box, Plus, Search, Edit, Delete, DataAnalysis, WarningFilled, Refresh,
-  Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document, Clock, TrendCharts
+  Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document, Clock, TrendCharts,
+  Minus, InfoFilled
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -3379,10 +3433,36 @@ const backtestForm = reactive({
   universe_preset: 'all',
   num_groups: 10,
   forward_periods: [1, 5, 10, 20],
-  factor_direction: 'auto',
+  factor_direction: 'positive',
   buy_price_type: 'daily_open',
   sell_price_type: 'daily_close',
   benchmarks: [] as string[]
+})
+
+// 研究模式（顶层字段）
+const researchMode = ref<'quick' | 'deep' | 'admission'>('quick')
+const researchModeHints: Record<string, string> = {
+  quick: '快速初筛，仅用于调参/筛选，不可直接入库或实盘',
+  deep: '深度研究：含 CNE6 风格中性化、泛化性诊断',
+  admission: '入库审核：含前视快照、库级共线性/正交、治理结论（最慢）'
+}
+const researchModeHint = computed(() => researchModeHints[researchMode.value] || '')
+
+// 三档递进包含：每档展示「新增」能力
+const researchModeOrder = ['quick', 'deep', 'admission']
+const researchTiers = [
+  { mode: 'quick', label: '快速初筛', adds: ['核心：IC / 分层 / 样本外摘要'] },
+  { mode: 'deep', label: '深度研究', adds: ['CNE6 风格中性化', '泛化诊断'] },
+  { mode: 'admission', label: '入库审核', adds: ['前视快照', '库级共线性 / 正交', '治理结论'] }
+]
+const currentModeIndex = computed(() => researchModeOrder.indexOf(researchMode.value))
+
+// walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
+const walkForward = reactive({
+  enabled: false,
+  max_folds: 3,
+  train_fraction: 0.8,
+  min_test_days: 20
 })
 
 // 价格类型和基准指数选项
@@ -3721,10 +3801,11 @@ const submitBacktest = async () => {
   
   try {
     // 构建纯 JSON 数据，避免 reactive 对象序列化问题
-    const data = {
+    const data: any = {
       factor_ids: factorIds,
       start_date: backtestForm.start_date,
       end_date: backtestForm.end_date,
+      research_mode: researchMode.value,
       universe: {
         type: 'preset',
         preset_name: backtestForm.universe_preset
@@ -3736,6 +3817,16 @@ const submitBacktest = async () => {
         buy_price_type: backtestForm.buy_price_type,
         sell_price_type: backtestForm.sell_price_type,
         benchmarks: [...selectedBenchmarks.value]
+      }
+    }
+
+    // walk-forward（顶层，仅 deep / admission 且开启时传）
+    if (researchMode.value !== 'quick' && walkForward.enabled) {
+      data.walk_forward = {
+        enabled: true,
+        max_folds: walkForward.max_folds,
+        train_fraction: walkForward.train_fraction,
+        min_test_days: walkForward.min_test_days
       }
     }
     
@@ -4151,6 +4242,74 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+// 三档递进包含可视化（回测弹窗内）
+.research-tiers {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  width: 100%;
+
+  .tiers-note {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+
+  .tier-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 6px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.4;
+
+    .tier-mark {
+      font-size: 16px;
+      color: #cbd5e1;
+    }
+
+    .tier-label {
+      font-weight: 600;
+      min-width: 64px;
+    }
+
+    .tier-adds {
+      color: #94a3b8;
+      .plus {
+        color: #0284c7;
+        font-weight: 700;
+        margin-right: 4px;
+      }
+    }
+
+    &.included {
+      color: #334155;
+      .tier-mark { color: #16a34a; }
+      .tier-adds { color: #475569; }
+    }
+
+    &.current {
+      background: #e0f2fe;
+      .tier-label { color: #0284c7; }
+    }
+  }
+
+  .tiers-hint {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 12px;
+    color: #b45309;
+  }
+}
+
 .my-factors-page {
   height: calc(100vh - 100px);
   background: #f5f7fa;
@@ -4986,6 +5145,11 @@ onMounted(() => {
 
 // 回测对话框样式
 .backtest-dialog-content {
+  max-height: 80vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+
   .factor-info {
     background: #f5f7fa;
     border-radius: 6px;
