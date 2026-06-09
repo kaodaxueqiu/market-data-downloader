@@ -677,7 +677,7 @@
                   :icon="DataAnalysis"
                   @click="openBacktest(currentFactorDetail)"
                 >
-                  发起回测
+                  发起 v{{ selectedVersion || Number(currentFactorDetail?.version) }} 回测
                 </el-button>
                 <el-button 
                   type="warning" 
@@ -1209,6 +1209,9 @@
           <el-descriptions :column="2" border size="small">
             <el-descriptions-item label="因子代码">{{ backtestFactors[0].factor_code }}</el-descriptions-item>
             <el-descriptions-item label="因子名称">{{ backtestFactors[0].factor_name }}</el-descriptions-item>
+            <el-descriptions-item label="回测版本" :span="2" v-if="backtestVersion">
+              <el-tag size="small" type="primary">将回测 v{{ backtestVersion }}</el-tag>
+            </el-descriptions-item>
             <el-descriptions-item label="因子表达式" :span="2">
               <code class="expression-code">{{ backtestFactors[0].expression }}</code>
             </el-descriptions-item>
@@ -1228,6 +1231,10 @@
         <div class="batch-factors-info" v-if="backtestFactors.length > 1">
           <div class="batch-header">
             <span>已选因子（{{ backtestFactors.length }}个）</span>
+          </div>
+          <div class="batch-version-note">
+            <el-icon><InfoFilled /></el-icon>
+            批量回测使用各因子最新版本
           </div>
           <div class="batch-list">
             <div v-for="factor in backtestFactors" :key="factor.factor_id" class="batch-item">
@@ -3767,6 +3774,13 @@ const openBacktest = async (factor: any) => {
   backtestDialogVisible.value = true
 }
 
+// 单因子回测将使用的版本（批量场景为 null，使用各因子最新版）
+const backtestVersion = computed(() => {
+  if (!backtestFactor.value) return null
+  const ver = selectedVersion.value || Number(backtestFactor.value.version)
+  return ver && !Number.isNaN(ver) ? ver : null
+})
+
 // 解析回测因子的数据依赖
 const parsedBacktestDataSources = computed(() => {
   const factor = backtestFactors.value.length === 1 ? backtestFactors.value[0] : backtestFactor.value
@@ -3817,6 +3831,14 @@ const submitBacktest = async () => {
         buy_price_type: backtestForm.buy_price_type,
         sell_price_type: backtestForm.sell_price_type,
         benchmarks: [...selectedBenchmarks.value]
+      }
+    }
+
+    // 单因子回测：带上选中的版本（factor_id → version）；批量不传 = 后端按各因子最新版
+    if (backtestFactor.value) {
+      const ver = selectedVersion.value || Number(backtestFactor.value.version)
+      if (ver && !Number.isNaN(ver)) {
+        data.factor_versions = { [backtestFactor.value.factor_id]: ver }
       }
     }
 
@@ -4242,6 +4264,16 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+// 批量回测版本说明
+.batch-version-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 10px;
+  font-size: 12px;
+  color: #909399;
+}
+
 // 三档递进包含可视化（回测弹窗内）
 .research-tiers {
   margin-top: 8px;
