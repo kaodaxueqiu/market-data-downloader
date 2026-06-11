@@ -510,6 +510,7 @@ const pageTitle = computed(() => {
     '/factor-library/workorder/submit': '数据工单',
     '/factor-library/workorder/my': '数据工单',
     '/factor-library/workorder/admin': '数据工单',
+    '/factor-library/cache-manager': '数据缓存管理',
     '/tasks': '任务管理',
     '/history': '历史记录',
     '/dictionary': '行情数据字典',

@@ -103,6 +103,13 @@ const routes: RouteRecordRaw[] = [
         name: 'WorkOrderDetail',
         component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
         meta: { menuId: 'workorder_my' }
+      },
+      // 数据缓存管理
+      {
+        path: 'cache-manager',
+        name: 'CacheManager',
+        component: () => import('../views/FactorLibrary/CacheManager/Main.vue'),
+        meta: { menuId: 'cache_management' }
       }
     ]
   },

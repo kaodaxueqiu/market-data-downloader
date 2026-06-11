@@ -262,6 +262,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:downloadFactorValues', taskId, tradeDate)
   },
 
+  // 数据缓存管理 API
+  marketData: {
+    listDefinitions: () => ipcRenderer.invoke('marketData:listDefinitions'),
+    getDefinition: (id: number) => ipcRenderer.invoke('marketData:getDefinition', id),
+    triggerSync: (id: number, body: { mode: string; from?: string; to?: string }) =>
+      ipcRenderer.invoke('marketData:triggerSync', id, body),
+    listRuns: (params?: { definition_id?: number; limit?: number }) =>
+      ipcRenderer.invoke('marketData:listRuns', params || {}),
+    calendar: (id: number, from?: string, to?: string) =>
+      ipcRenderer.invoke('marketData:calendar', id, from, to),
+    listInstances: () => ipcRenderer.invoke('marketData:listInstances'),
+    createDefinition: (body: any) => ipcRenderer.invoke('marketData:createDefinition', body),
+    updateDefinition: (id: number, body: any) => ipcRenderer.invoke('marketData:updateDefinition', id, body),
+    deleteDefinition: (id: number) => ipcRenderer.invoke('marketData:deleteDefinition', id),
+    flushDb: (instanceId: number, db: number) => ipcRenderer.invoke('marketData:flushDb', instanceId, db),
+    dbStats: (instanceId: number, db: number) => ipcRenderer.invoke('marketData:dbStats', instanceId, db),
+    keys: (instanceId: number, params: { db: number; match?: string; cursor?: string; count?: number }) =>
+      ipcRenderer.invoke('marketData:keys', instanceId, params),
+    value: (instanceId: number, db: number, key: string) =>
+      ipcRenderer.invoke('marketData:value', instanceId, db, key),
+    instanceDbs: (instanceId: number) => ipcRenderer.invoke('marketData:instanceDbs', instanceId),
+    sourceDatabases: (sourceType: string) => ipcRenderer.invoke('marketData:sourceDatabases', sourceType),
+    sourceTables: (sourceType: string, database: string) =>
+      ipcRenderer.invoke('marketData:sourceTables', sourceType, database),
+    sourceColumns: (sourceType: string, database: string, table: string) =>
+      ipcRenderer.invoke('marketData:sourceColumns', sourceType, database, table),
+  },
+
   // IM API
   im: {
     getToken: () => ipcRenderer.invoke('im:getToken'),
@@ -763,6 +791,25 @@ declare global {
         getFactorValueStats: (taskId: string, tradeDate: string) => Promise<{ success: boolean; data?: any; error?: string }>
         getFactorValueDistribution: (taskId: string, params: { trade_date: string; bins?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
         downloadFactorValues: (taskId: string, tradeDate?: string) => Promise<{ success: boolean; filePath?: string; error?: string }>
+      }
+      marketData: {
+        listDefinitions: () => Promise<{ success: boolean; data?: any; error?: string }>
+        getDefinition: (id: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        triggerSync: (id: number, body: { mode: string; from?: string; to?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        listRuns: (params?: { definition_id?: number; limit?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
+        calendar: (id: number, from?: string, to?: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        listInstances: () => Promise<{ success: boolean; data?: any; error?: string }>
+        createDefinition: (body: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        updateDefinition: (id: number, body: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        deleteDefinition: (id: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        flushDb: (instanceId: number, db: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        dbStats: (instanceId: number, db: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        keys: (instanceId: number, params: { db: number; match?: string; cursor?: string; count?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
+        value: (instanceId: number, db: number, key: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        instanceDbs: (instanceId: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        sourceDatabases: (sourceType: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        sourceTables: (sourceType: string, database: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        sourceColumns: (sourceType: string, database: string, table: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }
       im: {
         getToken: () => Promise<{ success: boolean; userID?: string; token?: string; expireTimeSeconds?: number; phoneNumber?: string; nickname?: string; email?: string; company?: string; error?: string }>

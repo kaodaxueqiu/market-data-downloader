@@ -88,7 +88,8 @@ export const allMenus: MenuItem[] = [
           { id: 'workorder_my', name: '我的申请', path: '/factor-library/workorder/my', icon: null },
           { id: 'workorder_manage', name: '工单管理', path: '/factor-library/workorder/admin', icon: null }
         ]
-      }
+      },
+      { id: 'cache_management', name: '数据缓存管理', path: '/factor-library/cache-manager', icon: null }
     ]
   },
   { 

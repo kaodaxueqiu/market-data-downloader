@@ -5796,6 +5796,418 @@ ipcMain.handle('backtest:getPriceTypeOptions', async () => {
 })
 
 // ============================================
+// 数据缓存管理（market-data-cache-manager）IPC Handlers
+// ============================================
+
+const MARKET_DATA_API_BASE = (process.env.MARKET_DATA_API_URL
+  || 'http://61.151.241.233:8080/api/v1') + '/market-data'
+
+// 缓存配置: 列表
+ipcMain.handle('marketData:listDefinitions', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/definitions`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取缓存配置列表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: 详情
+ipcMain.handle('marketData:getDefinition', async (_event, id: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/definitions/${id}`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取缓存配置详情失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: 触发同步（全量/增量/补数）
+ipcMain.handle('marketData:triggerSync', async (_event, id: number, body: {
+  mode: string
+  from?: string
+  to?: string
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(`${MARKET_DATA_API_BASE}/definitions/${id}/sync`, body, {
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 触发同步失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: 同步运行记录
+ipcMain.handle('marketData:listRuns', async (_event, params: {
+  definition_id?: number
+  limit?: number
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/runs`, {
+      params: {
+        definition_id: params?.definition_id || undefined,
+        limit: params?.limit || undefined
+      },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取同步记录失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: 数据日历（自然日，按真实 db 的 key 聚合）
+ipcMain.handle('marketData:calendar', async (_event, id: number, from?: string, to?: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/definitions/${id}/calendar`, {
+      params: {
+        from: from || undefined,
+        to: to || undefined
+      },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 20000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取数据日历失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: Redis 实例列表
+ipcMain.handle('marketData:listInstances', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/instances`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取Redis实例列表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: 新建
+ipcMain.handle('marketData:createDefinition', async (_event, body: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(`${MARKET_DATA_API_BASE}/definitions`, body, {
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 新建缓存配置失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: 修改（全量）
+ipcMain.handle('marketData:updateDefinition', async (_event, id: number, body: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.put(`${MARKET_DATA_API_BASE}/definitions/${id}`, body, {
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 修改缓存配置失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 缓存配置: 删除（只删配置，不动数据）
+ipcMain.handle('marketData:deleteDefinition', async (_event, id: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.delete(`${MARKET_DATA_API_BASE}/definitions/${id}`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 删除缓存配置失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 清空数据（按 实例+db 整库 FLUSHDB，与配置解耦）
+ipcMain.handle('marketData:flushDb', async (_event, instanceId: number, db: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(`${MARKET_DATA_API_BASE}/instances/${instanceId}/flush-db`, { db }, {
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 清空缓存数据失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 数据管理: 列出实例预留范围内实际非空的 db（含孤儿）
+ipcMain.handle('marketData:instanceDbs', async (_event, instanceId: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/instances/${instanceId}/dbs`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取实例 db 列表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 数据预览: db 统计（key 数/内存/TTL 抽样）
+ipcMain.handle('marketData:dbStats', async (_event, instanceId: number, db: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/instances/${instanceId}/db-stats`, {
+      params: { db },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取db统计失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 数据预览: SCAN 分页浏览 key 元信息
+ipcMain.handle('marketData:keys', async (_event, instanceId: number, params: {
+  db: number
+  match?: string
+  cursor?: string
+  count?: number
+}) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/instances/${instanceId}/keys`, {
+      params: {
+        db: params.db,
+        match: params.match || undefined,
+        cursor: params.cursor || undefined,
+        count: params.count || undefined
+      },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 浏览 key 失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 数据预览: 取单个 key 的值
+ipcMain.handle('marketData:value', async (_event, instanceId: number, db: number, key: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/instances/${instanceId}/value`, {
+      params: { db, key },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 取 key 值失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 源库穿透：列出 CH/PG 的库
+ipcMain.handle('marketData:sourceDatabases', async (_event, sourceType: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/source/databases`, {
+      params: { source_type: sourceType },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取源库列表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 源表穿透：列出某库下的表
+ipcMain.handle('marketData:sourceTables', async (_event, sourceType: string, database: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/source/tables`, {
+      params: { source_type: sourceType, database },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取源表列表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 源列穿透：列出某表的列（名+类型）
+ipcMain.handle('marketData:sourceColumns', async (_event, sourceType: string, database: string, table: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MARKET_DATA_API_BASE}/source/columns`, {
+      params: { source_type: sourceType, database, table },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ 获取源列列表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// ============================================
 // 研究成果模块 IPC Handlers
 // ============================================
 
