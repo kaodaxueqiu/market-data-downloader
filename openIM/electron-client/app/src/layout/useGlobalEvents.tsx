@@ -466,7 +466,18 @@ export function useGlobalEvent() {
     updateSyncState("success");
     getFriendListByReq();
     getGroupListByReq();
-    getConversationListByReq(false, true).then(async () => {
+    void (async () => {
+      // 入口加载「全部」会话：分页循环直到没有更多，避免只加载首页 50 条导致总数停在 50
+      let hasMore = await getConversationListByReq(false, true);
+      let guard = 0;
+      while (hasMore && guard < 200) {
+        const before = useConversationStore.getState().conversationList.length;
+        hasMore = await getConversationListByReq(true, true);
+        const after = useConversationStore.getState().conversationList.length;
+        if (after <= before) break; // 无新增则停止，防止意外死循环
+        guard += 1;
+      }
+
       const list = useConversationStore.getState().conversationList;
       console.log("[Sync] conversation 总数:", list.length);
       console.log("[Sync] 前5个:", list.slice(0, 5).map(c => ({
@@ -489,7 +500,7 @@ export function useGlobalEvent() {
         }
         updatePreloadState("done");
       }
-    });
+    })();
     getUnReadCountByReq().then((count) => window.electronAPI?.updateUnreadCount(count));
     resume.current = false;
   };

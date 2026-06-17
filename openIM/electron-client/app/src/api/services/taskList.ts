@@ -1,8 +1,10 @@
 import skillsClient from "../core/skillsClient";
 import type {
+  CronChannelsResult,
   CronJob,
   CronJobInput,
   CronJobListResult,
+  CronRejectedResult,
   CronRunsResult,
   CronStatus,
   HeartbeatContent,
@@ -37,20 +39,35 @@ export const patchCronJob = (agentID: string, jobId: string, patch: CronJobInput
 export const deleteCronJob = (agentID: string, jobId: string) =>
   skillsClient.delete(`${cronBase(agentID)}/jobs/${encodeURIComponent(jobId)}`);
 
-export const runCronJob = (agentID: string, jobId: string, mode: "force" | "due" = "force") =>
+// 立即运行：runMode = force（默认强制立即跑）/ due（仅到期才跑）
+export const runCronJob = (
+  agentID: string,
+  jobId: string,
+  runMode: "force" | "due" = "force",
+) =>
   skillsClient.post(
     `${cronBase(agentID)}/jobs/${encodeURIComponent(jobId)}/run`,
     undefined,
-    { params: { mode } },
+    { params: { runMode } },
   );
 
-export const getCronRuns = (agentID: string, jobId: string) =>
+// 运行历史：limit 可选，范围 1..5000（越界由后端用默认值）
+export const getCronRuns = (agentID: string, jobId: string, limit?: number) =>
   skillsClient.get<CronRunsResult, CronRunsResult>(
     `${cronBase(agentID)}/jobs/${encodeURIComponent(jobId)}/runs`,
+    limit ? { params: { limit } } : undefined,
   );
 
 export const getCronStatus = (agentID: string) =>
   skillsClient.get<CronStatus, CronStatus>(`${cronBase(agentID)}/status`);
+
+// 被拒任务（只读）：加载期被校验拒绝、留底的任务
+export const getRejectedJobs = (agentID: string) =>
+  skillsClient.get<CronRejectedResult, CronRejectedResult>(`${cronBase(agentID)}/rejected`);
+
+// 可用投递渠道（动态）：下拉用 channels 渲染、default 作默认选中
+export const getCronChannels = (agentID: string) =>
+  skillsClient.get<CronChannelsResult, CronChannelsResult>(`${cronBase(agentID)}/channels`);
 
 // ── 心跳 HEARTBEAT.md ──
 

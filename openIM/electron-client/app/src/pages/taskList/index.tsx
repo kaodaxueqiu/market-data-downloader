@@ -36,8 +36,10 @@ import {
   createCronJob,
   deleteCronJob,
   getAgentSessions,
+  getCronChannels,
   getCronRuns,
   getHeartbeat,
+  getRejectedJobs,
   listCronJobs,
   patchCronJob,
   runCronJob,
@@ -46,9 +48,11 @@ import {
 import type {
   CronJob,
   CronJobInput,
+  CronRejectedEntry,
   CronRunEntry,
   CronSchedule,
   HeartbeatContent,
+  SessionTarget,
 } from "@/api/types/cron";
 import type { AgentOwnerSession } from "@/api/types/agentSession";
 import OIMAvatar from "@/components/OIMAvatar";
@@ -61,6 +65,18 @@ interface ApiError {
 }
 const errMsg = (error: unknown, fallback: string) =>
   (error as ApiError)?.message || fallback;
+
+// 把后端校验关键字（§5）翻成友好中文
+const friendlyCronError = (error: unknown, fallback: string) => {
+  const msg = (error as ApiError)?.message || "";
+  if (/non-empty sessionId/i.test(msg)) return "请选择归属会话（sessionId 不能为空）";
+  if (/main cron jobs require/i.test(msg)) return "「主会话」任务的内容类型必须是系统事件文本";
+  if (/isolated cron jobs require payload\.kind="agentTurn"/i.test(msg))
+    return "「独立会话」任务的内容必须是给智能体的指令";
+  if (/session cron jobs require payload\.kind="agentTurn"/i.test(msg))
+    return "「指定会话」任务的内容必须是给智能体的指令";
+  return msg || fallback;
+};
 
 const fmtTime = (ms?: number) => {
   if (!ms) return "-";
@@ -113,12 +129,20 @@ const humanizeOneSchedule = (s?: CronSchedule) => {
     const min = s.everyMs ? Math.round(s.everyMs / 60000) : undefined;
     return min ? `每 ${min} 分钟` : "固定间隔";
   }
-  if (s.kind === "at") return `一次性 @ ${fmtTime(s.atMs)}`;
+  if (s.kind === "at") {
+    if (!s.at) return "一次性";
+    const d = new Date(s.at);
+    return `一次性 @ ${Number.isNaN(d.getTime()) ? s.at : d.toLocaleString()}`;
+  }
   return "-";
 };
 
+// 统一读取排期：多排期取 schedules，否则回退单个 schedule
+const scheduleList = (job: CronJob): CronSchedule[] =>
+  job.schedules?.length ? job.schedules : job.schedule ? [job.schedule] : [];
+
 const scheduleSummary = (job: CronJob) => {
-  const list = job.schedules?.length ? job.schedules : job.schedule ? [job.schedule] : [];
+  const list = scheduleList(job);
   if (!list.length) return "-";
   if (list.length === 1) return humanizeOneSchedule(list[0]);
 
@@ -145,7 +169,7 @@ const scheduleSummary = (job: CronJob) => {
 };
 
 const scheduleRaw = (job: CronJob) => {
-  const list = job.schedules?.length ? job.schedules : job.schedule ? [job.schedule] : [];
+  const list = scheduleList(job);
   return list
     .filter((s) => s.kind === "cron")
     .map((s) => `${s.expr}${s.tz ? `  (${s.tz})` : ""}`)
@@ -169,7 +193,6 @@ const expandDow = (dow: string): number[] | null => {
   return null;
 };
 
-// 把 cron 表达式反解析回友好表单（仅识别 daily/weekly/monthly），否则返回 null（高级 cron）
 // 解析单条 cron 表达式 → {m,h,dom,dow}（month 必须为 *，分/时必须为整数）
 const parseCronExpr = (
   expr?: string,
@@ -184,7 +207,7 @@ const parseCronExpr = (
 
 // 把一组排期反解析回友好表单（支持多时间）。无法识别返回 null（落到高级 cron）
 const parseSchedulesToForm = (
-  list: { kind: string; expr?: string; tz?: string; everyMs?: number; atMs?: number }[],
+  list: CronSchedule[],
 ):
   | {
       mode: RepeatMode;
@@ -201,7 +224,7 @@ const parseSchedulesToForm = (
     return { mode: "every", everyMinutes: list[0].everyMs ? Math.round(list[0].everyMs / 60000) : 10 };
   }
   if (list.length === 1 && list[0].kind === "at") {
-    return { mode: "at", atValue: list[0].atMs ? dayjs(list[0].atMs) : undefined };
+    return { mode: "at", atValue: list[0].at ? dayjs(list[0].at) : undefined };
   }
   // 全部是 cron
   if (!list.every((s) => s.kind === "cron")) return null;
@@ -239,6 +262,20 @@ const MONTHDAY_OPTIONS = Array.from({ length: 31 }, (_, i) => ({
   value: i + 1,
 }));
 
+// 前端只暴露 session / isolated 两种（main/系统事件对本产品无意义，不开放创建）
+type FormTarget = "session" | "isolated";
+
+const SESSION_TARGET_OPTIONS: { label: React.ReactNode; value: FormTarget }[] = [
+  { label: <span className="text-[#cf1322]">会话指令</span>, value: "session" },
+  { label: "独立运行", value: "isolated" },
+];
+
+const SESSION_TARGET_HINT: Record<FormTarget, string> = {
+  session:
+    "⚠️ 在绑定会话历史里持续累积上下文，长期/高频运行会产生巨大的 token 消耗，请谨慎使用；如无需记住历史，建议改用「独立运行」。",
+  isolated: "每次干净的临时上下文，互不干扰、跑完即清、不累积（适合周期性独立检测/汇报）。",
+};
+
 interface JobFormState {
   name: string;
   enabled: boolean;
@@ -250,13 +287,15 @@ interface JobFormState {
   tz: string;
   everyMinutes: number;
   atValue: Dayjs | null;
-  sessionTarget: "isolated" | "main" | "session";
-  sessionId: string;
-  message: string;
+  sessionTarget: FormTarget;
+  sessionId: string; // 归属会话（铁律必填）
+  message: string; // agentTurn 指令（session / isolated）
   timeoutSeconds: number;
+  // 出口（仅 session / isolated）
   deliveryMode: "none" | "announce";
   deliveryChannel: string;
   deliveryTo: string;
+  deliveryBestEffort: boolean;
 }
 
 const defaultJobForm = (): JobFormState => ({
@@ -275,8 +314,9 @@ const defaultJobForm = (): JobFormState => ({
   message: "",
   timeoutSeconds: 300,
   deliveryMode: "none",
-  deliveryChannel: "openim",
+  deliveryChannel: "",
   deliveryTo: "",
+  deliveryBestEffort: true,
 });
 
 export const TaskList = () => {
@@ -287,16 +327,24 @@ export const TaskList = () => {
 
   const [agentKeyword, setAgentKeyword] = useState("");
   const [currentAgentID, setCurrentAgentID] = useState("");
-  const [spaceTab, setSpaceTab] = useState<"cron" | "heartbeat">("cron");
+  const [spaceTab, setSpaceTab] = useState<"cron" | "heartbeat" | "rejected">("cron");
 
-  // 该智能体「主人」的会话列表（用于「运行的会话」）
+  // 该智能体「主人」的会话列表（用于「归属会话」）
   const [sessions, setSessions] = useState<AgentOwnerSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  // 可用投递渠道（动态）
+  const [channels, setChannels] = useState<string[]>([]);
+  const [channelDefault, setChannelDefault] = useState("last");
 
   // cron
   const [jobs, setJobs] = useState<CronJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [notProvisioned, setNotProvisioned] = useState(false);
+
+  // 被拒任务
+  const [rejected, setRejected] = useState<CronRejectedEntry[]>([]);
+  const [rejectedLoading, setRejectedLoading] = useState(false);
 
   // job 表单
   const [formOpen, setFormOpen] = useState(false);
@@ -370,6 +418,19 @@ export const TaskList = () => {
     }
   }, []);
 
+  const loadRejected = useCallback(async (agentID: string) => {
+    setRejectedLoading(true);
+    try {
+      const res = await getRejectedJobs(agentID);
+      setRejected(res.jobs || []);
+    } catch (error) {
+      feedbackToast({ error: { message: errMsg(error, "加载被拒任务失败") } });
+      setRejected([]);
+    } finally {
+      setRejectedLoading(false);
+    }
+  }, []);
+
   const loadHeartbeat = useCallback(async (agentID: string) => {
     setHbLoading(true);
     try {
@@ -403,6 +464,17 @@ export const TaskList = () => {
     }
   }, []);
 
+  const loadChannels = useCallback(async (agentID: string) => {
+    try {
+      const res = await getCronChannels(agentID);
+      setChannels(res?.channels || []);
+      setChannelDefault(res?.default || "last");
+    } catch {
+      setChannels([]);
+      setChannelDefault("last");
+    }
+  }, []);
+
   const selectAgent = async (agentID: string) => {
     if (agentID === currentAgentID) return;
     setCurrentAgentID(agentID);
@@ -411,22 +483,27 @@ export const TaskList = () => {
     setJobs([]);
     setHb(null);
     setSessions([]);
+    setRejected([]);
     loadSessions(agentID);
+    loadChannels(agentID);
     await loadJobs(agentID);
   };
 
-  const switchTab = (tab: "cron" | "heartbeat") => {
+  const switchTab = (tab: "cron" | "heartbeat" | "rejected") => {
     if (tab === spaceTab) return;
     setSpaceTab(tab);
     if (!currentAgentID) return;
     if (tab === "cron") loadJobs(currentAgentID);
-    else loadHeartbeat(currentAgentID);
+    else if (tab === "heartbeat") loadHeartbeat(currentAgentID);
+    else loadRejected(currentAgentID);
   };
 
   // ── job 表单 ──
   const openCreate = () => {
     setEditingId(null);
-    setJobForm(defaultJobForm());
+    const f = defaultJobForm();
+    f.deliveryChannel = channelDefault;
+    setJobForm(f);
     if (currentAgentID) loadSessions(currentAgentID);
     setFormOpen(true);
   };
@@ -436,16 +513,20 @@ export const TaskList = () => {
     const f = defaultJobForm();
     f.name = job.name || "";
     f.enabled = job.enabled;
-    f.sessionTarget = "session";
+    // 只支持 session / isolated；旧 main 任务回退为 session
+    f.sessionTarget = job.sessionTarget === "isolated" ? "isolated" : "session";
     f.sessionId = job.sessionId || "";
-    f.message = job.payload?.message || "";
+    // payload 回显（兼容旧 systemEvent：把事件文本并入任务内容）
+    f.message = job.payload?.message || job.payload?.text || "";
     f.timeoutSeconds = job.payload?.timeoutSeconds || 300;
-    f.deliveryMode = (job.delivery?.mode as string) === "announce" ? "announce" : "none";
-    f.deliveryChannel = (job.delivery?.channel as string) || "openim";
-    f.deliveryTo = (job.delivery?.to as string) || "";
+    // delivery 出口回显
+    f.deliveryMode = job.delivery?.mode === "announce" ? "announce" : "none";
+    f.deliveryChannel = job.delivery?.channel || channelDefault;
+    f.deliveryTo = job.delivery?.to || "";
+    f.deliveryBestEffort = job.delivery?.bestEffort ?? true;
 
     // 兼容单 schedule 与多 schedules
-    const sList = job.schedules && job.schedules.length ? job.schedules : job.schedule ? [job.schedule] : [];
+    const sList = scheduleList(job);
     const parsed = parseSchedulesToForm(sList);
     if (parsed) {
       f.mode = parsed.mode;
@@ -516,35 +597,55 @@ export const TaskList = () => {
         feedbackToast({ error: { message: "请选择执行时间" } });
         return null;
       }
-      schedule = { kind: "at", atMs: f.atValue.valueOf() };
+      schedule = { kind: "at", at: f.atValue.toISOString() };
     }
 
-    // 定时任务必须投递（不投递没有意义）：接收方 + 投递会话 均必填
-    if (!f.deliveryTo.trim()) {
-      feedbackToast({ error: { message: "请选择接收方" } });
-      return null;
-    }
+    // 归属会话：所有任务必填（铁律）
     if (!f.sessionId) {
-      feedbackToast({ error: { message: "请选择要投递到的会话" } });
+      feedbackToast({ error: { message: "请选择归属会话" } });
       return null;
     }
 
+    // payload：统一 agentTurn（session / isolated）
+    if (!f.message.trim()) {
+      feedbackToast({ error: { message: "请输入任务内容" } });
+      return null;
+    }
+    const payload: CronJobInput["payload"] = {
+      kind: "agentTurn",
+      message: f.message.trim(),
+      timeoutSeconds: f.timeoutSeconds,
+    };
+    let delivery: CronJobInput["delivery"];
+    if (f.deliveryMode === "announce") {
+      if (!f.deliveryChannel.trim()) {
+        feedbackToast({ error: { message: "请选择投递渠道" } });
+        return null;
+      }
+      if (!f.deliveryTo.trim()) {
+        feedbackToast({ error: { message: "请选择接收方" } });
+        return null;
+      }
+      delivery = {
+        mode: "announce",
+        channel: f.deliveryChannel.trim(),
+        to: f.deliveryTo.trim(),
+        bestEffort: f.deliveryBestEffort,
+      };
+    } else {
+      delivery = { mode: "none" };
+    }
+
+    // 始终发送完整 sessionTarget + payload + sessionId（满足 PATCH 改类型时的校验矩阵）
     const input: CronJobInput = {
       name: f.name.trim(),
       enabled: f.enabled,
-      sessionTarget: "session",
+      sessionTarget: f.sessionTarget,
       sessionId: f.sessionId,
-      payload: {
-        kind: "agentTurn",
-        message: f.message,
-        timeoutSeconds: f.timeoutSeconds,
-      },
-      delivery: {
-        mode: "announce",
-        channel: f.deliveryChannel.trim() || "openim",
-        to: f.deliveryTo.trim(),
-      },
+      wakeMode: "now",
+      payload,
     };
+    if (delivery) input.delivery = delivery;
     if (schedules) input.schedules = schedules;
     else input.schedule = schedule;
     return input;
@@ -565,7 +666,7 @@ export const TaskList = () => {
       setFormOpen(false);
       await loadJobs(currentAgentID);
     } catch (error) {
-      feedbackToast({ error: { message: errMsg(error, "保存失败") } });
+      feedbackToast({ error: { message: friendlyCronError(error, "保存失败") } });
     } finally {
       setSubmitting(false);
     }
@@ -578,7 +679,7 @@ export const TaskList = () => {
         prev.map((j) => (j.id === job.id ? { ...j, enabled } : j)),
       );
     } catch (error) {
-      feedbackToast({ error: { message: errMsg(error, "操作失败") } });
+      feedbackToast({ error: { message: friendlyCronError(error, "操作失败") } });
     }
   };
 
@@ -588,7 +689,7 @@ export const TaskList = () => {
       feedbackToast({ msg: "已触发立即运行" });
       setTimeout(() => loadJobs(currentAgentID), 1500);
     } catch (error) {
-      feedbackToast({ error: { message: errMsg(error, "运行失败") } });
+      feedbackToast({ error: { message: friendlyCronError(error, "运行失败") } });
     }
   };
 
@@ -616,7 +717,7 @@ export const TaskList = () => {
     setRunsOpen(true);
     setRunsLoading(true);
     try {
-      const res = await getCronRuns(currentAgentID, job.id);
+      const res = await getCronRuns(currentAgentID, job.id, 200);
       // 倒序：最新的在最上面
       const entries = [...(res.entries || [])].sort(
         (a, b) => (b.ts ?? 0) - (a.ts ?? 0),
@@ -658,6 +759,12 @@ export const TaskList = () => {
     }
   };
 
+  const targetTag = (t?: SessionTarget) => {
+    if (t === "main") return <Tag color="purple">系统事件</Tag>;
+    if (t === "isolated") return <Tag color="blue">独立运行</Tag>;
+    return <Tag color="red">会话指令</Tag>;
+  };
+
   const columns: ColumnsType<CronJob> = [
     {
       title: "名称",
@@ -672,6 +779,11 @@ export const TaskList = () => {
           )}
         </div>
       ),
+    },
+    {
+      title: "类型",
+      width: 96,
+      render: (_, job) => targetTag(job.sessionTarget),
     },
     {
       title: "排期",
@@ -692,9 +804,11 @@ export const TaskList = () => {
       render: (_, job) => {
         const st = job.state?.lastStatus;
         if (!st) return <span className="text-xs text-(--sub-text)">-</span>;
+        const color = st === "ok" ? "success" : st === "skipped" ? "default" : "error";
+        const label = st === "ok" ? "成功" : st === "skipped" ? "跳过" : "失败";
         return (
           <Tooltip title={`${fmtTime(job.state?.lastRunAtMs)}${job.state?.lastError ? ` · ${job.state.lastError}` : ""}`}>
-            <Tag color={st === "ok" ? "success" : "error"}>{st === "ok" ? "成功" : "失败"}</Tag>
+            <Tag color={color}>{label}</Tag>
           </Tooltip>
         );
       },
@@ -768,6 +882,69 @@ export const TaskList = () => {
     </div>
   );
 
+  const rejectedColumns: ColumnsType<CronRejectedEntry> = [
+    {
+      title: "名称",
+      render: (_, r) => <span className="truncate">{r.job?.name || "(未命名)"}</span>,
+    },
+    {
+      title: "类型",
+      width: 96,
+      render: (_, r) => targetTag(r.job?.sessionTarget),
+    },
+    {
+      title: "被拒原因",
+      ellipsis: true,
+      render: (_, r) => (
+        <Tooltip title={r.reason}>
+          <span className="text-xs text-(--error-text)">{r.reason}</span>
+        </Tooltip>
+      ),
+    },
+    {
+      title: "时间",
+      width: 170,
+      render: (_, r) => <span className="text-xs">{fmtTime(r.rejectedAtMs)}</span>,
+    },
+  ];
+
+  const renderRejected = () => (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-(--gap-text) px-3 py-2">
+        <span className="text-xs text-(--sub-text)">
+          加载期被校验拒绝、未进入调度的任务（只读，供排查）
+        </span>
+        <Button
+          className="ml-auto"
+          size="small"
+          icon={<ReloadOutlined />}
+          onClick={() => loadRejected(currentAgentID)}
+        >
+          刷新
+        </Button>
+      </div>
+      <div className="flex-1 overflow-auto p-2">
+        <Table
+          rowKey={(r) => r.jobId || String(Math.random())}
+          size="small"
+          tableLayout="auto"
+          loading={rejectedLoading}
+          columns={rejectedColumns}
+          dataSource={rejected}
+          pagination={false}
+          locale={{ emptyText: <Empty description="暂无被拒任务" /> }}
+          expandable={{
+            expandedRowRender: (r) => (
+              <div className="max-h-72 cursor-text overflow-auto rounded bg-[#f7f8fa] p-3 text-xs leading-relaxed break-words whitespace-pre-wrap select-text">
+                {JSON.stringify(r.job, null, 2)}
+              </div>
+            ),
+          }}
+        />
+      </div>
+    </div>
+  );
+
   const renderHeartbeat = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-(--gap-text) px-3 py-2">
@@ -822,7 +999,9 @@ export const TaskList = () => {
         </div>
       );
     }
-    return spaceTab === "cron" ? renderCron() : renderHeartbeat();
+    if (spaceTab === "cron") return renderCron();
+    if (spaceTab === "rejected") return renderRejected();
+    return renderHeartbeat();
   };
 
   const runsColumns: ColumnsType<CronRunEntry> = [
@@ -905,10 +1084,10 @@ export const TaskList = () => {
           {currentAgentID && !notProvisioned && (
             <Segmented
               value={spaceTab}
-              onChange={(v) => switchTab(v as "cron" | "heartbeat")}
+              onChange={(v) => switchTab(v as "cron" | "heartbeat" | "rejected")}
               options={[
                 { label: "定时任务", value: "cron" },
-                { label: "心跳任务", value: "heartbeat" },
+                { label: "被拒任务", value: "rejected" },
               ]}
             />
           )}
@@ -935,6 +1114,26 @@ export const TaskList = () => {
               onChange={(e) => setJobForm((s) => ({ ...s, name: e.target.value }))}
               placeholder="如：每日宏观早报"
             />
+          </LabeledRow>
+
+          <LabeledRow label="任务类型">
+            <div className="flex flex-col gap-1">
+              <Select
+                className="w-full"
+                value={jobForm.sessionTarget}
+                onChange={(v) => setJobForm((s) => ({ ...s, sessionTarget: v }))}
+                options={SESSION_TARGET_OPTIONS}
+              />
+              <span
+                className={`text-xs ${
+                  jobForm.sessionTarget === "session"
+                    ? "text-[#cf1322]"
+                    : "text-(--sub-text)"
+                }`}
+              >
+                {SESSION_TARGET_HINT[jobForm.sessionTarget]}
+              </span>
+            </div>
           </LabeledRow>
 
           <LabeledRow label="重复方式">
@@ -1065,6 +1264,35 @@ export const TaskList = () => {
             </>
           )}
 
+          <LabeledRow label="归属会话">
+            <Select
+              className="w-full"
+              showSearch
+              loading={sessionsLoading}
+              optionFilterProp="label"
+              value={jobForm.sessionId || undefined}
+              placeholder={
+                sessionsLoading
+                  ? "加载会话中…"
+                  : sessions.length
+                    ? "选择任务归属的会话"
+                    : "该智能体暂无会话"
+              }
+              notFoundContent={sessionsLoading ? "加载中…" : "该智能体暂无会话"}
+              onChange={(v) => setJobForm((s) => ({ ...s, sessionId: v }))}
+              options={sessions.map((se) => {
+                const ts = se.createdAt ?? se.lastActiveAt;
+                const timeStr = ts ? dayjs(ts).format("YYYY-MM-DD HH:mm") : "";
+                return {
+                  label: `${se.title || "未命名会话"}${
+                    timeStr ? `（${timeStr}）` : ""
+                  } · #${se.sessionId.slice(-6)}`,
+                  value: se.sessionId,
+                };
+              })}
+            />
+          </LabeledRow>
+
           <LabeledRow label="任务内容">
             <Input.TextArea
               rows={3}
@@ -1083,46 +1311,55 @@ export const TaskList = () => {
             />
           </LabeledRow>
 
-          <LabeledRow label="接收方">
-            <AutoComplete
-              className="w-full"
-              value={jobForm.deliveryTo}
-              onChange={(v) => setJobForm((s) => ({ ...s, deliveryTo: v }))}
-              options={deliveryOptions}
-              placeholder="选择联系人/智能体，或输入用户 ID"
-              filterOption={(input, opt) =>
-                String(opt?.label ?? "").toLowerCase().includes(input.toLowerCase())
-              }
-            />
-          </LabeledRow>
-          <LabeledRow label="投递会话">
+          <LabeledRow label="是否投递">
             <Select
               className="w-full"
-              showSearch
-              loading={sessionsLoading}
-              optionFilterProp="label"
-              value={jobForm.sessionId || undefined}
-              placeholder={
-                sessionsLoading
-                  ? "加载会话中…"
-                  : sessions.length
-                    ? "选择要投递到的会话"
-                    : "该智能体暂无会话"
-              }
-              notFoundContent={sessionsLoading ? "加载中…" : "该智能体暂无会话"}
-              onChange={(v) => setJobForm((s) => ({ ...s, sessionId: v }))}
-              options={sessions.map((se) => {
-                const ts = se.createdAt ?? se.lastActiveAt;
-                const timeStr = ts ? dayjs(ts).format("YYYY-MM-DD HH:mm") : "";
-                return {
-                  label: `${se.title || "未命名会话"}${
-                    timeStr ? `（${timeStr}）` : ""
-                  } · #${se.sessionId.slice(-6)}`,
-                  value: se.sessionId,
-                };
-              })}
+              value={jobForm.deliveryMode}
+              onChange={(v) => setJobForm((s) => ({ ...s, deliveryMode: v }))}
+              options={[
+                { label: "投递", value: "announce" },
+                { label: "不投递", value: "none" },
+              ]}
             />
           </LabeledRow>
+
+          {jobForm.deliveryMode === "announce" && (
+            <>
+              <LabeledRow label="投递渠道">
+                <Select
+                  className="w-full"
+                  value={jobForm.deliveryChannel || undefined}
+                  placeholder="选择投递渠道"
+                  onChange={(v) => setJobForm((s) => ({ ...s, deliveryChannel: v }))}
+                  options={channels.map((c) => ({
+                    label: c === "last" ? "last（最近一次路由）" : c,
+                    value: c,
+                  }))}
+                />
+              </LabeledRow>
+              <LabeledRow label="接收方">
+                <AutoComplete
+                  className="w-full"
+                  value={jobForm.deliveryTo}
+                  onChange={(v) => setJobForm((s) => ({ ...s, deliveryTo: v }))}
+                  options={deliveryOptions}
+                  placeholder="选择联系人/智能体，或输入用户 ID"
+                  filterOption={(input, opt) =>
+                    String(opt?.label ?? "").toLowerCase().includes(input.toLowerCase())
+                  }
+                />
+              </LabeledRow>
+              <LabeledRow label="容错投递">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={jobForm.deliveryBestEffort}
+                    onChange={(v) => setJobForm((s) => ({ ...s, deliveryBestEffort: v }))}
+                  />
+                  <span className="text-xs text-(--sub-text)">投递失败不算任务失败</span>
+                </div>
+              </LabeledRow>
+            </>
+          )}
 
           {editingId && (
             <LabeledRow label="启用">

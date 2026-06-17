@@ -9,7 +9,12 @@ import { useAgentPolling } from "@/components/AgentStatusPanel/useAgentPolling";
 import SessionHistoryPanel from "@/components/SessionHistoryPanel";
 import SessionTabBar from "@/components/SessionTabBar";
 import { IMSDK } from "@/layout/MainContentWrap";
-import { useConversationStore, useMessageStore, useUserStore } from "@/store";
+import {
+  useConversationStore,
+  useMessageStore,
+  useSessionStore,
+  useUserStore,
+} from "@/store";
 import { isBot } from "@/store/botMap";
 
 import ChatContent from "./ChatContent";
@@ -38,9 +43,12 @@ export const QueryChat = () => {
 
   const agentActive = useAgentPolling(agent?.userID);
   const selfUserID = useUserStore((state) => state.selfInfo.userID);
+  const activeSessionId = useSessionStore((state) => state.activeSessionId);
 
   const isNotificationSession =
     currentConversation?.conversationType === SessionType.Notification;
+  // 与智能体对话：未选中任何 session tab 时禁止输入
+  const isBotConversation = isBot(currentConversation?.userID);
 
   const { droping } = useDropAndPaste({
     currentConversation,
@@ -75,6 +83,15 @@ export const QueryChat = () => {
         <div className="flex justify-center py-4.5 text-xs text-(--sub-text)">
           <InfoCircleOutlined rev={undefined} />
           <span className="ml-1">{tip}</span>
+        </div>
+      );
+    }
+
+    if (isBotConversation && !activeSessionId) {
+      return (
+        <div className="flex justify-center py-4.5 text-xs text-(--sub-text)">
+          <InfoCircleOutlined rev={undefined} />
+          <span className="ml-1">请选择或新建一个会话后再发送消息</span>
         </div>
       );
     }
