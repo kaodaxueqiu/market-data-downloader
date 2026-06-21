@@ -4,7 +4,6 @@ import { useLatest } from "ahooks";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { LEGACY_SESSION_ID } from "@/api/types/session";
 import { SystemMessageTypes } from "@/constants/im";
 import { IMSDK } from "@/layout/MainContentWrap";
 import {
@@ -113,9 +112,6 @@ function filterBySession(messages: ExMessageItem[]): ExMessageItem[] {
 
   const filtered = messages.filter((msg) => {
     const sid = getMessageSessionId(msg);
-    if (activeSessionId === LEGACY_SESSION_ID) {
-      return sid === null;
-    }
     return sid === activeSessionId;
   });
 

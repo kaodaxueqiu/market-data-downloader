@@ -8,8 +8,6 @@ import {
   updateSession as apiUpdateSession,
 } from "@/api/services/session";
 import {
-  LEGACY_SESSION_ID,
-  LEGACY_SESSION_TITLE,
   type SessionItem,
   type SessionMessage,
 } from "@/api/types/session";
@@ -63,25 +61,10 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       sessions: [],
     });
 
-    const legacySession: SessionItem = {
-      sessionId: LEGACY_SESSION_ID,
-      sessionKey: "",
-      title: LEGACY_SESSION_TITLE,
-      remark: "包含未分组的早期消息",
-      createdAt: 0,
-      lastActiveAt: 0,
-      isDefault: false,
-      isPinned: true,
-      isOpen: false,
-      messageCount: 0,
-    };
-
     try {
       const resp = await apiGetSessions(agentId);
       const data = resp.data as unknown as { sessions: SessionItem[] };
-      let sessions = sortSessions(data?.sessions ?? []);
-
-      sessions = [legacySession, ...sessions.filter((s) => s.sessionId !== LEGACY_SESSION_ID)];
+      const sessions = sortSessions(data?.sessions ?? []);
 
       let restoredTabs = sessions
         .filter((s) => s.isOpen)
@@ -95,19 +78,16 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
         // 覆盖「定时任务/他人消息到达时用户不在该会话」导致的隐藏 session 收不到提示问题
         restoredTabs = [...restoredTabs, activeId];
         targetId = activeId;
-        if (activeId !== LEGACY_SESSION_ID) {
-          apiUpdateSession(agentId, activeId, { isOpen: true }).catch(console.error);
-        }
+        apiUpdateSession(agentId, activeId, { isOpen: true }).catch(console.error);
       } else if (restoredTabs.length > 0) {
         targetId = restoredTabs[0];
       }
 
-      if (restoredTabs.length === 0) {
-        const fallbackId = activeId || LEGACY_SESSION_ID;
-        if (sessions.some((s) => s.sessionId === fallbackId)) {
-          restoredTabs = [fallbackId];
-          targetId = fallbackId;
-        }
+      // 无任何已打开标签时,默认选中第一个真实会话;一个会话都没有则保持未选中
+      // (未选中时聊天底部输入框会被禁用,防止产生无 sessionId 的消息)。
+      if (restoredTabs.length === 0 && sessions.length > 0) {
+        targetId = sessions[0].sessionId;
+        restoredTabs = [targetId];
       }
 
       set({
@@ -161,7 +141,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
     const isNew = !tabSessionIds.includes(sessionId);
     const nextTabs = isNew ? [...tabSessionIds, sessionId] : tabSessionIds;
 
-    if (isNew && sessionId !== LEGACY_SESSION_ID) {
+    if (isNew) {
       apiUpdateSession(agentId, sessionId, { isOpen: true }).catch(console.error);
     }
 
@@ -175,9 +155,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   addToTabs: (sessionId: string) => {
     set((state) => {
       if (state.tabSessionIds.includes(sessionId)) return {};
-      if (sessionId !== LEGACY_SESSION_ID) {
-        apiUpdateSession(state.agentId, sessionId, { isOpen: true }).catch(console.error);
-      }
+      apiUpdateSession(state.agentId, sessionId, { isOpen: true }).catch(console.error);
       return { tabSessionIds: [...state.tabSessionIds, sessionId] };
     });
   },
@@ -193,11 +171,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       try {
         const resp = await apiGetSessions(state.agentId);
         const data = resp.data as unknown as { sessions: SessionItem[] };
-        let sessions = sortSessions(data?.sessions ?? []);
-        sessions = [
-          ...get().sessions.filter((s) => s.sessionId === LEGACY_SESSION_ID),
-          ...sessions.filter((s) => s.sessionId !== LEGACY_SESSION_ID),
-        ];
+        const sessions = sortSessions(data?.sessions ?? []);
         set({ sessions });
       } catch (error) {
         console.error("[Session] reopenSession 刷新列表失败:", error);
@@ -206,9 +180,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
 
     if (alreadyOpen) return;
 
-    if (sessionId !== LEGACY_SESSION_ID) {
-      apiUpdateSession(get().agentId, sessionId, { isOpen: true }).catch(console.error);
-    }
+    apiUpdateSession(get().agentId, sessionId, { isOpen: true }).catch(console.error);
 
     set((s) => ({
       tabSessionIds: s.tabSessionIds.includes(sessionId)
@@ -223,15 +195,12 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       const nextActive = state.activeSessionId === sessionId
         ? nextTabs[0] || ""
         : state.activeSessionId;
-      if (sessionId !== LEGACY_SESSION_ID) {
-        apiUpdateSession(state.agentId, sessionId, { isOpen: false }).catch(console.error);
-      }
+      apiUpdateSession(state.agentId, sessionId, { isOpen: false }).catch(console.error);
       return { tabSessionIds: nextTabs, activeSessionId: nextActive };
     });
   },
 
   renameSession: async (sessionId: string, title: string) => {
-    if (sessionId === LEGACY_SESSION_ID) return;
     try {
       await apiUpdateSession(get().agentId, sessionId, { title });
       set((state) => ({
@@ -258,7 +227,6 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   pinSession: async (sessionId: string, isPinned: boolean) => {
-    if (sessionId === LEGACY_SESSION_ID) return;
     try {
       await apiUpdateSession(get().agentId, sessionId, { isPinned });
       set((state) => ({
@@ -274,7 +242,6 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   removeSession: async (sessionId: string) => {
-    if (sessionId === LEGACY_SESSION_ID) return;
     try {
       await apiDeleteSession(get().agentId, sessionId);
       set((state) => {
@@ -322,7 +289,6 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
   },
 
   loadSessionHistory: async (sessionId: string) => {
-    if (sessionId === LEGACY_SESSION_ID) return [];
     try {
       const resp = await apiGetSessionHistory(get().agentId, sessionId);
       const data = resp.data as unknown as { messages: SessionMessage[]; hasMore: boolean };
@@ -341,20 +307,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
       try {
         const resp = await apiGetSessions(agentId);
         const data = resp.data as unknown as { sessions: SessionItem[] };
-        const legacySession: SessionItem = {
-          sessionId: LEGACY_SESSION_ID,
-          sessionKey: "",
-          title: LEGACY_SESSION_TITLE,
-          remark: "包含未分组的早期消息",
-          createdAt: 0,
-          lastActiveAt: 0,
-          isDefault: false,
-          isPinned: true,
-          isOpen: false,
-          messageCount: 0,
-        };
-        let sessions = sortSessions(data?.sessions ?? []);
-        sessions = [legacySession, ...sessions.filter((s) => s.sessionId !== LEGACY_SESSION_ID)];
+        const sessions = sortSessions(data?.sessions ?? []);
         set({ sessions });
       } catch (error) {
         console.error("[Session] 刷新 session 列表失败:", error);

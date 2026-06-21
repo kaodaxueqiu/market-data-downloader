@@ -38,6 +38,7 @@ const SessionHistoryPanel: FC = () => {
       onClose={() => setHistoryPanel(false)}
       closeIcon={<CloseOutlined />}
       zIndex={1999999999}
+      rootClassName="session-history-drawer"
       styles={{ body: { padding: 0 } }}
     >
       {loading ? (

@@ -485,10 +485,13 @@ export function useGlobalEvent() {
         name: c.showName,
       })));
 
+      // 加载智能体名册(供 getBot 取昵称/头像等)。与「是否有会话需要预加载」无关,
+      // 故放在门控外无条件执行,避免零会话账号下 botMap 一直为空。
+      await loadBotMap();
+
       const convIDs = list.map((c) => c.conversationID);
       if (convIDs.length > 0) {
         updatePreloadState("loading");
-        await loadBotMap();
         console.log(`[Preload] 开始预加载 ${convIDs.length} 个会话...`);
         try {
           await preloadAllConversations(convIDs, (loaded, total) => {
@@ -500,6 +503,17 @@ export function useGlobalEvent() {
         }
         updatePreloadState("done");
       }
+
+      // [幽灵未读修复] 同步早期(本地DB/会话列表尚未稳定)时 SDK 可能报出偏大的总未读,
+      // 旧逻辑只在 syncFinish 一开始拉一次就定住了,导致虚高的总未读挂到本次会话结束(重启才正常)。
+      // 这里在会话列表全部加载完后重新拉一次纠正,并延时再重试两次兜底(等 SDK 读状态完全落定)。
+      const reconcileUnread = async () => {
+        const fresh = await useConversationStore.getState().getUnReadCountByReq();
+        window.electronAPI?.updateUnreadCount(fresh);
+      };
+      await reconcileUnread();
+      setTimeout(reconcileUnread, 3000);
+      setTimeout(reconcileUnread, 8000);
     })();
     getUnReadCountByReq().then((count) => window.electronAPI?.updateUnreadCount(count));
     resume.current = false;

@@ -81,6 +81,11 @@
       },
     ],
   },
+  portable: {
+    // 每次启动解压到唯一的临时目录($PLUGINSDIR),退出时由系统自动清理。
+    // 避免「关闭后立刻重启」时,旧实例的临时目录被删/被覆盖导致主进程 require 报 ENOENT 崩溃。
+    unpackDirName: false,
+  },
   nsis: {
     oneClick: false,
     perMachine: true,

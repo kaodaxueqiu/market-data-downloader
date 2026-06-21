@@ -1,7 +1,6 @@
 import { MessageStatus, SendMsgParams, WsResponse } from "@openim/wasm-client-sdk";
 import { useCallback } from "react";
 
-import { LEGACY_SESSION_ID } from "@/api/types/session";
 import { IMSDK } from "@/layout/MainContentWrap";
 import {
   ExMessageItem,
@@ -38,7 +37,7 @@ export function useSendMessage() {
 
       if (isBot(currentConversation?.userID)) {
         const sessionId = useSessionStore.getState().activeSessionId;
-        if (sessionId && sessionId !== LEGACY_SESSION_ID) {
+        if (sessionId) {
           (message as any).sessionId = sessionId;
         }
       }

@@ -128,7 +128,14 @@ body,
 
 .app-no-drag,
 button,
-cursor-pointer {
+.cursor-pointer {
+  -webkit-app-region: no-drag;
+}
+
+// 历史对话抽屉头部压在顶部 40px 拖拽栏(app-drag)上,
+// 仅靠按钮自身的 no-drag 会受 Electron 拖拽区动态重算竞态影响(偶发点不动 X),
+// 这里把整个抽屉面板抠成 no-drag,确保关闭按钮等始终可点。
+.session-history-drawer .ant-drawer-content {
   -webkit-app-region: no-drag;
 }
 

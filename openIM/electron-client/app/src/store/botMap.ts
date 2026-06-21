@@ -28,9 +28,12 @@ export async function loadBotMap(): Promise<void> {
   }
 }
 
+// 机器人/智能体的 userID 统一以 "bot_" 开头,用前缀同步判断,
+// 不依赖异步加载的 botMap(避免「首次/无历史会话刚拉起时 botMap 未就绪 → 不被识别为机器人」的竞态)。
+// botMap.has 仅作兜底,兼容个别不符合前缀约定的历史数据。
 export function isBot(userID?: string): boolean {
   if (!userID) return false;
-  return botMap.has(userID);
+  return userID.startsWith("bot_") || botMap.has(userID);
 }
 
 export function getBot(userID?: string): Agent | undefined {

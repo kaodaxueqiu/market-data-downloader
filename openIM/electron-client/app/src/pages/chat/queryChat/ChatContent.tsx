@@ -34,18 +34,21 @@ const ChatContent = ({ isNotificationSession }: { isNotificationSession: boolean
   };
 
   const scrollToBottom = useCallback(() => {
-    setTimeout(() => {
+    const jumpToBottom = () => {
       virtuoso.current?.scrollToIndex({
-        index: 9999,
+        index: "LAST",
         align: "end",
         behavior: "auto",
       });
       isAtBottomRef.current = true;
-    });
+    };
+    // 变高内容(图片/markdown/引用卡片)在首次滚动后才会撑开真实高度,
+    // 单次 scrollToIndex 会偶发停在中间,故在高度稳定过程中补滚几次纠正到底部。
+    jumpToBottom();
+    [60, 150, 300].forEach((delay) => setTimeout(jumpToBottom, delay));
   }, []);
 
   const {
-    SPLIT_COUNT,
     conversationID,
     loadState,
     moreNewLoading,
@@ -107,7 +110,7 @@ const ChatContent = ({ isNotificationSession }: { isNotificationSession: boolean
             firstItemIndex={loadState.firstItemIndex}
             initialTopMostItemIndex={
               loadState.messageList.length > 0
-                ? Math.min(SPLIT_COUNT - 1, loadState.messageList.length - 1)
+                ? { index: loadState.messageList.length - 1, align: "end" }
                 : 0
             }
             startReached={loadMoreMessage}
