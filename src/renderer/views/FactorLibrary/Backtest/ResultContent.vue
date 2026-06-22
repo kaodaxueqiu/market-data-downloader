@@ -363,14 +363,33 @@
                 <span>CNE6 风格中性化</span>
               </div>
               <el-descriptions :column="2" border size="small">
-                <el-descriptions-item label="Raw IC">{{ formatNumber(cne6NeutralIc.raw_ic, 4) }}</el-descriptions-item>
-                <el-descriptions-item label="Neutral IC">{{ formatNumber(cne6NeutralIc.neutral_ic, 4) }}</el-descriptions-item>
-                <el-descriptions-item label="Raw RankIC">{{ formatNumber(cne6NeutralIc.raw_rank_ic, 4) }}</el-descriptions-item>
-                <el-descriptions-item label="Neutral RankIC">{{ formatNumber(cne6NeutralIc.neutral_rank_ic, 4) }}</el-descriptions-item>
-                <el-descriptions-item label="平均暴露 R²" :span="2">{{ formatNumber(cne6NeutralIc.avg_exposure_r_squared, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="Raw IC">{{ formatNumber(cne6NeutralIc.avg_raw_ic ?? cne6NeutralIc.raw_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="Neutral IC">{{ formatNumber(cne6NeutralIc.avg_neutral_ic ?? cne6NeutralIc.neutral_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="Raw RankIC">{{ formatNumber(cne6NeutralIc.avg_raw_rank_ic ?? cne6NeutralIc.raw_rank_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="Neutral RankIC">{{ formatNumber(cne6NeutralIc.avg_neutral_rank_ic ?? cne6NeutralIc.neutral_rank_ic, 4) }}</el-descriptions-item>
+                <el-descriptions-item label="暴露模型">{{ cne6NeutralIc.model || cne6ExposureCoverage?.exposure_model || '—' }}</el-descriptions-item>
+                <el-descriptions-item label="平均暴露 R²">{{ formatNumber(cne6NeutralIc.avg_exposure_r_squared, 4) }}</el-descriptions-item>
+              </el-descriptions>
+              <el-descriptions
+                v-if="cne6ExposureCoverage"
+                :column="2" border size="small" style="margin-top: 8px;"
+              >
+                <el-descriptions-item
+                  v-for="(val, key) in coveragePctEntries"
+                  :key="key"
+                  :label="COVERAGE_LABELS[key] || key"
+                >{{ fmtCoveragePct(val) }}</el-descriptions-item>
               </el-descriptions>
               <el-alert
-                v-if="cne6NeutralIc.avg_exposure_r_squared > 0.5 && (cne6NeutralIc.neutral_ic ?? 0) < (cne6NeutralIc.raw_ic ?? 0) * 0.6"
+                v-if="cne6NeutralIc.status && cne6NeutralIc.status !== 'ok' && cne6NeutralIc.reason"
+                type="info"
+                :closable="false"
+                show-icon
+                style="margin-top: 8px;"
+                :title="`CNE6 中性化未计算：${cne6NeutralIc.reason}`"
+              />
+              <el-alert
+                v-if="cne6NeutralIc.avg_exposure_r_squared > 0.5 && ((cne6NeutralIc.avg_neutral_ic ?? cne6NeutralIc.neutral_ic) ?? 0) < ((cne6NeutralIc.avg_raw_ic ?? cne6NeutralIc.raw_ic) ?? 0) * 0.6"
                 type="warning"
                 :closable="false"
                 show-icon
@@ -877,6 +896,23 @@ const isQuickScreeningOnly = computed<boolean>(() =>
 )
 const holdoutValidation = computed<any>(() => summary.value?.holdout_validation ?? null)
 const cne6NeutralIc = computed<any>(() => summary.value?.cne6_neutral_ic ?? null)
+const cne6ExposureCoverage = computed<any>(() => summary.value?.cne6_exposure_coverage ?? null)
+const coveragePctEntries = computed<Record<string, number>>(() => {
+  const c = cne6ExposureCoverage.value
+  if (!c) return {}
+  return Object.fromEntries(
+    Object.entries(c).filter(([k, v]) => k.endsWith('_pct') && typeof v === 'number')
+  ) as Record<string, number>
+})
+const COVERAGE_LABELS: Record<string, string> = {
+  coverage_direct_pct: '直接命中',
+  coverage_carry_forward_pct: '前值结转',
+  coverage_proxy_pct: '代理/自算',
+  coverage_missing_pct: '缺失',
+}
+// 引擎侧 coverage_*_pct 已 ×100（值域 0~100），不能再走 formatPercent
+const fmtCoveragePct = (v: number) =>
+  (v === null || v === undefined || isNaN(v)) ? '—' : v.toFixed(2) + '%'
 const walkForwardValidation = computed<any>(() => summary.value?.walk_forward_validation ?? null)
 
 // 模式展示名

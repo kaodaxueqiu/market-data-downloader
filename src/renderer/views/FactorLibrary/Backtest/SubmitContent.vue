@@ -381,20 +381,23 @@
                     <el-upload
                       :auto-upload="false"
                       :show-file-list="false"
-                      accept=".csv,.xlsx,.xls"
+                      accept=".csv"
                       :on-change="handleStockFileChange"
                       drag
                     >
                       <el-icon class="el-icon--upload"><Upload /></el-icon>
                       <div class="el-upload__text">拖拽文件到此处，或 <em>点击上传</em></div>
                       <template #tip>
-                        <div class="el-upload__tip">支持 CSV/Excel，第一列为 stock_code</div>
+                        <div class="el-upload__tip">仅支持 CSV，第一列为 stock_code</div>
                       </template>
                     </el-upload>
                     <div v-if="formData.universe.custom_file" class="uploaded-file">
-                      <el-tag closable @close="formData.universe.custom_file = null" size="large">
+                      <el-tag closable @close="formData.universe.custom_file = null; customStockCount = 0" size="large">
                         {{ formData.universe.custom_file.filename }}
                       </el-tag>
+                      <span v-if="customStockCount > 0" style="margin-left: 8px; color: #909399;">
+                        已识别 {{ customStockCount }} 只{{ customStockCount < 30 ? '（不足 30，无法回测）' : '' }}
+                      </span>
                     </div>
                   </div>
                 </el-tab-pane>
@@ -537,6 +540,15 @@
                   </el-form-item>
                 </el-col>
               </el-row>
+
+              <el-alert
+                v-if="minuteVwapLongRangeWarning"
+                type="warning"
+                :closable="false"
+                show-icon
+                style="margin: 8px 0;"
+                title="分钟行情仅覆盖近期，所选区间较长时分钟 VWAP 样本可能不足，长区间段会自动降级或缺失。"
+              />
               
               <el-form-item label="基准指数">
                 <el-tabs v-model="benchmarkTab" class="benchmark-tabs">
@@ -1525,16 +1537,40 @@ const removeDataSource = (index: number) => {
 }
 
 // 处理股票池文件上传
+const customStockCount = ref(0)
+
 const handleStockFileChange = (file: any) => {
+  if (!/\.csv$/i.test(file.name)) {
+    ElMessage.error('仅支持 CSV 文件，请上传 .csv（第一列为 stock_code）')
+    return
+  }
   const reader = new FileReader()
   reader.onload = (e) => {
+    const content = e.target?.result as string
     formData.universe.custom_file = {
       filename: file.name,
-      content: e.target?.result as string
+      content
     }
+    // 仅对 CSV 文本计数；首行若为表头(stock_code)则跳过，去空去重
+    const lines = content.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    const body = lines.length && /stock_code/i.test(lines[0]) ? lines.slice(1) : lines
+    customStockCount.value = new Set(body).size
   }
   reader.readAsText(file.raw)
 }
+
+// 分钟 VWAP 价类型（与日频 daily_vwap 区分）：形如 vwap_30min_xxx / vwap_60min_xxx
+const isMinuteVwap = (t?: string) => !!t && /vwap_\d+min/i.test(t)
+
+const minuteVwapLongRangeWarning = computed(() => {
+  const buy = formData.backtest_params.buy_price_type
+  const sell = formData.backtest_params.sell_price_type
+  if (!isMinuteVwap(buy) && !isMinuteVwap(sell)) return false
+  if (!dateRange.value || dateRange.value.length !== 2) return false
+  const [start, end] = dateRange.value
+  const days = (new Date(end).getTime() - new Date(start).getTime()) / 86400000
+  return days > 90
+})
 
 
 const handleSubmit = async () => {
@@ -1546,6 +1582,22 @@ const handleSubmit = async () => {
     if (!dateRange.value || dateRange.value.length !== 2) {
       ElMessage.error('请选择回测时间范围')
       return
+    }
+
+    // 校验自定义股票池
+    if (formData.universe.type === 'custom') {
+      if (!formData.universe.custom_file) {
+        ElMessage.error('请上传自定义股票池文件')
+        return
+      }
+      if (customStockCount.value < 30) {
+        ElMessage.error(
+          customStockCount.value === 0
+            ? '无法识别股票池内容，请检查 CSV 格式（第一列为 stock_code）'
+            : '自定义股票池样本过小（< 30 只），无法计算稳健的截面 IC/分层'
+        )
+        return
+      }
     }
     
     // 校验因子配置（二选一）
