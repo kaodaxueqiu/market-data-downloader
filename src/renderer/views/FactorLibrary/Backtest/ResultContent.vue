@@ -455,6 +455,16 @@
               </div>
             </div>
 
+            <!-- 短样本提示：有效样本 < 60 时年化/夏普可能为空或不稳健 -->
+            <el-alert
+              v-if="isShortSample"
+              type="info"
+              :closable="false"
+              show-icon
+              title="样本较短（有效样本 < 60），年化收益 / 夏普比率可能为空或不稳健，属正常现象，请以 IC / RankIC / 分层单调性为主判断。"
+              style="margin: 8px 0;"
+            />
+
             <!-- 核心指标卡片 -->
             <div class="metrics-cards">
               <div class="metric-card ic-metric">
@@ -914,6 +924,13 @@ const COVERAGE_LABELS: Record<string, string> = {
 const fmtCoveragePct = (v: number) =>
   (v === null || v === undefined || isNaN(v)) ? '—' : v.toFixed(2) + '%'
 const walkForwardValidation = computed<any>(() => summary.value?.walk_forward_validation ?? null)
+
+// 短样本提示：有效样本天数 < 60 时年化/夏普可能为空或不稳健
+const isShortSample = computed<boolean>(() => {
+  const rq = summary.value?.result_quality
+  const n = rq?.effective_sample_days ?? rq?.sample_days ?? summary.value?.daily_metrics?.length
+  return typeof n === 'number' && n > 0 && n < 60
+})
 
 // 模式展示名
 const getResearchModeName = (mode: string) => {
@@ -1564,23 +1581,25 @@ const calcDuration = (start: string, end: string) => {
   return `${Math.floor(duration / 3600)}时${Math.floor((duration % 3600) / 60)}分`
 }
 
-const formatNumber = (num: number | undefined | null, decimals: number = 2) => {
-  if (num === undefined || num === null || isNaN(num)) return '-'
+const DASH = '—'
+
+const formatNumber = (num: number | undefined | null, decimals: number = 2): string => {
+  if (num === null || num === undefined || !Number.isFinite(num)) return DASH
   return num.toFixed(decimals)
 }
 
-const formatPercent = (num: number | undefined | null) => {
-  if (num === undefined || num === null || isNaN(num)) return '-'
-  return (num * 100).toFixed(2) + '%'
+const formatPercent = (num: number | undefined | null, decimals: number = 2): string => {
+  if (num === null || num === undefined || !Number.isFinite(num)) return DASH
+  return (num * 100).toFixed(decimals) + '%'
 }
 
 const getValueClass = (value: number | undefined) => {
-  if (value === undefined || value === null || isNaN(value)) return ''
+  if (value === undefined || value === null || !Number.isFinite(value)) return ''
   return value > 0 ? 'positive' : value < 0 ? 'negative' : ''
 }
 
 const getMonotonicityClass = (value: number | undefined) => {
-  if (value === undefined || value === null || isNaN(value)) return ''
+  if (value === undefined || value === null || !Number.isFinite(value)) return ''
   const abs = Math.abs(value)
   return abs > 0.5 ? 'positive' : abs < 0.3 ? 'negative' : ''
 }

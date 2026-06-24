@@ -126,6 +126,17 @@
             <div v-else-if="row.status === 'pending' && isPendingStuck(row)" class="stage-info stage-warn">
               排队中 / worker 未消费
             </div>
+            <!-- 失败时：错误摘要（悬停 tooltip 看全文） -->
+            <el-tooltip
+              v-else-if="row.status === 'failed' && row.error_message"
+              effect="dark"
+              placement="top"
+              :content="row.error_message"
+            >
+              <span class="error-brief">
+                {{ row.error_message.length > 40 ? row.error_message.slice(0, 40) + '…' : row.error_message }}
+              </span>
+            </el-tooltip>
           </div>
         </template>
       </el-table-column>
@@ -370,9 +381,10 @@
             <div class="section-title">
               <el-icon><Warning /></el-icon>
               错误信息
+              <el-button link size="small" @click="copyError(taskDetail.error_message)">复制</el-button>
             </div>
             <div class="section-body">
-              <div class="error-message">{{ taskDetail.error_message }}</div>
+              <pre class="error-message">{{ taskDetail.error_message }}</pre>
             </div>
           </div>
         </template>
@@ -493,9 +505,11 @@ const getPeriodRankIc = (row: any, period: number): number | null => {
   return stat?.rank_ic_mean ?? null
 }
 
+const DASH = '—'
+
 // 格式化 Rank IC 显示
 const formatRankIc = (value: number | null): string => {
-  if (value === null || value === undefined) return '-'
+  if (value === null || value === undefined || !Number.isFinite(value)) return DASH
   return value.toFixed(4)
 }
 
@@ -703,21 +717,19 @@ const cancelTask = async (task: any) => {
   } catch (e) {}
 }
 
-const viewError = async (task: any) => {
-  try {
-    const result = await window.electronAPI.backtest.getTaskDetail(task.task_id)
-    
-    if (result.success && result.data?.task) {
-      ElMessageBox.alert(result.data.task.error_message || '未知错误', '错误信息', {
-        confirmButtonText: '确定',
-        type: 'error'
-      })
-    } else {
-      ElMessage.error('获取错误信息失败')
-    }
-  } catch (error: any) {
-    ElMessage.error('获取错误信息失败: ' + error.message)
-  }
+const viewError = (task: any) => {
+  const msg = task.error_message || '未知错误（无错误详情）'
+  ElMessageBox.alert(msg, `任务失败：${task.task_name || task.task_id}`, {
+    confirmButtonText: '关闭',
+    customClass: 'error-detail-box',
+    dangerouslyUseHTMLString: false,
+  })
+}
+
+const copyError = (msg: string) => {
+  navigator.clipboard?.writeText(msg)
+    .then(() => ElMessage.success('已复制'))
+    .catch(() => ElMessage.warning('复制失败，请手动选择'))
 }
 
 // 查看任务详情
@@ -1515,9 +1527,34 @@ onUnmounted(() => stopPolling())
           border-radius: 6px;
           font-size: 13px;
           line-height: 1.6;
+          white-space: pre-wrap;
+          word-break: break-word;
+          max-height: 40vh;
+          overflow: auto;
+          margin: 0;
+          font-family: inherit;
         }
       }
     }
   }
+}
+
+.error-brief {
+  color: var(--el-color-danger);
+  font-size: 12px;
+  cursor: default;
+  display: inline-block;
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+:global(.error-detail-box .el-message-box__message) {
+  max-height: 50vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>
