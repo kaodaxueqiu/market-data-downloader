@@ -126,8 +126,16 @@
           </el-table>
 
           <div v-if="resRows.length" class="res-actions">
-            <el-button type="primary" size="small" :loading="resSaving" @click="saveResource">保存</el-button>
-            <el-button size="small" type="danger" plain @click="clearSelectedTables">清空选中表的所有用户权限</el-button>
+            <el-alert
+              v-if="resTablesStale"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="表选择已变化，请重新点击「加载」后再保存"
+              style="margin-bottom:8px;width:100%"
+            />
+            <el-button type="primary" size="small" :loading="resSaving" :disabled="resTablesStale" @click="saveResource">保存</el-button>
+            <el-button size="small" type="danger" plain :disabled="resTablesStale" @click="clearSelectedTables">清空选中表的所有用户权限</el-button>
           </div>
 
           <!-- 空态引导 -->
@@ -390,6 +398,7 @@ const resEngine = ref<'postgresql' | 'clickhouse'>('postgresql')
 const resDb = ref('')
 const resAllTables = ref<string[]>([])
 const resSelectedTables = ref<string[]>([])
+const resLoadedTables = ref<string[]>([])   // 最后一次加载时的表集合快照
 const resRows = ref<any[]>([])
 const resSnapshot = ref<Record<string, Record<string, CellState>>>({})
 const resSelectedUsers = ref<string[]>([])
@@ -408,6 +417,19 @@ const isAllTablesSelected = computed(() =>
 
 const isSomeTablesSelected = computed(() =>
   resSelectedTables.value.length > 0 && resSelectedTables.value.length < resAllTables.value.length
+)
+
+// 加载后用户改了表勾选但未重新加载 → 保存会作用到错误的表集合
+const resTablesStale = computed(() => {
+  if (!resRows.value.length) return false
+  if (resLoadedTables.value.length !== resSelectedTables.value.length) return true
+  const loadedSet = new Set(resLoadedTables.value)
+  return resSelectedTables.value.some(t => !loadedSet.has(t))
+})
+
+// 加载时是否选了全库（用于 saveResource/clearSelectedTables 决定传 * 还是具体表名）
+const isLoadedAllTables = computed(() =>
+  resAllTables.value.length > 0 && resLoadedTables.value.length === resAllTables.value.length
 )
 
 const resHasUnsaved = computed(() => {
@@ -471,6 +493,7 @@ async function loadResourceGrants() {
   resSnapshot.value = {}
   resSelectedUsers.value = []
   batchPrivs.value = []
+  resLoadedTables.value = [...resSelectedTables.value]  // 快照当前选中表
   try {
     const tables = isAllTablesSelected.value ? ['*'] : resSelectedTables.value
     const res = await api.listResourceGrants(resEngine.value, resDb.value, tables)
@@ -537,8 +560,8 @@ async function saveResource() {
   }
   if (!changes.length) { ElMessage.info('权限未变更'); return }
 
-  const tables = isAllTablesSelected.value ? ['*'] : resSelectedTables.value
-  const tableCount = isAllTablesSelected.value ? resAllTables.value.length : tables.length
+  const tables = isLoadedAllTables.value ? ['*'] : resLoadedTables.value
+  const tableCount = resLoadedTables.value.length
   const grantCount = changes.reduce((s, c) => s + c.grant.length, 0)
   const revokeCount = changes.reduce((s, c) => s + c.revoke.length, 0)
 
@@ -564,8 +587,8 @@ async function saveResource() {
 }
 
 async function clearSelectedTables() {
-  const tables = isAllTablesSelected.value ? ['*'] : resSelectedTables.value
-  const tableCount = isAllTablesSelected.value ? resAllTables.value.length : tables.length
+  const tables = isLoadedAllTables.value ? ['*'] : resLoadedTables.value
+  const tableCount = resLoadedTables.value.length
   try {
     await ElMessageBox.confirm(
       `确定清空 ${tableCount} 张表上所有用户的权限？此操作不可撤销。`,
@@ -574,7 +597,11 @@ async function clearSelectedTables() {
   } catch { return }
 
   const allPrivs = getPrivilegeList(resEngine.value)
-  const changes = resRows.value.map(row => ({ username: row.username, grant: [] as string[], revoke: allPrivs }))
+  // 只对当前有任意权限的用户发 revoke，减少无效请求体
+  const changes = resRows.value
+    .filter(row => allPrivs.some(p => row.cells[p] !== 'none'))
+    .map(row => ({ username: row.username, grant: [] as string[], revoke: allPrivs }))
+  if (!changes.length) { ElMessage.info('所有用户在选中表上均无权限'); return }
   resSaving.value = true
   try {
     const res = await api.batchGrantUsers({ db_type: resEngine.value, database: resDb.value, tables, changes })
