@@ -310,6 +310,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     revokePrivileges: (username: string, body: any) => ipcRenderer.invoke('dbPerm:revokePrivileges', username, body),
     revokeAllPrivileges: (username: string, body: any) => ipcRenderer.invoke('dbPerm:revokeAllPrivileges', username, body),
     batchGrant: (username: string, body: any) => ipcRenderer.invoke('dbPerm:batchGrant', username, body),
+    listResourceGrants: (dbType: string, database: string, tables: string[]) =>
+      ipcRenderer.invoke('dbPerm:listResourceGrants', dbType, database, tables),
+    batchGrantUsers: (body: any) =>
+      ipcRenderer.invoke('dbPerm:batchGrantUsers', body),
   },
 
   // 研究成果API
@@ -827,6 +831,8 @@ declare global {
         revokePrivileges: (username: string, body: any) => Promise<any>
         revokeAllPrivileges: (username: string, body: any) => Promise<any>
         batchGrant: (username: string, body: any) => Promise<any>
+        listResourceGrants: (dbType: string, database: string, tables: string[]) => Promise<any>
+        batchGrantUsers: (body: any) => Promise<any>
       }
       research: {
         getList: (params?: { page?: number; page_size?: number; created_by?: string; status?: string; keyword?: string; sort_by?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>

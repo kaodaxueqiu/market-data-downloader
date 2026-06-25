@@ -6772,6 +6772,15 @@ ipcMain.handle('dbPerm:batchGrant', async (_e, username: string, body: any) => {
   return wrapDbPerm(() => dbPermPost(`/users/${username}/grants/batch`, body))()
 })
 
+ipcMain.handle('dbPerm:listResourceGrants', async (_e, dbType: string, database: string, tables: string[]) => {
+  const tablesParam = tables.join(',')
+  return wrapDbPerm(() => dbPermGet('/resources/grants', { db_type: dbType, database, tables: tablesParam }))()
+})
+
+ipcMain.handle('dbPerm:batchGrantUsers', async (_e, body: any) => {
+  return wrapDbPerm(() => dbPermPost('/resources/grants/batch', body))()
+})
+
 // ── IM 独立进程 ──
 ipcMain.handle('im:openWindow', async () => {
   try {
