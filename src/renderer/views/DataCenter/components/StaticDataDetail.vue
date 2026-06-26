@@ -37,11 +37,11 @@
         </el-descriptions>
 
         <div class="quick-actions">
-          <el-button type="primary" size="large" @click="showDetailDialog = true" style="width:100%;margin-bottom:10px">
+          <el-button type="primary" @click="showDetailDialog = true">
             <el-icon><View /></el-icon>
             查看字段详情
           </el-button>
-          <el-button type="success" size="large" @click="emit('preview')" style="width:100%">
+          <el-button type="success" @click="emit('preview')">
             <el-icon><DataLine /></el-icon>
             数据预览
           </el-button>
@@ -53,8 +53,7 @@
     <el-dialog
       v-model="showDetailDialog"
       :title="`${source?.table_comment || source?.table_name || ''} - 字段详情`"
-      width="95%"
-      top="3vh"
+      width="1100px"
       destroy-on-close
       class="detail-dialog"
     >
@@ -227,7 +226,13 @@ watch(() => props.source, (val) => {
         h3 { margin: 0; font-size: 15px; font-weight: 600; }
       }
 
-      .quick-actions { margin-top: 14px; }
+      .quick-actions {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        .el-button { flex: 1; }
+      }
     }
   }
 }
@@ -243,10 +248,17 @@ watch(() => props.source, (val) => {
 
 .mb-15 { margin-bottom: 15px; }
 
-:deep(.detail-dialog .el-dialog) {
-  height: 92vh;
+:global(.detail-dialog.el-dialog) {
+  height: 80vh;
   display: flex;
   flex-direction: column;
-  .el-dialog__body { flex: 1; overflow-y: auto; padding: 20px; }
+  margin: 10vh auto !important;
+}
+
+:global(.detail-dialog.el-dialog .el-dialog__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  min-height: 0;
 }
 </style>

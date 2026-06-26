@@ -109,9 +109,9 @@
     <el-dialog
       v-model="showPreview"
       :title="`数据预览 — ${selectedTable?.table_comment || selectedTable?.table_name || ''}`"
-      width="90%"
-      top="4vh"
+      width="1200px"
       destroy-on-close
+      class="preview-dialog"
     >
       <PreviewPanel
         v-if="showPreview"
@@ -489,6 +489,20 @@ onMounted(async () => {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   overflow: hidden;
+}
+
+:deep(.preview-dialog.el-dialog) {
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  margin: 10vh auto !important;
+
+  .el-dialog__body {
+    flex: 1;
+    overflow: hidden;
+    padding: 0;
+    min-height: 0;
+  }
 }
 
 /* 右侧字段详情 */

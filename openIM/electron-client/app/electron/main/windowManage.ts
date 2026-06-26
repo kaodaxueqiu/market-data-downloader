@@ -207,6 +207,7 @@ class WindowManager {
       this.sdkInstance = initIMSDK(this.mainWindow.webContents);
     }
 
+    this.mainWindow.on('destroyed', () => { this.mainWindow = null; });
     this.loadWindowEntry(this.mainWindow);
     this.attachMainWindowEvents(this.mainWindow);
 
@@ -383,7 +384,8 @@ class WindowManager {
       app.whenReady().then(() => this.showWindow());
       return;
     }
-    if (!this.mainWindow) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      this.mainWindow = null;
       this.createMainWindow();
       return;
     }
