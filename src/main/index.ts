@@ -2449,111 +2449,82 @@ ipcMain.handle('dbdict:setApiKey', async (_event, apiKey: string) => {
   return true
 })
 
-// 获取表列表
-ipcMain.handle('dbdict:getTables', async (_event, params?: any) => {
+// 获取数据源列表（新版：返回 engines+databases）
+ipcMain.handle('dbdict:getDatasources', async () => {
   try {
-    const result = await dbDictAPI.getTables(params)
-    return result
+    return await dbDictAPI.getDatasources()
+  } catch (error: any) {
+    throw new Error(error.message || '获取数据源列表失败')
+  }
+})
+
+// 获取表列表
+ipcMain.handle('dbdict:getTables', async (_event, engine: string, database: string, params?: any) => {
+  try {
+    return await dbDictAPI.getTables(engine, database, params)
   } catch (error: any) {
     throw new Error(error.message || '获取表列表失败')
   }
 })
 
 // 获取表详情
-ipcMain.handle('dbdict:getTableDetail', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
+ipcMain.handle('dbdict:getTableDetail', async (_event, engine: string, database: string, tableName: string) => {
   try {
-    const result = await dbDictAPI.getTableDetail(tableName, datasource)
-    return result
+    return await dbDictAPI.getTableDetail(engine, database, tableName)
   } catch (error: any) {
     throw new Error(error.message || '获取表详情失败')
   }
 })
 
 // 获取表字段
-ipcMain.handle('dbdict:getTableFields', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
+ipcMain.handle('dbdict:getTableFields', async (_event, engine: string, database: string, tableName: string) => {
   try {
-    const result = await dbDictAPI.getTableFields(tableName, datasource)
-    return result
+    return await dbDictAPI.getTableFields(engine, database, tableName)
   } catch (error: any) {
     throw new Error(error.message || '获取表字段失败')
   }
 })
 
 // 获取分类统计
-// 获取数据源列表（包含权限信息）
-ipcMain.handle('dbdict:getDatasources', async () => {
+ipcMain.handle('dbdict:getCategories', async (_event, engine: string, database: string) => {
   try {
-    const result = await dbDictAPI.getDatasources()
-    return result
-  } catch (error: any) {
-    throw new Error(error.message || '获取数据源列表失败')
-  }
-})
-
-ipcMain.handle('dbdict:getCategories', async (_event, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
-  try {
-    const result = await dbDictAPI.getCategories(datasource)
-    return result
+    return await dbDictAPI.getCategories(engine, database)
   } catch (error: any) {
     throw new Error(error.message || '获取分类统计失败')
   }
 })
 
-// 搜索表和字段
-ipcMain.handle('dbdict:search', async (_event, keyword: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
+// 搜索（受权限约束）
+ipcMain.handle('dbdict:search', async (_event, keyword: string) => {
   try {
-    const result = await dbDictAPI.search(keyword, datasource)
-    return result
+    return await dbDictAPI.search(keyword)
   } catch (error: any) {
     throw new Error(error.message || '搜索失败')
   }
 })
 
-// SQL构建器
-ipcMain.handle('dbdict:buildSQL', async (_event, params: any) => {
-  try {
-    const result = await dbDictAPI.buildSQL(params)
-    return result
-  } catch (error: any) {
-    throw new Error(error.message || 'SQL构建失败')
-  }
-})
-
 // 获取数据库统计
-ipcMain.handle('dbdict:getStats', async (_event, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
+ipcMain.handle('dbdict:getStats', async (_event, engine: string, database: string) => {
   try {
-    const result = await dbDictAPI.getStats(datasource)
-    return result
+    return await dbDictAPI.getStats(engine, database)
   } catch (error: any) {
     throw new Error(error.message || '获取数据库统计失败')
   }
 })
 
-// 导出数据字典
-ipcMain.handle('dbdict:export', async (_event, params: any) => {
-  try {
-    const result = await dbDictAPI.exportDict(params)
-    return result
-  } catch (error: any) {
-    throw new Error(error.message || '导出数据字典失败')
-  }
-})
-
 // 清除缓存
-ipcMain.handle('dbdict:clearCache', async (_event, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
+ipcMain.handle('dbdict:clearCache', async (_event, engine: string, database: string) => {
   try {
-    const result = await dbDictAPI.clearCache(datasource)
-    return result
+    return await dbDictAPI.clearCache(engine, database)
   } catch (error: any) {
     throw new Error(error.message || '清除缓存失败')
   }
 })
 
-// 预览表数据
-ipcMain.handle('dbdict:previewTable', async (_event, tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => {
+// 预览表数据（增强版：支持分页/选列/筛选）
+ipcMain.handle('dbdict:previewTable', async (_event, engine: string, database: string, tableName: string, limit?: number, page?: number, columns?: string, filter?: string) => {
   try {
-    const result = await dbDictAPI.previewTable(tableName, datasource)
-    return result
+    return await dbDictAPI.previewTable(engine, database, tableName, limit, page, columns, filter)
   } catch (error: any) {
     throw new Error(error.message || '预览表数据失败')
   }

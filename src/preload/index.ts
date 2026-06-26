@@ -140,24 +140,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbdict: {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('dbdict:setApiKey', apiKey),
     getDatasources: () => ipcRenderer.invoke('dbdict:getDatasources'),
-    getTables: (params?: any) => ipcRenderer.invoke('dbdict:getTables', params),
-    getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
-      ipcRenderer.invoke('dbdict:getTableDetail', tableName, datasource),
-    getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
-      ipcRenderer.invoke('dbdict:getTableFields', tableName, datasource),
-    getCategories: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
-      ipcRenderer.invoke('dbdict:getCategories', datasource),
-    search: (keyword: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
-      ipcRenderer.invoke('dbdict:search', keyword, datasource),
-    buildSQL: (params: any) => ipcRenderer.invoke('dbdict:buildSQL', params),
-    getStats: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
-      ipcRenderer.invoke('dbdict:getStats', datasource),
-    exportDict: (params: any) => ipcRenderer.invoke('dbdict:export', params),
-    clearCache: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
-      ipcRenderer.invoke('dbdict:clearCache', datasource),
-    downloadData: (params: any, savePath: string) => ipcRenderer.invoke('dbdict:downloadData', params, savePath),
-    previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => 
-      ipcRenderer.invoke('dbdict:previewTable', tableName, datasource)
+    getTables: (engine: string, database: string, params?: any) =>
+      ipcRenderer.invoke('dbdict:getTables', engine, database, params),
+    getTableDetail: (engine: string, database: string, tableName: string) =>
+      ipcRenderer.invoke('dbdict:getTableDetail', engine, database, tableName),
+    getTableFields: (engine: string, database: string, tableName: string) =>
+      ipcRenderer.invoke('dbdict:getTableFields', engine, database, tableName),
+    getCategories: (engine: string, database: string) =>
+      ipcRenderer.invoke('dbdict:getCategories', engine, database),
+    search: (keyword: string) =>
+      ipcRenderer.invoke('dbdict:search', keyword),
+    getStats: (engine: string, database: string) =>
+      ipcRenderer.invoke('dbdict:getStats', engine, database),
+    clearCache: (engine: string, database: string) =>
+      ipcRenderer.invoke('dbdict:clearCache', engine, database),
+    previewTable: (engine: string, database: string, tableName: string, limit?: number, page?: number, columns?: string, filter?: string) =>
+      ipcRenderer.invoke('dbdict:previewTable', engine, database, tableName, limit, page, columns, filter),
   },
   
   // 因子库API
@@ -698,17 +696,14 @@ declare global {
       dbdict: {
         setApiKey: (apiKey: string) => Promise<boolean>
         getDatasources: () => Promise<any>
-        getTables: (params?: any) => Promise<any>
-        getTableDetail: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
-        getTableFields: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
-        getCategories: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
-        search: (keyword: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
-        buildSQL: (params: any) => Promise<any>
-        getStats: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
-        exportDict: (params: any) => Promise<any>
-        clearCache: (datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
-        downloadData: (params: any, savePath: string) => Promise<any>
-        previewTable: (tableName: string, datasource?: 'postgresql' | 'clickhouse' | 'clickhouse_data') => Promise<any>
+        getTables: (engine: string, database: string, params?: any) => Promise<any>
+        getTableDetail: (engine: string, database: string, tableName: string) => Promise<any>
+        getTableFields: (engine: string, database: string, tableName: string) => Promise<any>
+        getCategories: (engine: string, database: string) => Promise<any>
+        search: (keyword: string) => Promise<any>
+        getStats: (engine: string, database: string) => Promise<any>
+        clearCache: (engine: string, database: string) => Promise<any>
+        previewTable: (engine: string, database: string, tableName: string, limit?: number, page?: number, columns?: string, filter?: string) => Promise<any>
       }
       factor: {
         setApiKey: (apiKey: string) => Promise<boolean>

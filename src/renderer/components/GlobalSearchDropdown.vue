@@ -1,211 +1,125 @@
 <template>
   <div v-if="visible" class="global-search-dropdown">
-    <!-- 加载状态 -->
     <div v-if="loading" class="loading-state">
       <el-icon class="is-loading"><Loading /></el-icon>
       <span>搜索中...</span>
     </div>
 
-    <!-- 无结果 -->
-    <div v-else-if="!results || results.total === 0" class="empty-state">
+    <div v-else-if="!results || totalCount === 0" class="empty-state">
       <el-icon><Search /></el-icon>
       <span>未找到匹配结果</span>
     </div>
 
-    <!-- 搜索结果 -->
     <div v-else class="results-container">
-      <!-- 行情数据结果 -->
-      <div v-if="results.data.market && results.data.market.total > 0" class="result-section">
+      <!-- 按引擎分组 -->
+      <div v-for="engineGroup in groupedResults" :key="engineGroup.engine" class="result-section">
         <div class="section-header">
-          <el-icon><DataLine /></el-icon>
-          <span>行情数据</span>
-          <el-tag size="small" type="primary">{{ results.data.market.total }}</el-tag>
+          <el-icon><Coin v-if="engineGroup.engine === 'postgresql'" /><DataLine v-else /></el-icon>
+          <span>{{ engineGroup.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse' }}</span>
         </div>
-        <div class="result-items">
-          <div
-            v-for="(item, index) in results.data.market.results"
-            :key="`market-${index}`"
-            class="result-item"
-            @click="handleSelect(item, 'market')"
-          >
-            <div class="item-header">
-              <span class="item-title">{{ item.source_name }}</span>
-              <span class="item-code">{{ item.source_code }}</span>
-            </div>
-            <div class="item-meta">
-              <el-tag
-                v-if="item.match_type === 'field'"
-                size="small"
-                type="primary"
-              >
-                字段: {{ item.match_field || item.match_field_en }}
-              </el-tag>
-              <el-tag v-else size="small" type="success">表名匹配</el-tag>
-              <span class="item-market">{{ item.market }}</span>
-              <span class="item-score">匹配度: {{ Math.round(item.match_score) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <!-- 静态元数据结果 -->
-      <div v-if="results.data.static && results.data.static.total > 0" class="result-section">
-        <div class="section-header">
-          <el-icon><Document /></el-icon>
-          <span>静态元数据</span>
-          <el-tag size="small" type="success">{{ results.data.static.total }}</el-tag>
-        </div>
-        <div class="result-items">
+        <!-- 按库分组 -->
+        <div v-for="dbGroup in engineGroup.databases" :key="dbGroup.database" class="db-group">
+          <div class="db-header">
+            <el-tag size="small" type="info">{{ dbGroup.database }}</el-tag>
+            <span class="db-count">{{ dbGroup.results.length }} 条</span>
+          </div>
           <div
-            v-for="(item, index) in results.data.static.results"
-            :key="`static-${index}`"
+            v-for="(item, idx) in dbGroup.results"
+            :key="idx"
             class="result-item"
-            @click="handleSelect(item, 'static')"
+            @click="handleSelect(item, engineGroup.engine, dbGroup.database)"
           >
             <div class="item-header">
               <span class="item-title">{{ item.table_comment || item.table_name }}</span>
               <span class="item-code">{{ item.table_name }}</span>
             </div>
             <div class="item-meta">
-              <el-tag
-                v-if="item.match_type === 'field'"
-                size="small"
-                type="primary"
-              >
+              <el-tag v-if="item.match_type === 'field'" size="small" type="primary">
                 字段: {{ item.match_field || item.match_field_en }}
               </el-tag>
               <el-tag v-else size="small" type="success">表名匹配</el-tag>
               <span v-if="item.category" class="item-category">{{ item.category }}</span>
-              <span v-if="item.field_type" class="item-type">{{ item.field_type }}</span>
               <span class="item-score">匹配度: {{ Math.round(item.match_score) }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 加工数据结果 -->
-      <div v-if="results.data.processed && results.data.processed.total > 0" class="result-section">
-        <div class="section-header">
-          <el-icon><Operation /></el-icon>
-          <span>加工数据</span>
-          <el-tag size="small" type="warning">{{ results.data.processed.total }}</el-tag>
-        </div>
-        <div class="result-items">
-          <div
-            v-for="(item, index) in results.data.processed.results"
-            :key="`processed-${index}`"
-            class="result-item"
-            @click="handleSelect(item, 'processed')"
-          >
-            <div class="item-header">
-              <span class="item-title">{{ item.table_comment || item.table_name }}</span>
-              <span class="item-code">{{ item.table_name }}</span>
-            </div>
-            <div class="item-meta">
-              <el-tag
-                v-if="item.match_type === 'field'"
-                size="small"
-                type="primary"
-              >
-                字段: {{ item.match_field || item.match_field_en }}
-              </el-tag>
-              <el-tag v-else size="small" type="success">表名匹配</el-tag>
-              <span v-if="item.category" class="item-category">{{ item.category }}</span>
-              <span v-if="item.field_type" class="item-type">{{ item.field_type }}</span>
-              <span class="item-score">匹配度: {{ Math.round(item.match_score) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 行情镜像库结果 -->
-      <div v-if="results.data.mirror && results.data.mirror.total > 0" class="result-section">
-        <div class="section-header">
-          <el-icon><CopyDocument /></el-icon>
-          <span>行情镜像库</span>
-          <el-tag size="small" type="info">{{ results.data.mirror.total }}</el-tag>
-        </div>
-        <div class="result-items">
-          <div
-            v-for="(item, index) in results.data.mirror.results"
-            :key="`mirror-${index}`"
-            class="result-item"
-            @click="handleSelect(item, 'mirror')"
-          >
-            <div class="item-header">
-              <span class="item-title">{{ item.table_comment || item.table_name }}</span>
-              <span class="item-code">{{ item.table_name }}</span>
-            </div>
-            <div class="item-meta">
-              <el-tag
-                v-if="item.match_type === 'field'"
-                size="small"
-                type="primary"
-              >
-                字段: {{ item.match_field || item.match_field_en }}
-              </el-tag>
-              <el-tag v-else size="small" type="success">表名匹配</el-tag>
-              <span v-if="item.category" class="item-category">{{ item.category }}</span>
-              <span v-if="item.field_type" class="item-type">{{ item.field_type }}</span>
-              <span class="item-score">匹配度: {{ Math.round(item.match_score) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 搜索统计 -->
       <div class="search-footer">
-        <span>共找到 {{ results.total }} 条结果</span>
-        <span class="search-time">耗时: {{ results.search_time_ms }}ms</span>
+        <span>共找到 {{ totalCount }} 条结果</span>
+        <span v-if="results?.search_time_ms" class="search-time">耗时: {{ results.search_time_ms }}ms</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Loading, Search, DataLine, Document, Operation, CopyDocument } from '@element-plus/icons-vue'
+import { computed } from 'vue'
+import { Loading, Search, DataLine, Coin } from '@element-plus/icons-vue'
 
-interface SearchResult {
-  type: 'source' | 'table'
-  match_type: 'table' | 'field' | 'comment'
-  match_score: number
-  match_field?: string
-  match_field_en?: string
-  source_code?: string
-  source_name?: string
-  market?: string
-  table_name?: string
-  table_comment?: string
-  category?: string
-  field_type?: string
-}
-
-interface GlobalSearchResponse {
-  code: number
-  message: string
-  data: {
-    market: { total: number; results: SearchResult[] }
-    static: { total: number; results: SearchResult[] }
-    processed: { total: number; results: SearchResult[] }
-    mirror: { total: number; results: SearchResult[] }
-  }
-  total: number
-  search_time_ms: number
-}
-
-defineProps<{
+const props = defineProps<{
   visible: boolean
-  results: GlobalSearchResponse | null
+  results: any | null
   loading: boolean
 }>()
 
 const emit = defineEmits<{
-  select: [result: SearchResult, dataType: 'market' | 'static' | 'processed' | 'mirror']
+  select: [result: any, engine: string, database: string]
   close: []
 }>()
 
-const handleSelect = (result: SearchResult, dataType: 'market' | 'static' | 'processed' | 'mirror') => {
-  emit('select', result, dataType)
+// 新版接口：results.data.results[] = [{ engine, database, table_name, ... }]
+// 兼容旧版：results.data.static/processed/mirror/market
+const groupedResults = computed(() => {
+  if (!props.results) return []
+  const data = props.results.data
+
+  // 新格式：{ results: [...] }
+  if (Array.isArray(data?.results)) {
+    const map = new Map<string, Map<string, any[]>>()
+    for (const item of data.results) {
+      const eng = item.engine || 'postgresql'
+      const db = item.database || ''
+      if (!map.has(eng)) map.set(eng, new Map())
+      const dbMap = map.get(eng)!
+      if (!dbMap.has(db)) dbMap.set(db, [])
+      dbMap.get(db)!.push(item)
+    }
+    return Array.from(map.entries()).map(([engine, dbMap]) => ({
+      engine,
+      databases: Array.from(dbMap.entries()).map(([database, results]) => ({ database, results }))
+    }))
+  }
+
+  // 旧格式兼容（静态/加工/镜像）
+  const groups: any[] = []
+  const pgResults: any[] = []
+  const chResults: any[] = []
+  if (data?.static?.results) pgResults.push(...data.static.results.map((r: any) => ({ ...r, database: 'finance_db' })))
+  if (data?.processed?.results) chResults.push(...data.processed.results.map((r: any) => ({ ...r, database: 'market_mart' })))
+  if (data?.mirror?.results) chResults.push(...data.mirror.results.map((r: any) => ({ ...r, database: 'market_data' })))
+
+  if (pgResults.length) {
+    const dbMap = new Map<string, any[]>()
+    pgResults.forEach(r => { if (!dbMap.has(r.database)) dbMap.set(r.database, []); dbMap.get(r.database)!.push(r) })
+    groups.push({ engine: 'postgresql', databases: Array.from(dbMap.entries()).map(([database, results]) => ({ database, results })) })
+  }
+  if (chResults.length) {
+    const dbMap = new Map<string, any[]>()
+    chResults.forEach(r => { if (!dbMap.has(r.database)) dbMap.set(r.database, []); dbMap.get(r.database)!.push(r) })
+    groups.push({ engine: 'clickhouse', databases: Array.from(dbMap.entries()).map(([database, results]) => ({ database, results })) })
+  }
+  return groups
+})
+
+const totalCount = computed(() => {
+  return groupedResults.value.reduce((s, eg) =>
+    s + eg.databases.reduce((s2: number, dg: any) => s2 + dg.results.length, 0), 0)
+})
+
+const handleSelect = (result: any, engine: string, database: string) => {
+  emit('select', result, engine, database)
 }
 </script>
 
@@ -217,103 +131,74 @@ const handleSelect = (result: SearchResult, dataType: 'market' | 'static' | 'pro
   right: 0;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
   z-index: 1000;
-  max-height: 600px;
+  max-height: 560px;
   overflow-y: auto;
 
-  .loading-state,
-  .empty-state {
-    padding: 40px 20px;
+  .loading-state, .empty-state {
+    padding: 36px 20px;
     text-align: center;
     color: #909399;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 10px;
-
-    .el-icon {
-      font-size: 32px;
-    }
+    .el-icon { font-size: 28px; }
   }
 
   .results-container {
-    padding: 10px 0;
-
     .result-section {
       border-bottom: 1px solid #f0f0f0;
-
-      &:last-child {
-        border-bottom: none;
-      }
+      &:last-child { border-bottom: none; }
 
       .section-header {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 12px 16px;
+        padding: 10px 16px;
         background: #f5f7fa;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         color: #303133;
-
-        .el-icon {
-          color: #409eff;
-        }
+        .el-icon { color: #409eff; }
       }
 
-      .result-items {
+      .db-group {
+        .db-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 16px 4px 24px;
+          background: #fafafa;
+          .db-count { font-size: 11px; color: #909399; }
+        }
+
         .result-item {
-          padding: 12px 16px;
+          padding: 10px 16px 10px 24px;
           cursor: pointer;
-          transition: background 0.2s;
           border-bottom: 1px solid #f5f5f5;
+          transition: background 0.15s;
 
-          &:last-child {
-            border-bottom: none;
-          }
-
-          &:hover {
-            background: #f5f7fa;
-          }
+          &:last-child { border-bottom: none; }
+          &:hover { background: #f5f7fa; }
 
           .item-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 8px;
-
-            .item-title {
-              font-size: 14px;
-              font-weight: 500;
-              color: #303133;
-            }
-
-            .item-code {
-              font-size: 12px;
-              color: #909399;
-              font-family: 'Consolas', monospace;
-            }
+            margin-bottom: 6px;
+            .item-title { font-size: 13px; font-weight: 500; color: #303133; }
+            .item-code { font-size: 11px; color: #909399; font-family: 'Consolas', monospace; }
           }
 
           .item-meta {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
-
-            .item-market,
-            .item-category,
-            .item-type {
-              font-size: 12px;
-              color: #606266;
-            }
-
-            .item-score {
-              font-size: 11px;
-              color: #909399;
-              margin-left: auto;
-            }
+            .item-category { font-size: 11px; color: #606266; }
+            .item-score { font-size: 11px; color: #909399; margin-left: auto; }
           }
         }
       }
@@ -322,16 +207,12 @@ const handleSelect = (result: SearchResult, dataType: 'market' | 'static' | 'pro
     .search-footer {
       display: flex;
       justify-content: space-between;
-      padding: 10px 16px;
+      padding: 8px 16px;
       font-size: 12px;
       color: #909399;
       background: #fafafa;
-
-      .search-time {
-        color: #c0c4cc;
-      }
+      .search-time { color: #c0c4cc; }
     }
   }
 }
 </style>
-
