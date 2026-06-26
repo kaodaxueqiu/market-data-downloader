@@ -37,9 +37,13 @@
         </el-descriptions>
 
         <div class="quick-actions">
-          <el-button type="primary" size="large" @click="showDetailDialog = true" style="width:100%">
+          <el-button type="primary" size="large" @click="showDetailDialog = true" style="width:100%;margin-bottom:10px">
             <el-icon><View /></el-icon>
             查看字段详情
+          </el-button>
+          <el-button type="success" size="large" @click="emit('preview')" style="width:100%">
+            <el-icon><DataLine /></el-icon>
+            数据预览
           </el-button>
         </div>
       </div>
@@ -133,13 +137,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { View, Check, Close } from '@element-plus/icons-vue'
+import { View, Check, Close, DataLine } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   source: any
   engine: string
   database: string
 }>()
+
+const emit = defineEmits<{ preview: [] }>()
 
 const fields = ref<any[]>([])
 const fieldsLoading = ref(false)

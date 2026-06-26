@@ -130,6 +130,7 @@ const props = defineProps<{
   source: any
   engine: string
   database: string
+  inline?: boolean  // 弹窗内使用时不需要 empty-state 撑高
 }>()
 
 const loading = ref(false)
@@ -258,6 +259,7 @@ const formatVal = (v: any) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 400px;
 
   .empty-state {
     height: 100%;
