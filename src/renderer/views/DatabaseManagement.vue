@@ -40,12 +40,6 @@
                 <el-tag v-if="row.hasCh" size="small" type="warning">CH</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="绑定 API Key" min-width="180">
-              <template #default="{ row }">
-                <span v-if="row.binding" class="binding-tag">{{ row.binding.api_key_name }} ({{ row.binding.api_key }})</span>
-                <span v-else class="no-binding">-</span>
-              </template>
-            </el-table-column>
             <el-table-column label="操作" width="320" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" text type="info" @click="viewUserGrants(row.username)">查看权限</el-button>
@@ -56,7 +50,7 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="按库表授权" name="resource">
+        <el-tab-pane label="按库表授权" name="resource" class="res-tab-pane">
           <!-- 引擎 + 库选择 -->
           <div class="tab-toolbar">
             <el-radio-group v-model="resEngine" size="small" @change="onResEngineChange">
@@ -68,19 +62,58 @@
             </el-select>
           </div>
 
-          <!-- 表选择器 -->
-          <div v-if="resDb" class="res-table-selector">
-            <el-checkbox
-              :model-value="isAllTablesSelected"
-              :indeterminate="isSomeTablesSelected"
-              @change="(v: any) => toggleAllTables(v)"
-              style="font-weight:600;flex-shrink:0"
-            >全库（所有表）</el-checkbox>
-            <el-divider direction="vertical" />
-            <el-checkbox-group v-model="resSelectedTables" style="display:inline-flex;flex-wrap:wrap;gap:4px">
-              <el-checkbox v-for="t in resAllTables" :key="t" :value="t">{{ t }}</el-checkbox>
-            </el-checkbox-group>
-            <el-button size="small" type="primary" style="margin-left:auto;flex-shrink:0" :disabled="!resSelectedTables.length" @click="confirmAndLoad">加载</el-button>
+          <!-- 已加载：精简摘要 + 重新选择 -->
+          <div v-if="resRows.length" class="res-loaded-bar">
+            <el-icon><DataLine /></el-icon>
+            <span>已加载：{{ resEngine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse' }} / {{ resDb }} /
+              {{ isLoadedAllTables ? `全库（${resAllTables.length} 张表）` : `${resLoadedTables.length} 张表` }}
+            </span>
+            <el-button link size="small" style="margin-left:auto" @click="reSelectTables">重新选择</el-button>
+          </div>
+
+          <!-- 表选择器 / 未选库占位（无数据时展示） -->
+          <div v-else class="res-table-selector">
+            <template v-if="resDb">
+              <div class="res-table-toolbar">
+                <el-checkbox
+                  :model-value="isAllTablesSelected"
+                  :indeterminate="isSomeTablesSelected"
+                  @change="(v: any) => toggleAllTables(v)"
+                >全库（共 {{ resAllTables.length }} 张表）</el-checkbox>
+                <span v-if="resSelectedTables.length && !isAllTablesSelected" class="res-selected-count">
+                  已选 {{ resSelectedTables.length }} 张
+                </span>
+                <el-button
+                  size="small"
+                  type="primary"
+                  style="margin-left:auto"
+                  :disabled="!resSelectedTables.length"
+                  @click="confirmAndLoad"
+                >加载{{ resSelectedTables.length ? `（${resSelectedTables.length} 张）` : '' }}</el-button>
+              </div>
+              <div class="res-table-chips">
+                <span
+                  v-for="t in resTablePageList"
+                  :key="t"
+                  class="res-table-chip"
+                  :class="{ 'is-selected': resSelectedTables.includes(t) }"
+                  @click="toggleTable(t)"
+                >{{ t }}</span>
+              </div>
+              <div class="res-table-pagination">
+                <el-pagination
+                  v-model:current-page="resTablePage"
+                  :page-size="resTablePageSize"
+                  :total="resAllTables.length"
+                  layout="prev, pager, next, jumper, total"
+                  size="small"
+                  background
+                />
+              </div>
+            </template>
+            <div v-else class="res-guide">
+              <el-empty description="请先选择数据库" :image-size="60" />
+            </div>
           </div>
 
           <!-- 批量操作栏（有已选用户时显示） -->
@@ -93,7 +126,7 @@
             <el-button size="small" type="danger" plain :disabled="!batchPrivs.length" @click="applyToSelected('none')">撤权</el-button>
           </div>
 
-          <!-- 权限矩阵表格 -->
+          <!-- 权限矩阵表格（flex:1 填满剩余高度） -->
           <el-table
             v-if="resRows.length"
             :data="resRows"
@@ -105,12 +138,6 @@
           >
             <el-table-column type="selection" width="45" />
             <el-table-column prop="username" label="用户名" min-width="140" fixed />
-            <el-table-column label="绑定 API Key" min-width="160">
-              <template #default="{ row }">
-                <span v-if="row.binding" class="binding-tag">{{ row.binding.api_key_name }} ({{ row.binding.api_key }})</span>
-                <span v-else class="no-binding">-</span>
-              </template>
-            </el-table-column>
             <el-table-column v-for="p in getPrivilegeList(resEngine)" :key="p" :label="p" width="95" align="center">
               <template #header>
                 <div class="priv-header" @click="toggleResColumnAll(p)">{{ p }}</div>
@@ -138,10 +165,6 @@
             <el-button size="small" type="danger" plain :disabled="resTablesStale" @click="clearSelectedTables">清空选中表的所有用户权限</el-button>
           </div>
 
-          <!-- 空态引导 -->
-          <div v-else-if="!resLoading" class="res-guide">
-            <el-empty :description="resDb && resSelectedTables.length ? '点击「加载」查看权限矩阵' : resDb ? '请勾选要操作的表' : '请先选择数据库'" :image-size="60" />
-          </div>
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -385,7 +408,7 @@ async function viewUserGrants(username: string) {
 }
 
 const pgPrivilegeList = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP']
-const chPrivilegeList = ['SHOW', 'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP']
+const chPrivilegeList = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP']
 
 function getPrivilegeList(engine: string) {
   return engine === 'postgresql' ? pgPrivilegeList : chPrivilegeList
@@ -405,6 +428,14 @@ const resSelectedUsers = ref<string[]>([])
 const resLoading = ref(false)
 const resSaving = ref(false)
 const batchPrivs = ref<string[]>([])
+
+const resTablePage = ref(1)
+const resTablePageSize = 60
+
+const resTablePageList = computed(() => {
+  const start = (resTablePage.value - 1) * resTablePageSize
+  return resAllTables.value.slice(start, start + resTablePageSize)
+})
 
 const resDbList = computed(() => {
   const info = dbTreeRaw.value[resEngine.value]
@@ -468,13 +499,16 @@ async function onResDbChange() {
   await checkUnsavedThenRun(async () => {
     resAllTables.value = []
     resSelectedTables.value = []
+    resTablePage.value = 1
     resRows.value = []
     resSnapshot.value = {}
     resSelectedUsers.value = []
     batchPrivs.value = []
     if (!resDb.value) return
     const res = await api.listTables(resEngine.value, resDb.value)
-    resAllTables.value = (res.success && res.data?.tables) ? res.data.tables.map((t: any) => t.name) : []
+    const tables = (res.success && res.data?.tables) ? res.data.tables.map((t: any) => t.name) : []
+    resAllTables.value = tables
+    resSelectedTables.value = [...tables]  // 默认全选
   })
 }
 
@@ -482,21 +516,45 @@ function toggleAllTables(checked: boolean) {
   resSelectedTables.value = checked ? [...resAllTables.value] : []
 }
 
+function toggleTable(t: string) {
+  const idx = resSelectedTables.value.indexOf(t)
+  if (idx >= 0) resSelectedTables.value.splice(idx, 1)
+  else resSelectedTables.value.push(t)
+}
+
+function reSelectTables() {
+  resRows.value = []
+  resSnapshot.value = {}
+  resSelectedUsers.value = []
+  batchPrivs.value = []
+}
+
 async function confirmAndLoad() {
-  await checkUnsavedThenRun(loadResourceGrants)
+  try {
+    await checkUnsavedThenRun(loadResourceGrants)
+  } catch (err: any) {
+    console.error('[confirmAndLoad]', err)
+    ElMessage.error('加载出错：' + (err?.message || String(err)))
+  }
 }
 
 async function loadResourceGrants() {
-  if (!resDb.value || !resSelectedTables.value.length) return
+  console.log('[loadResourceGrants] db=', resDb.value, 'tables=', resSelectedTables.value.length)
+  if (!resDb.value || !resSelectedTables.value.length) {
+    ElMessage.warning('请先选择数据库和表')
+    return
+  }
   resLoading.value = true
   resRows.value = []
   resSnapshot.value = {}
   resSelectedUsers.value = []
   batchPrivs.value = []
-  resLoadedTables.value = [...resSelectedTables.value]  // 快照当前选中表
+  resLoadedTables.value = [...resSelectedTables.value]
   try {
-    const tables = isAllTablesSelected.value ? ['*'] : resSelectedTables.value
+    const tables = isAllTablesSelected.value ? ['*'] : [...resSelectedTables.value]
+    console.log('[loadResourceGrants] calling API, tables=', tables.length > 1 ? tables.slice(0, 3) + '...' : tables)
     const res = await api.listResourceGrants(resEngine.value, resDb.value, tables)
+    console.log('[loadResourceGrants] response:', res?.success, res?.error)
     if (res.success && res.data?.users) {
       resRows.value = res.data.users.map((u: any) => {
         const merged = mergedUsers.value.find(m => m.username === u.username)
@@ -515,6 +573,9 @@ async function loadResourceGrants() {
     } else {
       ElMessage.error(res.error || '加载失败')
     }
+  } catch (err: any) {
+    console.error('[loadResourceGrants] error:', err)
+    ElMessage.error('加载出错：' + (err?.message || String(err)))
   } finally {
     resLoading.value = false
   }
@@ -560,7 +621,7 @@ async function saveResource() {
   }
   if (!changes.length) { ElMessage.info('权限未变更'); return }
 
-  const tables = isLoadedAllTables.value ? ['*'] : resLoadedTables.value
+  const tables = isLoadedAllTables.value ? ['*'] : [...resLoadedTables.value]
   const tableCount = resLoadedTables.value.length
   const grantCount = changes.reduce((s, c) => s + c.grant.length, 0)
   const revokeCount = changes.reduce((s, c) => s + c.revoke.length, 0)
@@ -587,7 +648,7 @@ async function saveResource() {
 }
 
 async function clearSelectedTables() {
-  const tables = isLoadedAllTables.value ? ['*'] : resLoadedTables.value
+  const tables = isLoadedAllTables.value ? ['*'] : [...resLoadedTables.value]
   const tableCount = resLoadedTables.value.length
   try {
     await ElMessageBox.confirm(
@@ -634,7 +695,11 @@ onMounted(() => {
   .tree-node { display: flex; align-items: center; font-size: 13px; }
 }
 .db-mgmt-right {
-  flex: 1; min-width: 0; padding: 16px 20px; overflow-y: auto;
+  flex: 1; min-width: 0; padding: 8px 16px;
+  display: flex; flex-direction: column; overflow: hidden;
+  :deep(.el-tabs) { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  :deep(.el-tabs__content) { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  :deep(.el-tab-pane) { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
 }
 .tab-toolbar {
   display: flex; align-items: center; margin-bottom: 12px;
@@ -644,18 +709,90 @@ onMounted(() => {
 
 .priv-header { cursor: pointer; user-select: none; &:hover { color: #409eff; } }
 
-.res-table-selector {
+.res-tab-pane {
+  overflow: hidden !important;
+}
+
+.res-loaded-bar {
   display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 14px;
-  background: #f8f9fa;
-  border: 1px solid #e8e8e8;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #f0f7ff;
+  border: 1px solid #d9ecff;
   border-radius: 6px;
-  margin-bottom: 12px;
-  max-height: 130px;
+  font-size: 13px;
+  color: #409eff;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.res-table-selector {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  margin-bottom: 0;
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.res-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.res-selected-count {
+  font-size: 12px;
+  color: #409eff;
+}
+
+.res-table-chips {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 12px 14px;
+  flex: 1;
   overflow-y: auto;
+  align-content: flex-start;
+}
+
+.res-table-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #fff;
+  color: #606266;
+  transition: all 0.15s;
+  user-select: none;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: #409eff;
+    color: #409eff;
+  }
+
+  &.is-selected {
+    background: #409eff;
+    border-color: #409eff;
+    color: #fff;
+  }
+}
+
+.res-table-pagination {
+  padding: 8px 14px;
+  border-top: 1px solid #e4e7ed;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .res-batch-toolbar {
@@ -672,7 +809,7 @@ onMounted(() => {
   color: #606266;
 }
 
-.res-matrix-table { margin-top: 8px; }
+.res-matrix-table { margin-top: 8px; flex: 1; }
 
 .res-actions { margin-top: 12px; display: flex; gap: 10px; }
 
