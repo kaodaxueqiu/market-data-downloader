@@ -41,7 +41,7 @@
     </div>
 
     <!-- 分类标签（后端返回真实分类才显示） -->
-    <div v-if="activeDatabase && categories.length > 1" class="category-section">
+    <div v-if="!enginesLoading && !enginesError && activeDatabase && categories.length > 1" class="category-section">
       <div class="category-tags">
         <el-tag
           v-for="cat in categories"
@@ -58,7 +58,20 @@
     </div>
 
     <!-- 三栏布局 -->
-    <div class="content-layout">
+    <div v-if="enginesLoading" class="state-overlay">
+      <el-icon class="state-spinner is-loading"><Loading /></el-icon>
+      <div class="state-title">正在加载数据源…</div>
+      <div class="state-desc">数据库元数据较多时可能需要十几秒，请稍候</div>
+    </div>
+
+    <div v-else-if="enginesError" class="state-overlay">
+      <el-icon class="state-icon-error"><WarningFilled /></el-icon>
+      <div class="state-title">数据源加载失败</div>
+      <div class="state-desc">{{ enginesError }}</div>
+      <el-button type="primary" :loading="enginesLoading" @click="loadEngines">重试</el-button>
+    </div>
+
+    <div v-else class="content-layout">
       <!-- 左侧：库列表 -->
       <div class="db-panel">
         <div class="db-panel-header">
@@ -127,13 +140,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Coin, DataLine, Search, Refresh, Loading, FolderOpened } from '@element-plus/icons-vue'
+import { Coin, DataLine, Search, Refresh, Loading, FolderOpened, WarningFilled } from '@element-plus/icons-vue'
 import DataSourceList from './components/DataSourceList.vue'
 import StaticDataDetail from './components/StaticDataDetail.vue'
 import PreviewPanel from './components/PreviewPanel.vue'
 import GlobalSearchDropdown from '../../components/GlobalSearchDropdown.vue'
 
 const enginesLoading = ref(false)
+const enginesError = ref('')
 const engines = ref<{ code: string; name: string; databases: { name: string }[] }[]>([])
 const activeEngine = ref('postgresql')
 const activeDatabase = ref('')
@@ -201,6 +215,7 @@ const setupApiKey = async (): Promise<boolean> => {
 
 const loadEngines = async () => {
   enginesLoading.value = true
+  enginesError.value = ''
   try {
     const result = await window.electronAPI.dbdict.getDatasources()
     if (result.code === 200 && result.data?.engines) {
@@ -215,10 +230,13 @@ const loadEngines = async () => {
         }
       }
     } else {
-      ElMessage.error('获取数据库列表失败')
+      enginesError.value = result.msg || '获取数据库列表失败'
     }
   } catch (e: any) {
-    ElMessage.error(e.message || '获取数据库列表失败')
+    const msg = e?.message || ''
+    enginesError.value = /timeout/i.test(msg)
+      ? '请求超时，后端响应过慢。请稍后点击重试。'
+      : (msg || '获取数据库列表失败')
   } finally {
     enginesLoading.value = false
   }
@@ -515,4 +533,20 @@ onMounted(async () => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   overflow: hidden;
 }
+.state-overlay {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #606266;
+
+  .state-spinner { font-size: 40px; color: #409eff; }
+  .state-icon-error { font-size: 44px; color: #e6a23c; }
+  .state-title { font-size: 16px; font-weight: 600; color: #303133; }
+  .state-desc { font-size: 13px; color: #909399; max-width: 420px; text-align: center; line-height: 1.6; }
+}
+
 </style>

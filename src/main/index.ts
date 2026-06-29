@@ -199,7 +199,7 @@ function createWindow() {
 
   // 开发环境
   if (process.env.NODE_ENV === 'development') {
-    console.log('正在加载开发服务器: http://localhost:3101')
+    console.log('正在加载开发服务器: http://localhost:5200')
     
     // 延迟加载，确保Vite服务器准备就绪
     let retryCount = 0
@@ -209,7 +209,7 @@ function createWindow() {
       try {
         retryCount++
         console.log(`🔄 尝试加载页面... (第${retryCount}次)`)
-        await mainWindow!.loadURL('http://localhost:3101')
+        await mainWindow!.loadURL('http://localhost:5200')
         console.log('✅ 页面加载成功！')
         // 开发模式下启用DevTools
         mainWindow!.webContents.openDevTools()
