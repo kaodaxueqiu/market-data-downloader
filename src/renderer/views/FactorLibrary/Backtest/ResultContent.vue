@@ -778,8 +778,8 @@
                   <span class="report-label">中性化覆盖率:</span>
                   <span class="report-value" :class="{ warn: neutralCoverage < 0.5 }">
                     {{ formatPercent(neutralCoverage) }}
-                    <span class="report-sub" v-if="neutralizationReport">
-                      ({{ neutralizationReport.rows_neutralized }} / {{ neutralizationReport.rows_total }})
+                    <span class="report-sub" v-if="neutralAllVariant">
+                      ({{ neutralAllVariant.rows_neutralized }} / {{ neutralAllVariant.rows_total }})
                     </span>
                   </span>
                   <el-alert
@@ -800,12 +800,14 @@
                     </el-tag>
                   </div>
                 </div>
-                <!-- 原始 Rank IC 对比 -->
-                <div class="report-row" v-if="neutralizationReport?.rank_ic_decay">
+                <!-- 原始 Rank IC 对比（数值在 neutralization.raw / neutralization.all） -->
+                <div class="report-row" v-if="neutralizationReport?.raw || neutralizationReport?.all">
                   <span class="report-label">Rank IC 对比:</span>
-                  <span class="report-sub">raw = {{ formatNumber(neutralizationReport.rank_ic_decay.raw, 4) }}</span>
-                  <span class="report-sub" v-if="typeof neutralizationReport.rank_ic_decay.all === 'number'">
-                    | all = {{ formatNumber(neutralizationReport.rank_ic_decay.all, 4) }}
+                  <span class="report-sub" v-if="neutralizationReport?.raw">
+                    raw = {{ formatNumber(neutralizationReport.raw.rank_ic_mean, 4) }}
+                  </span>
+                  <span class="report-sub" v-if="typeof neutralizationReport?.all?.rank_ic_mean === 'number'">
+                    | all = {{ formatNumber(neutralizationReport.all.rank_ic_mean, 4) }}
                   </span>
                 </div>
               </div>
@@ -1038,21 +1040,24 @@ const hasMultipleVariants = computed<boolean>(() => (result.value?.factor_result
 const neutralCollapseActive = ref<string[]>(['neutral'])
 const autoFieldCollapseActive = ref<string[]>([])
 
-// Rank IC 衰减比率（all_vs_raw）
+// Rank IC 衰减比率（直接读引擎预计算的 all_vs_raw）
 const rankIcDecayRatio = computed<number | null>(() => {
-  const decay = neutralizationReport.value?.rank_ic_decay
-  if (!decay) return null
-  const raw = decay.raw
-  const all = decay.all
-  if (typeof raw !== 'number' || typeof all !== 'number' || raw === 0) return null
-  return all / raw
+  return neutralizationReport.value?.rank_ic_decay?.all_vs_raw ?? null
 })
 
-// 中性化覆盖率
+// 中性化覆盖率所在的 variant（优先 neutral_all，其次 neutral_selected）
+const neutralAllVariant = computed<any>(() => {
+  const variants = neutralizationReport.value?.variants ?? []
+  return variants.find((x: any) => x.variant === 'neutral_all')
+      ?? variants.find((x: any) => x.variant === 'neutral_selected')
+      ?? null
+})
+
+// 中性化覆盖率（从 variants 数组读取）
 const neutralCoverage = computed<number | null>(() => {
-  const n = neutralizationReport.value
-  if (!n || typeof n.rows_neutralized !== 'number' || typeof n.rows_total !== 'number' || n.rows_total === 0) return null
-  return n.rows_neutralized / n.rows_total
+  const v = neutralAllVariant.value
+  if (!v || !v.rows_total) return null
+  return v.rows_neutralized / v.rows_total
 })
 const currentResearchMode = computed<string>(() =>
   modeBudget.value?.mode ?? task.value?.task_config?.research_mode ?? ''
