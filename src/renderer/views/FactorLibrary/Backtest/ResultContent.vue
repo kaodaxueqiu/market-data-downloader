@@ -136,6 +136,7 @@
                 <div class="status-badge" :class="task.status">
                   <el-icon v-if="task.status === 'completed'"><CircleCheck /></el-icon>
                   <el-icon v-else-if="task.status === 'running'" class="is-loading"><Loading /></el-icon>
+                  <el-icon v-else-if="task.status === 'deferred'"><Clock /></el-icon>
                   {{ getStatusName(task.status) }}
                 </div>
                 <span class="meta-divider">|</span>
@@ -146,6 +147,10 @@
                 <span v-if="task.user_id">执行人: {{ task.user_id }}</span>
                 <span class="meta-divider">|</span>
                 <span class="task-id-text">ID: {{ task.task_id }}</span>
+                <template v-if="summary?.engine_version">
+                  <span class="meta-divider">|</span>
+                  <span class="engine-version">引擎 v{{ summary.engine_version }}</span>
+                </template>
               </div>
             </div>
             <!-- 回测配置信息 -->
@@ -428,8 +433,21 @@
             </div>
           </div>
 
+          <!-- variant 切换 Tab -->
+          <div v-if="result.factor_results?.length > 1" class="variant-tabs">
+            <div 
+              v-for="(vr, vi) in result.factor_results" 
+              :key="vi" 
+              class="variant-tab" 
+              :class="{ active: activeVariant === vi }" 
+              @click="activeVariant = vi"
+            >
+              {{ getVariantLabel(vr.variant) }}
+            </div>
+          </div>
+
           <!-- 遍历因子结果 -->
-          <div v-for="(factor, index) in result.factor_results" :key="index" class="factor-result-section">
+          <div v-show="activeVariant === index" v-for="(factor, index) in result.factor_results" :key="index" class="factor-result-section">
             <!-- 因子标题 -->
             <div class="factor-header">
               <div class="factor-title-row">
@@ -730,6 +748,110 @@
 
           </div>
 
+          <!-- 风险中性化报告 -->
+          <el-collapse v-if="neutralizationReport" class="report-collapse neutralization-collapse">
+            <el-collapse-item>
+              <template #title>
+                <div class="collapse-title">
+                  <el-icon><WarningFilled /></el-icon>
+                  风险中性化报告 (Neutralization)
+                </div>
+              </template>
+              <div class="report-body">
+                <!-- Rank IC 衰减 -->
+                <div class="report-row" v-if="rankIcDecayRatio !== null">
+                  <span class="report-label">Rank IC 衰减 (all/raw):</span>
+                  <span class="report-value" :class="{ warn: rankIcDecayRatio < 0.3 }">
+                    {{ formatNumber(rankIcDecayRatio, 3) }}
+                  </span>
+                  <el-alert
+                    v-if="rankIcDecayRatio < 0.3"
+                    type="warning"
+                    :closable="false"
+                    show-icon
+                    title="剥离风格后 Rank IC 显著衰减，因子可能主要为风格暴露，需谨慎评估"
+                    style="margin-top: 8px;"
+                  />
+                </div>
+                <!-- 覆盖率 -->
+                <div class="report-row" v-if="neutralCoverage !== null">
+                  <span class="report-label">中性化覆盖率:</span>
+                  <span class="report-value" :class="{ warn: neutralCoverage < 0.5 }">
+                    {{ formatPercent(neutralCoverage) }}
+                    <span class="report-sub" v-if="neutralizationReport">
+                      ({{ neutralizationReport.rows_neutralized }} / {{ neutralizationReport.rows_total }})
+                    </span>
+                  </span>
+                  <el-alert
+                    v-if="neutralCoverage < 0.5"
+                    type="info"
+                    :closable="false"
+                    show-icon
+                    title="CNE6 覆盖不足，大量股票未被中性化，结果可能有偏差"
+                    style="margin-top: 8px;"
+                  />
+                </div>
+                <!-- 跳过的风险因子 -->
+                <div class="report-row" v-if="neutralizationReport?.skipped_risks?.length">
+                  <span class="report-label">未接入的风险因子:</span>
+                  <div class="report-tags">
+                    <el-tag v-for="r in neutralizationReport.skipped_risks" :key="r" type="warning" size="small" style="margin-right: 6px;">
+                      {{ r }}
+                    </el-tag>
+                  </div>
+                </div>
+                <!-- 原始 Rank IC 对比 -->
+                <div class="report-row" v-if="neutralizationReport?.rank_ic_decay">
+                  <span class="report-label">Rank IC 对比:</span>
+                  <span class="report-sub">raw = {{ formatNumber(neutralizationReport.rank_ic_decay.raw, 4) }}</span>
+                  <span class="report-sub" v-if="typeof neutralizationReport.rank_ic_decay.all === 'number'">
+                    | all = {{ formatNumber(neutralizationReport.rank_ic_decay.all, 4) }}
+                  </span>
+                </div>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+
+          <!-- 字段自动识别报告 -->
+          <el-collapse v-if="autoFieldReport" class="report-collapse auto-field-collapse">
+            <el-collapse-item>
+              <template #title>
+                <div class="collapse-title">
+                  <el-icon><InfoFilled /></el-icon>
+                  字段自动识别报告 (Auto Field)
+                </div>
+              </template>
+              <div class="report-body">
+                <!-- 识别出的字段 -->
+                <div class="report-row" v-if="autoFieldReport.detected_fields?.length">
+                  <span class="report-label"><el-icon><SetUp /></el-icon> 识别字段:</span>
+                  <div class="report-tags">
+                    <el-tag v-for="f in autoFieldReport.detected_fields" :key="f" size="small" style="margin-right: 6px;">
+                      {{ f }}
+                    </el-tag>
+                  </div>
+                </div>
+                <!-- 自动补齐的字段 -->
+                <div class="report-row" v-if="autoFieldReport.auto_added_fields?.length">
+                  <span class="report-label"><el-icon><Key /></el-icon> 自动补齐字段:</span>
+                  <div class="report-tags">
+                    <el-tag v-for="f in autoFieldReport.auto_added_fields" :key="f" type="success" size="small" style="margin-right: 6px;">
+                      {{ f }}
+                    </el-tag>
+                  </div>
+                </div>
+                <!-- 自动映射的中文列名 -->
+                <div class="report-row" v-if="autoFieldReport.auto_field_mappings && Object.keys(autoFieldReport.auto_field_mappings).length">
+                  <span class="report-label">自动字段映射:</span>
+                  <el-table :data="objectToRows(autoFieldReport.auto_field_mappings)" size="small" stripe style="width: 100%; margin-top: 6px;">
+                    <el-table-column prop="key" label="ASCII 字段" width="180" />
+                    <el-table-column prop="value" label="中文列名" />
+                  </el-table>
+                </div>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+
           <!-- 每日明细（独立区域，只显示一次） -->
           <el-collapse v-if="dailyMetrics.length > 0 || dailyMetricsLoading" class="daily-collapse">
             <el-collapse-item>
@@ -858,7 +980,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
   ArrowLeft, ArrowRight, Refresh, Loading, Calendar, Timer, 
-  CircleCheck, TrendCharts, Histogram, DataLine, Document, Download, Tickets
+  CircleCheck, TrendCharts, Histogram, DataLine, Document, Download, Tickets, Clock,
+  WarningFilled, InfoFilled, SetUp, Key
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import FactorValuesSection from './FactorValuesSection.vue'
@@ -886,6 +1009,17 @@ const pageSize = ref(12)
 const detailLoading = ref(false)
 const task = ref<any>(null)
 const result = ref<any>(null)
+const activeVariant = ref(0)
+
+// variant 文案映射
+const getVariantLabel = (variant: string) => {
+  const map: Record<string, string> = {
+    'raw': '原始因子',
+    'neutral_selected': '所选风险剥离',
+    'neutral_all': '全风险剥离'
+  }
+  return map[variant] || variant || '因子结果'
+}
 
 // ========== 回测三模式：研究分析（summary.*） ==========
 // summary 位置兼容：result.summary（任务级）或单因子 factor_results[0].summary
@@ -893,6 +1027,28 @@ const summary = computed<any>(() => {
   return result.value?.summary ?? result.value?.factor_results?.[0]?.summary ?? null
 })
 const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
+
+// 风险中性化报告
+const neutralizationReport = computed<any>(() => summary.value?.neutralization ?? null)
+// 字段自动识别报告
+const autoFieldReport = computed<any>(() => summary.value?.auto_field_report ?? null)
+
+// Rank IC 衰减比率（all_vs_raw）
+const rankIcDecayRatio = computed<number | null>(() => {
+  const decay = neutralizationReport.value?.rank_ic_decay
+  if (!decay) return null
+  const raw = decay.raw
+  const all = decay.all
+  if (typeof raw !== 'number' || typeof all !== 'number' || raw === 0) return null
+  return all / raw
+})
+
+// 中性化覆盖率
+const neutralCoverage = computed<number | null>(() => {
+  const n = neutralizationReport.value
+  if (!n || typeof n.rows_neutralized !== 'number' || typeof n.rows_total !== 'number' || n.rows_total === 0) return null
+  return n.rows_neutralized / n.rows_total
+})
 const currentResearchMode = computed<string>(() =>
   modeBudget.value?.mode ?? task.value?.task_config?.research_mode ?? ''
 )
@@ -1384,6 +1540,14 @@ const getExcessReturn = (row: any, benchmarkCode: string) => {
 }
 
 // 初始化周期选择
+const resetActiveVariant = () => { activeVariant.value = 0 }
+
+// 对象转 key-value 行数组（用于表格展示）
+const objectToRows = (obj: Record<string, string>) => {
+  if (!obj) return []
+  return Object.entries(obj).map(([key, value]) => ({ key, value }))
+}
+
 const initPeriodSelections = () => {
   if (!result.value?.factor_results) return
   result.value.factor_results.forEach((factor: any, index: number) => {
@@ -1406,8 +1570,10 @@ const getStatusName = (status: string) => {
   const map: Record<string, string> = {
     'completed': '执行完成',
     'running': '正在执行',
+    'deferred': '排队中',
     'pending': '等待执行',
-    'failed': '执行失败'
+    'failed': '执行失败',
+    'cancelled': '已取消'
   }
   return map[status] || status
 }
@@ -1701,6 +1867,7 @@ const loadResult = async () => {
   if (!props.taskId) return
   
   detailLoading.value = true
+  resetActiveVariant()
   
   try {
     const detailRes = await window.electronAPI.backtest.getTaskDetail(props.taskId)
@@ -2248,6 +2415,9 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
           &.running { 
             background: rgba($accent, 0.3);
           }
+          &.deferred {
+            background: rgba($warning, 0.35);
+          }
         }
         
         .meta-divider {
@@ -2260,6 +2430,13 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
           font-size: 12px;
           opacity: 0.75;
           background: rgba(255,255,255,0.1);
+          padding: 4px 10px;
+          border-radius: $radius-sm;
+        }
+        .engine-version {
+          font-size: 12px;
+          opacity: 0.85;
+          background: rgba(255,255,255,0.12);
           padding: 4px 10px;
           border-radius: $radius-sm;
         }
@@ -2297,7 +2474,116 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   // 因子结果区域 - 现代卡片设计
-  .factor-result-section {
+  .variant-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e4e7ed;
+  padding-bottom: 0;
+
+  .variant-tab {
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #606266;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    margin-bottom: -1px;
+
+    &:hover {
+      color: #409eff;
+    }
+
+    &.active {
+      color: #409eff;
+      border-bottom-color: #409eff;
+      font-weight: 600;
+    }
+  }
+}
+
+.report-collapse {
+  margin-bottom: 20px;
+  border: 1px solid #ebeef5;
+  border-radius: $radius-md;
+  overflow: hidden;
+
+  :deep(.el-collapse-item__header) {
+    padding: 0 20px;
+    height: 52px;
+    background: $bg-muted;
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  :deep(.el-collapse-item__wrap) {
+    border-bottom: none;
+  }
+
+  :deep(.el-collapse-item__content) {
+    padding: 20px;
+  }
+
+  .collapse-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: $text-primary;
+
+    .el-icon {
+      color: $primary;
+    }
+  }
+
+  .neutralization-collapse .collapse-title .el-icon { color: $accent; }
+
+  .report-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .report-row {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-direction: column;
+  }
+
+  .report-label {
+    font-size: 14px;
+    color: $text-secondary;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+  }
+
+  .report-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .report-value.warn {
+    color: $accent;
+  }
+
+  .report-sub {
+    font-size: 13px;
+    color: $text-muted;
+  }
+
+  .report-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+}
+
+.factor-result-section {
     background: $bg-card;
     border: 1px solid $border;
     border-radius: $radius-lg;

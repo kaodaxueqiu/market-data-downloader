@@ -36,6 +36,10 @@
         <div class="stat-value">{{ stats.running }}</div>
         <div class="stat-label">正在执行</div>
       </div>
+      <div class="stat-card deferred">
+        <div class="stat-value">{{ stats.deferred }}</div>
+        <div class="stat-label">排队中</div>
+      </div>
       <div class="stat-card completed">
         <div class="stat-value">{{ stats.completed }}</div>
         <div class="stat-label">执行完成</div>
@@ -122,6 +126,12 @@
                 {{ getProgressText(row) }}
               </div>
             </template>
+            <!-- 排队中（deferred）：long task 等待 slow worker -->
+            <template v-else-if="row.status === 'deferred'">
+              <div class="stage-info stage-warn">
+                长任务排队中
+              </div>
+            </template>
             <!-- 等待中：疑似排队卡住提示 -->
             <div v-else-if="row.status === 'pending' && isPendingStuck(row)" class="stage-info stage-warn">
               排队中 / worker 未消费
@@ -199,7 +209,7 @@
               :underline="false"
             >结果</el-link>
             <el-link 
-              v-if="row.status === 'pending'" 
+              v-if="row.status === 'pending' || row.status === 'deferred'" 
               type="danger" 
               @click="cancelTask(row)"
               :underline="false"
@@ -419,6 +429,7 @@ const sortOrder = ref<'asc' | 'desc'>('desc')
 const statusFilters = [
   { text: '等待执行', value: 'pending' },
   { text: '正在执行', value: 'running' },
+  { text: '排队中', value: 'deferred' },
   { text: '执行完成', value: 'completed' },
   { text: '执行失败', value: 'failed' },
   { text: '已取消', value: 'cancelled' }
@@ -446,6 +457,7 @@ let pollTimer: number | null = null
 const statsData = ref({
   total: 0,
   running: 0,
+  deferred: 0,
   completed: 0,
   failed: 0
 })
@@ -456,10 +468,11 @@ const stats = computed(() => statsData.value)
 const loadStats = async () => {
   try {
     // 并行请求各状态的数量（只请求 page_size=1 来获取 total）
-    const [allRes, runningRes, pendingRes, completedRes, failedRes] = await Promise.all([
+    const [allRes, runningRes, pendingRes, deferredRes, completedRes, failedRes] = await Promise.all([
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1 }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'running' }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'pending' }),
+      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'deferred' }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'completed' }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'failed' })
     ])
@@ -467,6 +480,7 @@ const loadStats = async () => {
     statsData.value = {
       total: allRes.success ? allRes.data.total : 0,
       running: (runningRes.success ? runningRes.data.total : 0) + (pendingRes.success ? pendingRes.data.total : 0),
+      deferred: deferredRes.success ? deferredRes.data.total : 0,
       completed: completedRes.success ? completedRes.data.total : 0,
       failed: failedRes.success ? failedRes.data.total : 0
     }
@@ -489,6 +503,7 @@ const getStatusName = (status: string) => {
   const map: Record<string, string> = {
     'pending': '等待执行',
     'running': '正在执行',
+    'deferred': '排队中',
     'completed': '执行完成',
     'failed': '执行失败',
     'cancelled': '已取消'
@@ -657,7 +672,7 @@ const loadTasks = async () => {
       tasks.value = result.data.tasks || []
       total.value = result.data.total || 0
       
-      const hasRunning = tasks.value.some(t => t.status === 'running' || t.status === 'pending')
+      const hasRunning = tasks.value.some(t => t.status === 'running' || t.status === 'pending' || t.status === 'deferred')
       hasRunning ? startPolling() : stopPolling()
     } else {
       ElMessage.error(result.error || '获取任务列表失败')
@@ -774,6 +789,7 @@ const getStatusType = (status: string) => {
   const map: Record<string, string> = {
     'pending': 'warning',
     'running': 'primary',
+    'deferred': 'warning',
     'completed': 'success',
     'failed': 'danger',
     'cancelled': 'info'
@@ -1003,6 +1019,11 @@ onUnmounted(() => stopPolling())
         .stat-value { color: #2563eb; }
       }
       
+      &.deferred {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        .stat-value { color: #d97706; }
+      }
+      
       &.completed {
         background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
         .stat-value { color: #16a34a; }
@@ -1146,6 +1167,10 @@ onUnmounted(() => stopPolling())
       
       &.pending { 
         color: #d97706; 
+        background: #fef3c7;
+      }
+      &.deferred {
+        color: #d97706;
         background: #fef3c7;
       }
       &.running { 

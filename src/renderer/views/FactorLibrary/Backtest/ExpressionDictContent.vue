@@ -56,6 +56,7 @@
                 <span class="func-aliases" v-if="func.aliases">
                   {{ func.aliases }}
                 </span>
+                <span class="func-py-badge" v-if="func.python_usage" title="支持 Python 调用">Py</span>
               </div>
               <div class="func-syntax">
                 <code>{{ func.syntax }}</code>
@@ -106,11 +107,26 @@
 
         <!-- 示例 -->
         <div class="examples-section" v-if="currentFunction.examples && currentFunction.examples.length > 0">
-          <h4>使用示例</h4>
+          <h4>使用示例（表达式）</h4>
           <div class="examples-list">
             <div v-for="(example, idx) in currentFunction.examples" :key="idx" class="example-item">
               <code>{{ example }}</code>
             </div>
+          </div>
+        </div>
+
+        <!-- Python 用法 -->
+        <div class="python-usage-section" v-if="currentFunction.python_usage">
+          <h4>Python 调用示例</h4>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="在 Python 因子中通过 ops.eval() 调用该算子"
+            style="margin-bottom: 10px;"
+          />
+          <div class="python-usage-code">
+            <code>{{ currentFunction.python_usage }}</code>
           </div>
         </div>
       </div>
@@ -288,6 +304,18 @@ onMounted(() => {
       font-size: 12px;
       color: #909399;
     }
+
+    .func-py-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      background: #22C55E;
+      padding: 1px 6px;
+      border-radius: 4px;
+      line-height: 1.4;
+      margin-left: auto;
+    }
   }
   
   .func-syntax {
@@ -338,6 +366,32 @@ onMounted(() => {
     }
   }
   
+  .python-usage-section {
+    margin-top: 20px;
+
+    h4 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .python-usage-code {
+      code {
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 13px;
+        color: #374151;
+        background: #ECFDF5;
+        border: 1px solid #A7F3D0;
+        padding: 10px 14px;
+        border-radius: 6px;
+        display: block;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    }
+  }
+
   .examples-list {
     display: flex;
     flex-direction: column;

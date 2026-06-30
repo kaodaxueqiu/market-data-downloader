@@ -239,6 +239,10 @@
                     </el-option>
                   </el-select>
                 </el-form-item>
+                <!-- 自动识别字段（仅 Python 模式） -->
+                <el-form-item v-if="factorSource === 'code'" label-width="70px">
+                  <el-checkbox v-model="ds.auto_fields">自动识别字段（fields 留空，引擎从代码推断）</el-checkbox>
+                </el-form-item>
                 <div class="date-code-row">
                   <div class="field-item">
                     <span class="field-label"><span class="required">*</span>日期字段</span>
@@ -263,6 +267,18 @@
                     </el-select>
                   </div>
                 </div>
+                
+                <!-- 高级：字段映射（中文列名表，仅 Python 模式） -->
+                <el-collapse v-if="factorSource === 'code' && ds.fields.length > 0" class="field-mapping-collapse">
+                  <el-collapse-item title="高级：字段映射（中文列名表）" name="mapping">
+                    <div class="mapping-hint">用于中文列名的 ClickHouse 逐笔表。ASCII 列名 → 中文列名（可选）</div>
+                    <div v-for="f in ds.fields" :key="f" class="mapping-row">
+                      <span class="mapping-ascii">{{ f }}</span>
+                      <span class="mapping-arrow">→</span>
+                      <el-input v-model="ds.field_mappings[f]" placeholder="中文列名（可选）" size="small" style="width: 180px" />
+                    </div>
+                  </el-collapse-item>
+                </el-collapse>
                 
                 <!-- 时段筛选配置（仅 intraday 模式显示） -->
                 <template v-if="ds.mode === 'intraday'">
@@ -987,6 +1003,8 @@ const formData = reactive({
       fields: [],
       date_field: '',
       code_field: '',
+      auto_fields: false,
+      field_mappings: {} as Record<string, string>,
       // 时段筛选字段（仅 intraday 模式使用）
       time_field: '',
       time_start: '',
@@ -1038,10 +1056,29 @@ const formRules: FormRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
 }
 
+const PYTHON_TEMPLATE_SINGLE = `def factor(df):
+    # df 为所选数据源的 DataFrame
+    # 可调用 ops.eval("Mean(close_price, 20)") 使用表达式算子
+    return df[['trade_date', 'stock_code']].assign(
+        factor_value=df['close'] / df['open'] - 1
+    )`
+
+const PYTHON_TEMPLATE_MULTI = `def factor(data, context):
+    # data['表名'] 获取对应 DataFrame
+    # 示例：取行情表
+    df = data['stock_daily']
+    return df[['trade_date', 'stock_code']].assign(
+        factor_value=df['close'] / df['open'] - 1
+    )`
+
 const onFactorSourceChange = () => {
   formData.factor_expression = ''
-  formData.factor_code = ''
   codeCheckResult.value = {}
+  if (factorSource.value === 'code') {
+    formData.factor_code = formData.data_sources.length <= 1 ? PYTHON_TEMPLATE_SINGLE : PYTHON_TEMPLATE_MULTI
+  } else {
+    formData.factor_code = ''
+  }
 }
 
 // 解析 Python 代码中的表名和字段（支持中文）
@@ -1289,7 +1326,9 @@ const autoConfigDataSources = () => {
         table: tableName,
         fields: validFields,
         date_field: '',
-        code_field: ''
+        code_field: '',
+        auto_fields: false,
+        field_mappings: {} as Record<string, string>
       })
       
       // 尝试加载字段并自动填充日期/代码字段
@@ -1387,6 +1426,8 @@ const selectDialogResult = async (item: any, database: string) => {
   ds.fields = []
   ds.date_field = ''
   ds.code_field = ''
+  ds.auto_fields = false
+  ds.field_mappings = {}
   
   searchDialogVisible.value = false
   
@@ -1403,6 +1444,8 @@ const clearSelectedTable = (index: number) => {
   ds.fields = []
   ds.date_field = ''
   ds.code_field = ''
+  ds.auto_fields = false
+  ds.field_mappings = {}
   // 清除时段筛选（如果是 intraday 模式）
   if (ds.mode === 'intraday') {
     ds.time_field = ''
@@ -1520,7 +1563,9 @@ const handleAddDataSource = (mode: 'normal' | 'intraday') => {
     table: '',
     fields: [],
     date_field: '',
-    code_field: ''
+    code_field: '',
+    auto_fields: false,
+    field_mappings: {} as Record<string, string>
   }
   // 日内时段筛选模式需要额外字段
   if (mode === 'intraday') {
@@ -1629,8 +1674,8 @@ const handleSubmit = async () => {
         return
       }
       tableSet.add(ds.table)
-      if (!ds.fields || ds.fields.length === 0) {
-        ElMessage.error(`数据源 ${i + 1}: 请选择字段`)
+      if (!ds.auto_fields && (!ds.fields || ds.fields.length === 0)) {
+        ElMessage.error(`数据源 ${i + 1}: 请选择字段，或勾选自动识别`)
         return
       }
       if (!ds.date_field) {
@@ -1673,9 +1718,17 @@ const handleSubmit = async () => {
           name: ds.name,
           database: ds.database,
           table: ds.table,
-          fields: ds.fields,
+          fields: ds.auto_fields ? null : ds.fields,
           date_field: ds.date_field,
           code_field: ds.code_field
+        }
+        // field_mappings: 只提交有值的映射
+        const mappings: Record<string, string> = {}
+        for (const [k, v] of Object.entries(ds.field_mappings || {})) {
+          if (v) mappings[k] = v
+        }
+        if (Object.keys(mappings).length > 0) {
+          result.field_mappings = mappings
         }
         // 日内时段筛选模式：加入时段字段
         if (ds.mode === 'intraday') {
@@ -1713,6 +1766,12 @@ const handleSubmit = async () => {
         requestData.factor_expression = formData.factor_expression
       } else if (factorSource.value === 'code') {
         requestData.factor_code = formData.factor_code
+        requestData.factor_code_meta = {
+          entrypoint: 'factor',
+          allow_pandas: true,
+          timeout_secs: 600,
+          result_mode: 'dataframe'
+        }
       }
 
       // walk-forward（顶层，仅 deep / admission 且开启时传）
@@ -2466,6 +2525,44 @@ const initApiKey = async () => {
         font-size: 11px;
         color: #909399;
         margin-left: 8px;
+      }
+      
+      .field-mapping-collapse {
+        margin-top: 8px;
+        border: none;
+        
+        :deep(.el-collapse-item__header) {
+          font-size: 13px;
+          color: #6b7280;
+          border-bottom: 1px solid #f0f0f0;
+        }
+        :deep(.el-collapse-item__wrap) {
+          border-bottom: none;
+        }
+        
+        .mapping-hint {
+          font-size: 12px;
+          color: #9ca3af;
+          margin-bottom: 8px;
+        }
+        .mapping-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 6px;
+          
+          .mapping-ascii {
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            color: #4b5563;
+            width: 160px;
+            flex-shrink: 0;
+          }
+          .mapping-arrow {
+            color: #9ca3af;
+            font-size: 12px;
+          }
+        }
       }
       
       .table-search-wrapper {
