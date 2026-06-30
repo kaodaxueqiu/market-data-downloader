@@ -2,8 +2,9 @@
   <div class="my-factors-page">
     <!-- 加载中 -->
     <div v-if="pageLoading" class="loading-container">
-      <el-icon class="is-loading" :size="48"><Loading /></el-icon>
-      <span>加载中...</span>
+      <el-icon class="is-loading" :size="40"><Loading /></el-icon>
+      <div class="loading-title">正在加载我的因子…</div>
+      <div class="loading-desc">正在检查因子库状态并加载数据，请稍候</div>
     </div>
 
     <!-- API 不可用 -->
@@ -4358,17 +4359,20 @@ onMounted(() => {
 
 // 加载状态
 .loading-container {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 120px 0;
-  color: #909399;
-  gap: 20px;
-  
+  padding: 40px;
+  color: #606266;
+  gap: 12px;
+
   .is-loading {
     color: #409eff;
   }
+  .loading-title { font-size: 16px; font-weight: 600; color: #303133; }
+  .loading-desc { font-size: 13px; color: #909399; max-width: 420px; text-align: center; line-height: 1.6; }
 }
 
 // 初始化引导
