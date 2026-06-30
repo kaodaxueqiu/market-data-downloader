@@ -749,8 +749,8 @@
           </div>
 
           <!-- 风险中性化报告 -->
-          <el-collapse v-if="neutralizationReport" class="report-collapse neutralization-collapse">
-            <el-collapse-item>
+          <el-collapse v-if="neutralizationReport && hasMultipleVariants" v-model="neutralCollapseActive" class="report-collapse neutralization-collapse">
+            <el-collapse-item name="neutral">
               <template #title>
                 <div class="collapse-title">
                   <el-icon><WarningFilled /></el-icon>
@@ -813,8 +813,8 @@
           </el-collapse>
 
           <!-- 字段自动识别报告 -->
-          <el-collapse v-if="autoFieldReport" class="report-collapse auto-field-collapse">
-            <el-collapse-item>
+          <el-collapse v-if="autoFieldReport" v-model="autoFieldCollapseActive" class="report-collapse auto-field-collapse">
+            <el-collapse-item name="autofield">
               <template #title>
                 <div class="collapse-title">
                   <el-icon><InfoFilled /></el-icon>
@@ -1032,6 +1032,11 @@ const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
 const neutralizationReport = computed<any>(() => summary.value?.neutralization ?? null)
 // 字段自动识别报告
 const autoFieldReport = computed<any>(() => summary.value?.auto_field_report ?? null)
+// 是否多 variant（>1 才展示 neutralization 报告）
+const hasMultipleVariants = computed<boolean>(() => (result.value?.factor_results?.length ?? 0) > 1)
+// 折叠面板展开状态
+const neutralCollapseActive = ref<string[]>(['neutral'])
+const autoFieldCollapseActive = ref<string[]>([])
 
 // Rank IC 衰减比率（all_vs_raw）
 const rankIcDecayRatio = computed<number | null>(() => {
