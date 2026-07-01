@@ -202,7 +202,7 @@ const loadExistingFields = async () => {
   fieldsLoading.value = true
   try {
     // zz_384 是 ClickHouse 加工数据表，使用 dbdict.getTableFields
-    const result = await window.electronAPI.dbdict.getTableFields('zz_384', 'clickhouse')
+    const result = await window.electronAPI.dbdict.getTableFields('clickhouse', 'clickhouse', 'zz_384')
     console.log('🔍 zz_384 字段API返回:', result)
     if (result.code === 200 && result.data) {
       // 提取字段名（转小写存储，方便比较）

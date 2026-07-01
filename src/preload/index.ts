@@ -312,6 +312,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('dbPerm:listResourceGrants', dbType, database, tables),
     batchGrantUsers: (body: any) =>
       ipcRenderer.invoke('dbPerm:batchGrantUsers', body),
+    createDatabase: (body: { db_type: string; name: string }) =>
+      ipcRenderer.invoke('dbPerm:createDatabase', body),
+    dropDatabase: (dbType: string, dbName: string) =>
+      ipcRenderer.invoke('dbPerm:dropDatabase', dbType, dbName),
+    createTable: (dbType: string, dbName: string, body: any) =>
+      ipcRenderer.invoke('dbPerm:createTable', dbType, dbName, body),
+    dropTable: (dbType: string, dbName: string, tableName: string) =>
+      ipcRenderer.invoke('dbPerm:dropTable', dbType, dbName, tableName),
+    moveTable: (dbType: string, dbName: string, tableName: string, body: { target_database?: string; target_table: string }) =>
+      ipcRenderer.invoke('dbPerm:moveTable', dbType, dbName, tableName, body),
   },
 
   // 研究成果API
@@ -828,6 +838,11 @@ declare global {
         batchGrant: (username: string, body: any) => Promise<any>
         listResourceGrants: (dbType: string, database: string, tables: string[]) => Promise<any>
         batchGrantUsers: (body: any) => Promise<any>
+        createDatabase: (body: { db_type: string; name: string }) => Promise<any>
+        dropDatabase: (dbType: string, dbName: string) => Promise<any>
+        createTable: (dbType: string, dbName: string, body: any) => Promise<any>
+        dropTable: (dbType: string, dbName: string, tableName: string) => Promise<any>
+        moveTable: (dbType: string, dbName: string, tableName: string, body: { target_database?: string; target_table: string }) => Promise<any>
       }
       research: {
         getList: (params?: { page?: number; page_size?: number; created_by?: string; status?: string; keyword?: string; sort_by?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>

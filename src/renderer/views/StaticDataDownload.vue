@@ -204,6 +204,8 @@ const selectedCategory = ref('')
 const selectedTableName = ref('')
 const selectAllFields = ref(false)
 const selectedFields = ref<string[]>([])
+const activeEngine = ref('')
+const activeDatabase = ref('')
 
 // 数据
 const categories = ref<any[]>([])
@@ -267,15 +269,29 @@ const loadCategoriesAndTables = async () => {
     }
     
     await window.electronAPI.dbdict.setApiKey(fullApiKey)
-    
+
+    // 获取用户可访问的引擎及库列表，确定 engine 和 database
+    const dsResult = await window.electronAPI.dbdict.getDatasources()
+    if (dsResult.code === 200 && dsResult.data?.engines?.length > 0) {
+      activeEngine.value = dsResult.data.engines[0].code
+      const firstDb = dsResult.data.engines[0].databases?.[0]?.name
+      if (firstDb) {
+        activeDatabase.value = firstDb
+      }
+    }
+    if (!activeEngine.value || !activeDatabase.value) {
+      ElMessage.error('未获取到可用的数据库引擎信息')
+      return
+    }
+
     // 获取分类
-    const catResult = await window.electronAPI.dbdict.getCategories()
+    const catResult = await window.electronAPI.dbdict.getCategories(activeEngine.value, activeDatabase.value)
     if (catResult.code === 200) {
       categories.value = catResult.data
     }
-    
+
     // 获取所有表
-    const tablesResult = await window.electronAPI.dbdict.getTables({ page: 1, size: 1000 })
+    const tablesResult = await window.electronAPI.dbdict.getTables(activeEngine.value, activeDatabase.value, { page: 1, size: 1000 })
     if (tablesResult.code === 200) {
       allTables.value = tablesResult.data
     }
@@ -302,7 +318,7 @@ const selectTable = async (table: any) => {
   
   try {
     // 获取表字段
-    const result = await window.electronAPI.dbdict.getTableFields(table.table_name)
+    const result = await window.electronAPI.dbdict.getTableFields(activeEngine.value, activeDatabase.value, table.table_name)
     if (result.code === 200) {
       tableFields.value = result.data
       // 默认选中所有字段
@@ -397,16 +413,17 @@ const handleDownload = async () => {
     const simpleParams = JSON.parse(JSON.stringify(params))
     console.log('简化后的参数:', simpleParams)
     
-    // 调用下载API（主进程会保存文件）
-    const result = await window.electronAPI.dbdict.downloadData(simpleParams, saveResult.filePath)
-    console.log('下载结果:', result)
-    
-    if (result && result.success) {
-      ElMessage.success(`下载成功！`)
-      
-      // 打开文件所在位置
-      window.electronAPI.shell.showItemInFolder(result.path)
-    }
+    // TODO: downloadData 方法未实现（preload 未暴露该方法，且 DatabaseDictAPI 类无此方法）
+    // const result = await window.electronAPI.dbdict.downloadData(simpleParams, saveResult.filePath)
+    // console.log('下载结果:', result)
+    //
+    // if (result && result.success) {
+    //   ElMessage.success(`下载成功！`)
+    //
+    //   // 打开文件所在位置
+    //   window.electronAPI.shell.showItemInFolder(result.path)
+    // }
+    ElMessage.warning('下载功能尚未实现')
   } catch (error: any) {
     console.error('下载失败:', error)
     ElMessage.error(error.message || '下载失败')

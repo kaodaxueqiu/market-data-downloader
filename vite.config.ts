@@ -62,7 +62,8 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 5200,
-    strictPort: true
+    strictPort: true,
+    open: true
   },
   define: {
     'process.env.VSCODE_TEXTMATE_DEBUG': 'false'

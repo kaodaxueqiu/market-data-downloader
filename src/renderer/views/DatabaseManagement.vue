@@ -166,6 +166,31 @@
           </div>
 
         </el-tab-pane>
+
+        <el-tab-pane label="库表管理" name="schema" class="schema-tab-pane">
+          <div class="schema-toolbar">
+            <el-radio-group v-model="schemaEngine" size="small" @change="onSchemaEngineChange">
+              <el-radio-button value="postgresql">PostgreSQL</el-radio-button>
+              <el-radio-button value="clickhouse">ClickHouse</el-radio-button>
+            </el-radio-group>
+            <el-select v-model="schemaDb" placeholder="选择数据库" size="small" filterable style="margin-left:12px;width:180px" @change="onSchemaDbChange" :disabled="!schemaDbList.length">
+              <el-option v-for="d in schemaDbList" :key="d" :label="d" :value="d" />
+            </el-select>
+            <el-button size="small" type="primary" @click="openCreateDbDialog(schemaEngine)" style="margin-left:8px">+ 新建库</el-button>
+            <el-button size="small" type="success" plain :disabled="!schemaDb" @click="openCreateTableDialog(schemaEngine, schemaDb)">+ 新建表</el-button>
+            <el-button size="small" type="danger" plain :disabled="!schemaDb" @click="confirmDropDb(schemaEngine, schemaDb)">删除库</el-button>
+          </div>
+
+          <el-table :data="schemaTables" stripe size="small" v-loading="schemaLoading" empty-text="请选择数据库">
+            <el-table-column prop="name" label="表名" min-width="200" />
+            <el-table-column label="操作" width="180" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" text type="primary" @click="openMoveTableDialog(row.name)">{{ schemaEngine === 'clickhouse' ? '移动/重命名' : '重命名' }}</el-button>
+                <el-button size="small" text type="danger" @click="confirmDropTable(row.name)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -227,6 +252,147 @@
       <template #footer>
         <el-button @click="pwdDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="pwdLoading" @click="doChangePassword">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 建库弹窗 -->
+    <el-dialog v-model="createDbDialogVisible" title="新建数据库" width="420px" destroy-on-close>
+      <el-form label-width="80px" size="small">
+        <el-form-item label="引擎">
+          <el-tag>{{ createDbForm.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse' }}</el-tag>
+        </el-form-item>
+        <el-form-item label="数据库名">
+          <el-input v-model="createDbForm.name" placeholder="字母开头，可含字母/数字/下划线" @keyup.enter="doCreateDb" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDbDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="createDbLoading" @click="doCreateDb">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 建表弹窗（可视化） -->
+    <el-dialog v-model="createTableDialogVisible" title="新建表" width="780px" destroy-on-close :close-on-click-modal="false">
+      <el-form label-width="80px" size="small">
+        <el-form-item label="引擎">
+          <el-tag>{{ createTableForm.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse' }}</el-tag>
+        </el-form-item>
+        <el-form-item label="数据库">
+          <el-tag>{{ createTableForm.dbName }}</el-tag>
+        </el-form-item>
+        <el-form-item label="表名">
+          <el-input v-model="createTableForm.table_name" placeholder="字母开头，可含字母/数字/下划线" style="width:240px" />
+        </el-form-item>
+        <el-form-item label="表注释">
+          <el-input v-model="createTableForm.comment" placeholder="可选" style="width:360px" />
+        </el-form-item>
+      </el-form>
+
+      <div class="ct-columns-header">
+        <span>列定义</span>
+        <el-button size="small" type="primary" plain @click="addColumn">+ 添加列</el-button>
+      </div>
+      <el-table :data="createTableForm.columns" border size="small" empty-text="请添加列" style="margin-bottom:12px">
+        <el-table-column label="#" width="40" type="index" />
+        <el-table-column label="列名" width="150">
+          <template #default="{ row }">
+            <el-input v-model="row.name" size="small" placeholder="列名" />
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="180">
+          <template #default="{ row }">
+            <el-select v-model="row.type" size="small" filterable allow-create default-first-option placeholder="选择或输入">
+              <el-option v-for="t in getTypeList(createTableForm.engine)" :key="t" :label="t" :value="t" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="可空" width="60" align="center">
+          <template #default="{ row }">
+            <el-checkbox v-model="row.nullable" :disabled="row.primary_key" />
+          </template>
+        </el-table-column>
+        <el-table-column v-if="createTableForm.engine === 'postgresql'" label="PK" width="60" align="center">
+          <template #default="{ row }">
+            <el-checkbox v-model="row.primary_key" @change="onPkChange(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="默认值" width="150">
+          <template #default="{ row }">
+            <el-input v-model="row.default" size="small" placeholder="表达式" />
+          </template>
+        </el-table-column>
+        <el-table-column label="注释" min-width="120">
+          <template #default="{ row }">
+            <el-input v-model="row.comment" size="small" placeholder="注释" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="60" align="center">
+          <template #default="{ $index }">
+            <el-button link size="small" type="danger" @click="removeColumn($index)">删</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- CH 专属区域 -->
+      <div v-if="createTableForm.engine === 'clickhouse'" class="ct-ch-section">
+        <el-form label-width="100px" size="small">
+          <el-form-item label="引擎">
+            <el-select v-model="createTableForm.engine_ch" filterable allow-create default-first-option placeholder="选择引擎" style="width:240px">
+              <el-option v-for="e in chEngineList" :key="e.value" :label="e.label" :value="e.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="ORDER BY">
+            <el-input v-model="createTableForm.order_by" placeholder="(id) 或 (date, id)" style="width:240px" />
+          </el-form-item>
+          <el-form-item label="PARTITION BY">
+            <el-input v-model="createTableForm.partition_by" placeholder="可选，如 toYYYYMM(date)" style="width:240px" />
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <el-button @click="createTableDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="createTableLoading" @click="doCreateTable">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 重命名/移动表弹窗 -->
+    <el-dialog v-model="moveTableDialogVisible" title="表操作" width="500px" destroy-on-close>
+      <div style="margin-bottom:12px;font-size:13px;color:#606266">
+        当前：{{ moveTableForm.dbName }}.{{ moveTableForm.tableName }}
+      </div>
+
+      <!-- PG 只有重命名 -->
+      <el-form v-if="moveTableForm.engine !== 'clickhouse'" label-width="80px" size="small">
+        <el-form-item label="新表名">
+          <el-input v-model="moveTableForm.target_table" placeholder="新表名" style="width:240px" @keyup.enter="doMoveTable" />
+        </el-form-item>
+      </el-form>
+
+      <!-- CH 用 Tab 区分 -->
+      <el-tabs v-else v-model="moveActiveTab">
+        <el-tab-pane label="重命名" name="rename">
+          <el-form label-width="80px" size="small">
+            <el-form-item label="新表名">
+              <el-input v-model="moveTableForm.target_table" placeholder="新表名" style="width:240px" @keyup.enter="doMoveTable" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="移动到其他库" name="move">
+          <el-form label-width="80px" size="small">
+            <el-form-item label="目标库">
+              <el-select v-model="moveTableForm.target_database" placeholder="选择目标库" filterable style="width:240px">
+                <el-option v-for="d in moveTargetDbList" :key="d" :label="d" :value="d" :disabled="d === moveTableForm.dbName" />
+              </el-select>
+            </el-form-item>
+            <div v-if="!moveTableForm.target_database" style="font-size:12px;color:#e6a23c;margin-left:80px">请选择目标库（不能是当前库）</div>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
+
+      <template #footer>
+        <el-button @click="moveTableDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="moveTableLoading" :disabled="!canMoveSubmit" @click="doMoveTable">确认</el-button>
       </template>
     </el-dialog>
   </div>
@@ -677,6 +843,304 @@ async function clearSelectedTables() {
   }
 }
 
+// ========== 库表管理 Tab ==========
+const schemaEngine = ref<'postgresql' | 'clickhouse'>('postgresql')
+const schemaDb = ref('')
+const schemaTables = ref<any[]>([])
+const schemaLoading = ref(false)
+
+const schemaDbList = computed(() => {
+  const info = dbTreeRaw.value[schemaEngine.value]
+  return (info?.databases || []).map((d: any) => d.name)
+})
+
+function onSchemaEngineChange() {
+  schemaDb.value = ''
+  schemaTables.value = []
+}
+
+async function onSchemaDbChange() {
+  schemaTables.value = []
+  if (!schemaDb.value) return
+  schemaLoading.value = true
+  try {
+    const res = await api.listTables(schemaEngine.value, schemaDb.value)
+    if (res.success && res.data?.tables) {
+      schemaTables.value = res.data.tables
+    }
+  } finally {
+    schemaLoading.value = false
+  }
+}
+
+// ========== 建库 ==========
+const createDbDialogVisible = ref(false)
+const createDbLoading = ref(false)
+const createDbForm = ref({ engine: 'postgresql' as string, name: '' })
+
+function openCreateDbDialog(engine: string) {
+  createDbForm.value = { engine, name: '' }
+  createDbDialogVisible.value = true
+}
+
+async function doCreateDb() {
+  const name = createDbForm.value.name.trim()
+  if (!name) return ElMessage.warning('请输入数据库名')
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) return ElMessage.warning('名称须以字母开头，仅含字母/数字/下划线')
+  createDbLoading.value = true
+  try {
+    const res = await api.createDatabase({ db_type: createDbForm.value.engine, name })
+    if (res.success) {
+      ElMessage.success(res.message || '数据库创建成功')
+      createDbDialogVisible.value = false
+      await loadDatabases()
+    } else {
+      ElMessage.error(res.error || '创建失败')
+    }
+  } finally {
+    createDbLoading.value = false
+  }
+}
+
+// ========== 删库 ==========
+async function confirmDropDb(engine: string, dbName: string) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `此操作不可恢复！\n\n将删除数据库: ${dbName}\n类型: ${engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse'}\n\n请输入 "确认删除" 以继续:`,
+      '删除数据库',
+      { confirmButtonText: '确认删除', cancelButtonText: '取消', inputPlaceholder: '请输入 确认删除', inputValidator: (v) => v === '确认删除' || '请输入"确认删除"' }
+    )
+    if (value !== '确认删除') return
+  } catch { return }
+  const res = await api.dropDatabase(engine, dbName)
+  if (res.success) {
+    ElMessage.success(res.message || '数据库删除成功')
+    await loadDatabases()
+    if (schemaEngine.value === engine && schemaDb.value === dbName) {
+      schemaDb.value = ''
+      schemaTables.value = []
+    }
+    if (resEngine.value === engine && resDb.value === dbName) {
+      resDb.value = ''
+      resAllTables.value = []
+      resRows.value = []
+    }
+  } else {
+    ElMessage.error(res.error || '删除失败')
+  }
+}
+
+// ========== 建表 ==========
+const pgTypeList = ['smallint', 'integer', 'bigint', 'serial', 'bigserial', 'real', 'double precision', 'numeric(18,4)', 'char(10)', 'varchar(20)', 'text', 'date', 'time', 'timestamp', 'timestamptz', 'boolean', 'json', 'jsonb', 'uuid', 'bytea']
+const chTypeList = ['Int8', 'Int16', 'Int32', 'Int64', 'UInt8', 'UInt16', 'UInt32', 'UInt64', 'Float32', 'Float64', 'Decimal(18,4)', 'String', 'FixedString(16)', 'Date', 'DateTime', 'DateTime64(3)', 'UUID', 'Enum8(...)', 'Enum16(...)', 'Array(String)']
+const chEngineList = [
+  { label: 'MergeTree', value: 'MergeTree' },
+  { label: 'ReplacingMergeTree', value: 'ReplacingMergeTree' },
+  { label: 'SummingMergeTree', value: 'SummingMergeTree' },
+  { label: 'AggregatingMergeTree', value: 'AggregatingMergeTree' },
+  { label: 'CollapsingMergeTree', value: 'CollapsingMergeTree' },
+  { label: 'ReplicatedMergeTree', value: 'ReplicatedMergeTree' },
+]
+
+function getTypeList(engine: string) {
+  return engine === 'postgresql' ? pgTypeList : chTypeList
+}
+
+const createTableDialogVisible = ref(false)
+const createTableLoading = ref(false)
+const createTableForm = ref({
+  engine: 'postgresql' as string,
+  dbName: '',
+  table_name: '',
+  comment: '',
+  columns: [] as any[],
+  engine_ch: 'MergeTree',
+  order_by: '',
+  partition_by: '',
+})
+
+function openCreateTableDialog(engine: string, dbName: string) {
+  createTableForm.value = {
+    engine,
+    dbName,
+    table_name: '',
+    comment: '',
+    columns: [{ name: '', type: engine === 'postgresql' ? 'bigserial' : 'Int64', nullable: false, primary_key: true, default: '', comment: '' }],
+    engine_ch: 'MergeTree',
+    order_by: '',
+    partition_by: '',
+  }
+  createTableDialogVisible.value = true
+}
+
+function addColumn() {
+  createTableForm.value.columns.push({ name: '', type: '', nullable: true, primary_key: false, default: '', comment: '' })
+}
+
+function removeColumn(index: number) {
+  createTableForm.value.columns.splice(index, 1)
+}
+
+function onPkChange(row: any) {
+  if (row.primary_key) row.nullable = false
+}
+
+async function doCreateTable() {
+  const f = createTableForm.value
+  if (!f.table_name.trim()) return ElMessage.warning('请输入表名')
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(f.table_name.trim())) return ElMessage.warning('表名须以字母开头，仅含字母/数字/下划线')
+  if (!f.columns.length) return ElMessage.warning('请至少添加一列')
+  for (const col of f.columns) {
+    if (!col.name.trim()) return ElMessage.warning('每列必须有列名')
+    if (!col.type) return ElMessage.warning(`列「${col.name}」未选择类型`)
+  }
+  if (f.engine === 'clickhouse') {
+    if (!f.engine_ch) return ElMessage.warning('请选择 CH 引擎')
+    if (!f.order_by.trim()) return ElMessage.warning('请填写 ORDER BY')
+  }
+  createTableLoading.value = true
+  try {
+    const body: any = {
+      table_name: f.table_name.trim(),
+      columns: f.columns.map(c => ({
+        name: c.name.trim(),
+        type: c.type,
+        nullable: c.nullable,
+        primary_key: c.primary_key,
+        default: c.default,
+        comment: c.comment,
+      })),
+      comment: f.comment,
+    }
+    if (f.engine === 'clickhouse') {
+      body.engine = f.engine_ch
+      body.order_by = f.order_by.trim()
+      body.partition_by = f.partition_by.trim()
+    }
+    const res = await api.createTable(f.engine, f.dbName, body)
+    if (res.success) {
+      ElMessage.success(res.message || '表创建成功')
+      createTableDialogVisible.value = false
+      // 刷新库表管理 Tab
+      if (schemaEngine.value === f.engine && schemaDb.value === f.dbName) {
+        await onSchemaDbChange()
+      }
+      // 刷新授权 Tab
+      if (resEngine.value === f.engine && resDb.value === f.dbName) {
+        await onResDbChange()
+      }
+    } else {
+      ElMessage.error(res.error || '创建失败')
+    }
+  } finally {
+    createTableLoading.value = false
+  }
+}
+
+// ========== 删表 ==========
+async function confirmDropTable(tableName: string) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `此操作不可恢复！\n\n将删除表: ${schemaDb.value}.${tableName}\n\n请输入 "确认删除" 以继续:`,
+      '删除表',
+      { confirmButtonText: '确认删除', cancelButtonText: '取消', inputPlaceholder: '请输入 确认删除', inputValidator: (v) => v === '确认删除' || '请输入"确认删除"' }
+    )
+    if (value !== '确认删除') return
+  } catch { return }
+  const res = await api.dropTable(schemaEngine.value, schemaDb.value, tableName)
+  if (res.success) {
+    ElMessage.success(res.message || '表删除成功')
+    await onSchemaDbChange()
+  } else {
+    ElMessage.error(res.error || '删除失败')
+  }
+}
+
+// ========== 移动/重命名表 ==========
+const moveTableDialogVisible = ref(false)
+const moveTableLoading = ref(false)
+const moveActiveTab = ref('rename')
+const moveTableForm = ref({
+  engine: 'postgresql' as string,
+  dbName: '',
+  tableName: '',
+  target_database: '',
+  target_table: '',
+})
+
+const moveTargetDbList = computed(() => {
+  const info = dbTreeRaw.value[moveTableForm.value.engine]
+  return (info?.databases || []).map((d: any) => d.name)
+})
+
+const canMoveSubmit = computed(() => {
+  const f = moveTableForm.value
+  if (f.engine !== 'clickhouse') {
+    // PG 只有重命名
+    return f.target_table.trim() && f.target_table.trim() !== f.tableName
+  }
+  if (moveActiveTab.value === 'rename') {
+    return f.target_table.trim() && f.target_table.trim() !== f.tableName
+  }
+  // move tab：必须选了目标库（不能是当前库）
+  return !!f.target_database && f.target_database !== f.dbName
+})
+
+function openMoveTableDialog(tableName: string) {
+  moveTableForm.value = {
+    engine: schemaEngine.value,
+    dbName: schemaDb.value,
+    tableName,
+    target_database: '',
+    target_table: tableName,
+  }
+  moveActiveTab.value = 'rename'
+  moveTableDialogVisible.value = true
+}
+
+async function doMoveTable() {
+  const f = moveTableForm.value
+  const isMove = f.engine === 'clickhouse' && moveActiveTab.value === 'move'
+  if (isMove) {
+    if (!f.target_database || f.target_database === f.dbName) return ElMessage.warning('请选择目标库')
+    moveTableLoading.value = true
+    try {
+      const res = await api.moveTable(f.engine, f.dbName, f.tableName, {
+        target_database: f.target_database,
+        target_table: f.tableName,
+      })
+      if (res.success) {
+        ElMessage.success(res.message || '移动成功')
+        moveTableDialogVisible.value = false
+        await onSchemaDbChange()
+      } else {
+        ElMessage.error(res.error || '操作失败')
+      }
+    } finally {
+      moveTableLoading.value = false
+    }
+    return
+  }
+  // 重命名（PG 或 CH rename tab）
+  if (!f.target_table.trim()) return ElMessage.warning('请输入新表名')
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(f.target_table.trim())) return ElMessage.warning('表名须以字母开头，仅含字母/数字/下划线')
+  moveTableLoading.value = true
+  try {
+    const res = await api.moveTable(f.engine, f.dbName, f.tableName, {
+      target_table: f.target_table.trim(),
+    })
+    if (res.success) {
+      ElMessage.success(res.message || '重命名成功')
+      moveTableDialogVisible.value = false
+      await onSchemaDbChange()
+    } else {
+      ElMessage.error(res.error || '操作失败')
+    }
+  } finally {
+    moveTableLoading.value = false
+  }
+}
+
 // ========== 初始化 ==========
 onMounted(() => {
   loadDatabases()
@@ -814,4 +1278,28 @@ onMounted(() => {
 .res-actions { margin-top: 12px; display: flex; gap: 10px; }
 
 .res-guide { padding: 40px 0; }
+
+.schema-tab-pane {
+  overflow: hidden !important;
+}
+.schema-toolbar {
+  display: flex; align-items: center; margin-bottom: 12px;
+}
+
+.ct-columns-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ct-ch-section {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 12px 16px 0;
+  margin-bottom: 12px;
+  background: #f9fafc;
+}
 </style>

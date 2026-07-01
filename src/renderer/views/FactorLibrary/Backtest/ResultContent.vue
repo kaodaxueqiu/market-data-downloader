@@ -1996,6 +1996,7 @@ $primary-light: #60A5FA;     // 天蓝次色
 $primary-lighter: #EFF6FF;   // 极浅蓝背景
 $primary-soft: #BFDBFE;      // 柔和蓝
 $accent: #F59E0B;            // 琥珀高亮 CTA
+$warning: #E6A23C;           // 警告色（Element Plus warning）
 $accent-light: #FEF3C7;      // 浅琥珀背景
 $positive: #22C55E;          // 明亮绿正值
 $positive-light: #DCFCE7;    // 浅绿背景

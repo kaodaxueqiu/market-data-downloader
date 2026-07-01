@@ -1249,38 +1249,32 @@ const runCodeCheck = async () => {
         fields: fields.map(f => ({ name: f, exists: false }))
       }
       
-      // 搜索表是否存在 - 分别搜索两个数据源
+      // 搜索表是否存在（search 自适应遍历用户可访问的所有库）
       try {
         let foundTable: any = null
-        let foundDatabase: 'postgresql' | 'clickhouse' | 'clickhouse_data' | undefined
-        
-        // 搜索两个数据源：clickhouse 和 postgresql
-        for (const datasource of ['clickhouse', 'postgresql'] as const) {
-          try {
-            const searchResult = await window.electronAPI.dbdict.search(tableName, datasource)
-            
-            // 在搜索结果中查找精确匹配的表（type='table' 且表名精确匹配）
-            const results = searchResult.data || []
-            for (const item of results) {
-              if (item.table_name === tableName && item.type === 'table') {
-                foundTable = item
-                foundDatabase = datasource
-                break
-              }
+
+        try {
+          const searchResult = await window.electronAPI.dbdict.search(tableName)
+
+          // 在搜索结果中查找精确匹配的表（type='table' 且表名精确匹配）
+          const results = searchResult.data || []
+          for (const item of results) {
+            if (item.table_name === tableName && item.type === 'table') {
+              foundTable = item
+              break
             }
-            if (foundTable) break
-          } catch (e) {
-            console.error(`搜索 ${datasource} 失败:`, e)
           }
+        } catch (e) {
+          console.error('搜索表失败:', e)
         }
-        
+
         if (foundTable) {
           result[tableName].tableExists = true
-          result[tableName].database = foundDatabase
-          
+          result[tableName].database = foundTable.database
+
           // 获取表的字段列表进行比对
           try {
-            const tableDetail = await window.electronAPI.dbdict.getTableDetail(tableName, foundDatabase!)
+            const tableDetail = await window.electronAPI.dbdict.getTableDetail(foundTable.engine, foundTable.database, tableName)
             if (tableDetail.code === 200 && tableDetail.data?.columns) {
               const dbFields = tableDetail.data.columns.map((c: any) => c.column_name)
               // 检查每个字段是否存在
@@ -1483,7 +1477,7 @@ const loadFieldList = async (index: number) => {
   fieldListLoading.value[index] = true
   try {
     console.log('🔍 加载字段列表:', ds.table, 'datasource:', ds.database)
-    const result = await window.electronAPI.dbdict.getTableDetail(ds.table, ds.database)
+    const result = await window.electronAPI.dbdict.getTableDetail(ds.database, ds.database, ds.table)
     console.log('✅ 字段列表返回:', result)
     if (result.code === 200 && result.data?.columns) {
       // 使用展开运算符确保 Vue 响应式更新
@@ -1725,7 +1719,7 @@ const handleSubmit = async () => {
         // field_mappings: 只提交有值的映射
         const mappings: Record<string, string> = {}
         for (const [k, v] of Object.entries(ds.field_mappings || {})) {
-          if (v) mappings[k] = v
+          if (v) mappings[k] = v as string
         }
         if (Object.keys(mappings).length > 0) {
           result.field_mappings = mappings

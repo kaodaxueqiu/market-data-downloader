@@ -2012,7 +2012,7 @@ const handleTableChange = async (index: number) => {
   
   try {
     // 不指定数据源，由后端自适应定位表所在的库
-    const result = await window.electronAPI.dbdict.getTableFields(source.table)
+    const result = await window.electronAPI.dbdict.getTableFields(source.database, source.database, source.table)
     if (result.code === 200) {
       source.availableFields = result.data || []
     }

@@ -148,7 +148,7 @@ import GlobalSearchDropdown from '../../components/GlobalSearchDropdown.vue'
 
 const enginesLoading = ref(false)
 const enginesError = ref('')
-const engines = ref<{ code: string; name: string; databases: { name: string }[] }[]>([])
+const engines = ref<{ code: string; name: string; databases: { name: string; table_count?: number }[] }[]>([])
 const activeEngine = ref('postgresql')
 const activeDatabase = ref('')
 const showPreview = ref(false)
@@ -161,7 +161,7 @@ const currentEngineDatabases = computed(() => {
 const categoryFilter = ref('')
 
 // 从表数据推导分类，不依赖后端 getCategories（后端未改造前的可靠兜底）
-const categories = computed(() => {
+const deriveCategories = (): { code: string; name: string; table_count: number }[] => {
   if (!tables.value.length) return []
   const catMap = new Map<string, number>()
   for (const t of tables.value) {
@@ -176,7 +176,8 @@ const categories = computed(() => {
     { code: 'all', name: '全部', table_count: tables.value.length },
     ...items
   ]
-})
+}
+const categories = ref<{ code: string; name: string; table_count: number }[]>([])
 const tablesLoading = ref(false)
 const tables = ref<any[]>([])
 const selectedTable = ref<any>(null)
@@ -267,6 +268,7 @@ const loadTables = async () => {
       tables.value = (result.data || []).sort((a: any, b: any) =>
         (a.table_name || '').localeCompare(b.table_name || '')
       )
+      if (!categories.value.length) categories.value = deriveCategories()
     } else {
       ElMessage.error(result.msg || '加载表列表失败')
     }

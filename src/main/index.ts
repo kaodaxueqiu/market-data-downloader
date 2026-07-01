@@ -2531,50 +2531,9 @@ ipcMain.handle('dbdict:previewTable', async (_event, engine: string, database: s
 })
 
 // 下载静态数据（旧接口，保留兼容）
-ipcMain.handle('dbdict:downloadData', async (_event, params: any, savePath: string) => {
-  const fs = require('fs').promises
-  
-  try {
-    console.log('开始下载静态数据，参数:', params)
-    console.log('保存路径:', savePath)
-    
-    const result = await dbDictAPI.downloadData(params)
-    
-    console.log('下载完成，数据类型:', typeof result)
-    console.log('是否Buffer:', Buffer.isBuffer(result))
-    console.log('是否ArrayBuffer:', result instanceof ArrayBuffer)
-    
-    // 根据格式保存文件
-    if (params.format === 'csv') {
-      // CSV格式 - arraybuffer/Buffer 数据
-      if (Buffer.isBuffer(result)) {
-        console.log('保存Buffer数据，大小:', result.length)
-        await fs.writeFile(savePath, result)
-      } else if (result instanceof ArrayBuffer) {
-        console.log('保存ArrayBuffer数据，大小:', result.byteLength)
-        await fs.writeFile(savePath, Buffer.from(result))
-      } else {
-        // 可能是字符串
-        console.log('保存字符串数据')
-        await fs.writeFile(savePath, result, 'utf-8')
-      }
-    } else {
-      // JSON格式 - 对象转字符串
-      console.log('保存JSON数据')
-      const jsonStr = JSON.stringify(result, null, 2)
-      await fs.writeFile(savePath, jsonStr, 'utf-8')
-    }
-    
-    console.log(`✅ 文件已成功保存到: ${savePath}`)
-    
-    // 返回简单对象
-    const returnValue = { success: true, path: savePath }
-    console.log('返回值:', returnValue)
-    return returnValue
-  } catch (error: any) {
-    console.error('❌ 下载保存失败:', error)
-    throw new Error(error.message || '下载静态数据失败')
-  }
+ipcMain.handle('dbdict:downloadData', async (_event, _params: any, _savePath: string) => {
+  // TODO: DatabaseDictAPI.downloadData 方法未实现
+  return { success: false, error: 'downloadData 方法未实现' }
 })
 
 // ========== WebSocket 实时订阅任务管理 ==========
@@ -6752,6 +6711,26 @@ ipcMain.handle('dbPerm:batchGrantUsers', async (_e, body: any) => {
   return wrapDbPerm(() => dbPermPost('/resources/grants/batch', body))()
 })
 
+ipcMain.handle('dbPerm:createDatabase', async (_e, body: any) => {
+  return wrapDbPerm(() => dbPermPost('/databases', body))()
+})
+
+ipcMain.handle('dbPerm:dropDatabase', async (_e, dbType: string, dbName: string) => {
+  return wrapDbPerm(() => dbPermDelete(`/databases/${dbType}/${dbName}`))()
+})
+
+ipcMain.handle('dbPerm:createTable', async (_e, dbType: string, dbName: string, body: any) => {
+  return wrapDbPerm(() => dbPermPost(`/databases/${dbType}/${dbName}/tables`, body))()
+})
+
+ipcMain.handle('dbPerm:dropTable', async (_e, dbType: string, dbName: string, tableName: string) => {
+  return wrapDbPerm(() => dbPermDelete(`/databases/${dbType}/${dbName}/tables/${tableName}`))()
+})
+
+ipcMain.handle('dbPerm:moveTable', async (_e, dbType: string, dbName: string, tableName: string, body: any) => {
+  return wrapDbPerm(() => dbPermPost(`/databases/${dbType}/${dbName}/tables/${tableName}/move`, body))()
+})
+
 // ── IM 独立进程 ──
 ipcMain.handle('im:openWindow', async () => {
   try {
@@ -6759,8 +6738,8 @@ ipcMain.handle('im:openWindow', async () => {
     const imExePath =
       process.env.NODE_ENV === 'development'
         ? isMac
-          ? join(__dirname, '../../../openIM/electron-client/app/release/prod/1.2.8/mac-arm64/G-Snowball-IM.app/Contents/MacOS/G-Snowball-IM')
-          : join(__dirname, '../../../openIM/electron-client/app/release/prod/1.2.8/win-unpacked/G-Snowball-IM.exe')
+          ? join(__dirname, '../../../openIM/electron-client/app/release/prod/1.2.9/mac-arm64/G-Snowball-IM.app/Contents/MacOS/G-Snowball-IM')
+          : join(__dirname, '../../../openIM/electron-client/app/release/prod/1.2.9/win-unpacked/G-Snowball-IM.exe')
         : isMac
           ? join(process.resourcesPath, 'im', 'G-Snowball-IM.app', 'Contents', 'MacOS', 'G-Snowball-IM')
           : join(process.resourcesPath, 'im', 'G-Snowball-IM.exe')

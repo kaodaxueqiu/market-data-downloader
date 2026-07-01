@@ -246,6 +246,8 @@ const selectedCategory = ref('all')
 const selectedTableName = ref('')
 const sqlBuilderVisible = ref(false)
 const showDetails = ref(false)
+const activeEngine = ref('')
+const activeDatabase = ref('')
 
 // 数据
 const categories = ref<any[]>([
@@ -310,8 +312,22 @@ const loadCategories = async () => {
     // 设置API Key
     await window.electronAPI.dbdict.setApiKey(fullApiKey)
     
+    // 获取用户可访问的引擎及库列表，确定 engine 和 database
+    const dsResult = await window.electronAPI.dbdict.getDatasources()
+    if (dsResult.code === 200 && dsResult.data?.engines?.length > 0) {
+      activeEngine.value = dsResult.data.engines[0].code
+      const firstDb = dsResult.data.engines[0].databases?.[0]?.name
+      if (firstDb) {
+        activeDatabase.value = firstDb
+      }
+    }
+    if (!activeEngine.value || !activeDatabase.value) {
+      ElMessage.error('未获取到可用的数据库引擎信息')
+      return
+    }
+    
     // 获取分类统计
-    const result = await window.electronAPI.dbdict.getCategories()
+    const result = await window.electronAPI.dbdict.getCategories(activeEngine.value, activeDatabase.value)
     if (result.code === 200) {
       const allCount = result.data.reduce((sum: number, cat: any) => sum + cat.table_count, 0)
       categories.value = [
@@ -346,7 +362,7 @@ const loadTables = async (category?: string) => {
       console.log('📋 [数据库字典] 加载所有表数据')
     }
     
-    const result = await window.electronAPI.dbdict.getTables(params)
+    const result = await window.electronAPI.dbdict.getTables(activeEngine.value, activeDatabase.value, params)
     console.log('✅ [数据库字典] API返回结果:', result)
     if (result.code === 200) {
       allTables.value = result.data
@@ -406,7 +422,7 @@ const selectTable = async (table: any) => {
   
   loading.value = true
   try {
-    const result = await window.electronAPI.dbdict.getTableDetail(table.table_name)
+    const result = await window.electronAPI.dbdict.getTableDetail(activeEngine.value, activeDatabase.value, table.table_name)
     if (result.code === 200) {
       tableDetail.value = result.data
     }
@@ -459,18 +475,21 @@ const buildSQL = async () => {
       .map(c => c.trim())
       .filter(c => c)
     
-    const result = await window.electronAPI.dbdict.buildSQL({
-      table_name: selectedTableName.value,
-      columns: sqlForm.value.columns.length > 0 ? sqlForm.value.columns : undefined,
-      conditions: conditions.length > 0 ? conditions : undefined,
-      order_by: sqlForm.value.order_by || undefined,
-      limit: sqlForm.value.limit
-    })
-    
-    if (result.code === 200) {
-      generatedSQL.value = result.data.sql
-      ElMessage.success('SQL生成成功')
+    // 前端拼接 SQL（preload 未暴露 buildSQL 方法）
+    const columnsPart = sqlForm.value.columns.length > 0
+      ? sqlForm.value.columns.join(', ')
+      : '*'
+    let sql = `SELECT ${columnsPart} FROM ${selectedTableName.value}`
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(' AND ')}`
     }
+    if (sqlForm.value.order_by) {
+      sql += ` ORDER BY ${sqlForm.value.order_by}`
+    }
+    sql += ` LIMIT ${sqlForm.value.limit}`
+    
+    generatedSQL.value = sql
+    ElMessage.success('SQL生成成功')
   } catch (error: any) {
     console.error('SQL构建失败:', error)
     ElMessage.error(error.message || 'SQL构建失败')
