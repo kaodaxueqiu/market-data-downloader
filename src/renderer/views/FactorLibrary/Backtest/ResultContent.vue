@@ -226,6 +226,8 @@
 
         <!-- 结果展示 -->
         <template v-if="task.status === 'completed' && result">
+          <el-tabs v-model="activeReportTab" class="result-tabs">
+          <el-tab-pane label="概览" name="overview">
           <!-- ========== 研究分析（回测三模式） ========== -->
           <div v-if="summary" class="research-analysis">
             <!-- 配置告警（红字置顶） -->
@@ -952,6 +954,12 @@
           <FactorValuesSection :task-id="props.taskId!" />
 
           <el-empty v-if="!result.factor_results?.length" description="暂无回测结果数据" />
+          </el-tab-pane>
+
+          <el-tab-pane label="详细报告 v0.2.6" name="report">
+            <ReportView :report="reportData" :admission-report="admissionReport" :active="activeReportTab === 'report'" />
+          </el-tab-pane>
+          </el-tabs>
         </template>
       </template>
     </template>
@@ -987,6 +995,7 @@ import {
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import FactorValuesSection from './FactorValuesSection.vue'
+import ReportView from './ReportView.vue'
 
 // electronAPI 类型已在 preload/index.ts 中全局定义
 
@@ -1012,6 +1021,8 @@ const detailLoading = ref(false)
 const task = ref<any>(null)
 const result = ref<any>(null)
 const activeVariant = ref(0)
+// v0.2.6 详细报告 Tab
+const activeReportTab = ref('overview')
 
 // variant 文案映射
 const getVariantLabel = (variant: string) => {
@@ -1028,6 +1039,10 @@ const getVariantLabel = (variant: string) => {
 const summary = computed<any>(() => {
   return result.value?.summary ?? result.value?.factor_results?.[0]?.summary ?? null
 })
+// v0.2.6 report（追加式，缺失则子组件显示空态）
+const reportData = computed<any>(() => summary.value?.report ?? null)
+// 入库审核报告（仅 admission 模式有）
+const admissionReport = computed<any>(() => summary.value?.admission_report ?? null)
 const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
 
 // 风险中性化报告

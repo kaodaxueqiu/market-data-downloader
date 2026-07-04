@@ -565,6 +565,64 @@
                 style="margin: 8px 0;"
                 title="分钟行情仅覆盖近期，所选区间较长时分钟 VWAP 样本可能不足，长区间段会自动降级或缺失。"
               />
+
+              <!-- 费率三件套 -->
+              <el-row :gutter="16" class="param-row">
+                <el-col :span="8">
+                  <el-form-item label="无风险利率">
+                    <el-input-number
+                      v-model="formData.backtest_params.risk_free_rate"
+                      :min="0"
+                      :max="10000"
+                      :controls="false"
+                      :disabled="isAdmissionMode"
+                      placeholder="bp，留空默认"
+                      style="width: 100%;"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="买入费率">
+                    <el-input-number
+                      v-model="formData.backtest_params.buy_cost_bps"
+                      :min="0"
+                      :max="10000"
+                      :controls="false"
+                      :disabled="isAdmissionMode"
+                      :placeholder="isAdmissionMode ? '固定 5bp' : 'bp，留空默认'"
+                      style="width: 100%;"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="卖出费率">
+                    <el-input-number
+                      v-model="formData.backtest_params.sell_cost_bps"
+                      :min="0"
+                      :max="10000"
+                      :controls="false"
+                      :disabled="isAdmissionMode"
+                      :placeholder="isAdmissionMode ? '固定 10bp' : 'bp，留空默认'"
+                      style="width: 100%;"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <div class="form-hint">
+                <el-icon><InfoFilled /></el-icon>
+                费率单位为 bp（万分之一），留空则由引擎回退 A 股拆分成本模型
+              </div>
+
+              <!-- admission 强制覆盖提示 -->
+              <el-alert
+                v-if="isAdmissionMode"
+                type="warning"
+                :closable="false"
+                show-icon
+                style="margin: 12px 0;"
+                title="入库审核模式将强制：股票池=中证1000、IC周期=5日、样本内外固定切片、费率买5/卖10bp。以上配置将被忽略。"
+              />
+
               
               <el-form-item label="基准指数">
                 <el-tabs v-model="benchmarkTab" class="benchmark-tabs">
@@ -1022,7 +1080,11 @@ const formData = reactive({
     factor_direction: 'positive',
     buy_price_type: 'daily_open',
     sell_price_type: 'daily_close',
-    benchmarks: [] as string[]
+    benchmarks: [] as string[],
+    // 费率三件套（单位 bp），留空则引擎回退 A 股拆分模型
+    risk_free_rate: null as number | null,
+    buy_cost_bps: null as number | null,
+    sell_cost_bps: null as number | null
   }
 })
 
@@ -1043,6 +1105,9 @@ const researchTiers = [
   { mode: 'admission', label: '入库审核', adds: ['前视快照', '库级共线性 / 正交', '治理结论'] }
 ]
 const currentModeIndex = computed(() => researchModeOrder.indexOf(researchMode.value))
+
+// admission 模式：universe / forward_periods / 费率会被引擎强制覆盖
+const isAdmissionMode = computed(() => researchMode.value === 'admission')
 
 // walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
 const walkForward = reactive({
@@ -1743,7 +1808,11 @@ const handleSubmit = async () => {
         universe: formData.universe,
         backtest_params: {
           ...formData.backtest_params,
-          benchmarks: selectedBenchmarks.value
+          benchmarks: selectedBenchmarks.value,
+          // 费率留空则不提交，交由引擎回退默认模型（admission 模式引擎强制覆盖）
+          risk_free_rate: formData.backtest_params.risk_free_rate ?? undefined,
+          buy_cost_bps: formData.backtest_params.buy_cost_bps ?? undefined,
+          sell_cost_bps: formData.backtest_params.sell_cost_bps ?? undefined
         },
         calc_options: {
           calc_ic: calcOptions.value.includes('calc_ic'),

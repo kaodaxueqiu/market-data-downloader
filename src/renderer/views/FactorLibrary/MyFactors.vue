@@ -1402,6 +1402,57 @@
             </el-col>
           </el-row>
           
+          <!-- 费率三件套 -->
+          <el-row :gutter="16">
+            <el-col :span="8">
+              <el-form-item label="无风险利率">
+                <el-input-number
+                  v-model="backtestForm.risk_free_rate"
+                  :min="0"
+                  :max="10000"
+                  :controls="false"
+                  :disabled="isAdmissionMode"
+                  placeholder="bp，留空默认"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="买入费率">
+                <el-input-number
+                  v-model="backtestForm.buy_cost_bps"
+                  :min="0"
+                  :max="10000"
+                  :controls="false"
+                  :disabled="isAdmissionMode"
+                  :placeholder="isAdmissionMode ? '固定 5bp' : 'bp，留空默认'"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="卖出费率">
+                <el-input-number
+                  v-model="backtestForm.sell_cost_bps"
+                  :min="0"
+                  :max="10000"
+                  :controls="false"
+                  :disabled="isAdmissionMode"
+                  :placeholder="isAdmissionMode ? '固定 10bp' : 'bp，留空默认'"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-alert
+            v-if="isAdmissionMode"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px;"
+            title="入库审核模式将强制：股票池=中证1000、IC周期=5日、样本内外固定切片、费率买5/卖10bp。以上配置将被忽略。"
+          />
+          
           <el-form-item label="基准指数">
             <el-tabs v-model="benchmarkTab" class="benchmark-tabs-mini">
               <!-- 标准指数 Tab -->
@@ -3444,7 +3495,11 @@ const backtestForm = reactive({
   factor_direction: 'positive',
   buy_price_type: 'daily_open',
   sell_price_type: 'daily_close',
-  benchmarks: [] as string[]
+  benchmarks: [] as string[],
+  // 费率三件套（单位 bp），留空则引擎回退 A 股拆分模型
+  risk_free_rate: null as number | null,
+  buy_cost_bps: null as number | null,
+  sell_cost_bps: null as number | null
 })
 
 // 研究模式（顶层字段）
@@ -3464,6 +3519,9 @@ const researchTiers = [
   { mode: 'admission', label: '入库审核', adds: ['前视快照', '库级共线性 / 正交', '治理结论'] }
 ]
 const currentModeIndex = computed(() => researchModeOrder.indexOf(researchMode.value))
+
+// admission 模式：universe / forward_periods / 费率会被引擎强制覆盖
+const isAdmissionMode = computed(() => researchMode.value === 'admission')
 
 // walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
 const walkForward = reactive({
@@ -3831,7 +3889,11 @@ const submitBacktest = async () => {
         factor_direction: backtestForm.factor_direction,
         buy_price_type: backtestForm.buy_price_type,
         sell_price_type: backtestForm.sell_price_type,
-        benchmarks: [...selectedBenchmarks.value]
+        benchmarks: [...selectedBenchmarks.value],
+        // 费率留空则不提交，交由引擎回退默认模型（admission 模式引擎强制覆盖）
+        risk_free_rate: backtestForm.risk_free_rate ?? undefined,
+        buy_cost_bps: backtestForm.buy_cost_bps ?? undefined,
+        sell_cost_bps: backtestForm.sell_cost_bps ?? undefined
       }
     }
 
