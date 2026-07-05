@@ -2159,6 +2159,7 @@ const parseDataSources = (dataSourcesStr: string | object | null) => {
   const defaultSource: DataSourceItem = { 
     mode: 'normal',
     table: '', 
+    engine: 'clickhouse',
     database: 'clickhouse',
     fields: [], 
     date_field: '',
@@ -2196,7 +2197,8 @@ const parseDataSources = (dataSourcesStr: string | object | null) => {
     const ds: DataSourceItem = {
       mode: isIntraday ? 'intraday' : 'normal',
       table,
-      database: 'clickhouse',
+      engine: value.engine || 'clickhouse',
+      database: value.database || 'clickhouse',
       fields: value.fields || [],
       date_field: value.date_field || '',
       code_field: value.code_field || '',
@@ -3066,6 +3068,7 @@ const openCreateDialog = async () => {
   dataSources.value = [{ 
     mode: 'normal' as const,
     table: '', 
+    engine: 'clickhouse',
     database: 'clickhouse',
     fields: [], 
     date_field: '',
