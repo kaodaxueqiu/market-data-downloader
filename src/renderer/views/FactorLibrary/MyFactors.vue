@@ -840,7 +840,7 @@
                 <el-tag type="success" effect="light" closable @close="clearSelectedTable(index)">
                   {{ source.table }}
                 </el-tag>
-                <el-tag type="info">{{ source.database || 'clickhouse' }}</el-tag>
+                <el-tag type="info">{{ source.engine }} / {{ source.database }}</el-tag>
               </div>
               <!-- 字段选择 -->
               <el-form-item label="字段" label-width="70px">
@@ -1955,6 +1955,7 @@ const handleSelectUniverseFile = async () => {
 interface DataSourceItem {
   mode: 'normal' | 'intraday'  // 'normal' 日频数据 | 'intraday' 日内时段筛选
   table: string
+  engine: string               // postgresql / clickhouse
   database: string
   fields: string[]
   date_field: string
@@ -1978,6 +1979,7 @@ interface TimeFilterPreset {
 const dataSources = ref<DataSourceItem[]>([{ 
   mode: 'normal',
   table: '', 
+  engine: 'clickhouse',
   database: 'clickhouse',
   fields: [], 
   date_field: '',
@@ -2027,6 +2029,8 @@ const doDialogSearch = async () => {
 const selectSearchResult = async (item: any) => {
   const source = dataSources.value[currentSearchIndex.value]
   source.table = item.table_name
+  source.engine = item.engine
+  source.database = item.database
   source.fields = []
   source.date_field = ''
   source.code_field = ''
@@ -2041,6 +2045,7 @@ const selectSearchResult = async (item: any) => {
 const clearSelectedTable = (index: number) => {
   const source = dataSources.value[index]
   source.table = ''
+  source.engine = 'clickhouse'
   source.database = 'clickhouse'
   source.fields = []
   source.date_field = ''
@@ -2062,8 +2067,8 @@ const handleTableChange = async (index: number) => {
   source.loadingFields = true
   
   try {
-    // 不指定数据源，由后端自适应定位表所在的库
-    const result = await window.electronAPI.dbdict.getTableFields(source.database, source.database, source.table)
+    // 按 engine+database 精确路由，与后端多库精细化改造对齐
+    const result = await window.electronAPI.dbdict.getTableFields(source.engine, source.database, source.table)
     if (result.code === 200) {
       source.availableFields = result.data || []
     }
@@ -2080,6 +2085,7 @@ const handleAddDataSource = (mode: 'normal' | 'intraday') => {
   const ds: DataSourceItem = {
     mode,
     table: '', 
+    engine: 'clickhouse',
     database: 'clickhouse',
     fields: [], 
     date_field: '',
