@@ -643,8 +643,9 @@ const handleTableFilterChange = (filters: Record<string, string[]>) => {
   loadTasks()
 }
 
-const loadTasks = async () => {
-  loading.value = true
+const loadTasks = async (silent = false) => {
+  // 轮询静默刷新时不显示 loading 遮罩，避免整屏闪烁
+  if (!silent) loading.value = true
   try {
     // 构建请求参数
     const params: any = {
@@ -686,7 +687,7 @@ const loadTasks = async () => {
 
 const startPolling = () => {
   if (pollTimer) return
-  pollTimer = window.setInterval(() => loadTasks(), 5000)
+  pollTimer = window.setInterval(() => loadTasks(true), 5000)
 }
 
 const stopPolling = () => {
