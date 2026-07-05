@@ -6738,8 +6738,8 @@ ipcMain.handle('im:openWindow', async () => {
     const imExePath =
       process.env.NODE_ENV === 'development'
         ? isMac
-          ? join(__dirname, '../../../openIM/electron-client/app/release/prod/1.2.9/mac-arm64/G-Snowball-IM.app/Contents/MacOS/G-Snowball-IM')
-          : join(__dirname, '../../../openIM/electron-client/app/release/prod/1.2.9/win-unpacked/G-Snowball-IM.exe')
+          ? join(__dirname, '../../../openIM/electron-client/app/release/prod/1.3.0/mac-arm64/G-Snowball-IM.app/Contents/MacOS/G-Snowball-IM')
+          : join(__dirname, '../../../openIM/electron-client/app/release/prod/1.3.0/win-unpacked/G-Snowball-IM.exe')
         : isMac
           ? join(process.resourcesPath, 'im', 'G-Snowball-IM.app', 'Contents', 'MacOS', 'G-Snowball-IM')
           : join(process.resourcesPath, 'im', 'G-Snowball-IM.exe')

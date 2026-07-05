@@ -1,4 +1,4 @@
-import { ProfileOutlined, RightOutlined, ScheduleOutlined } from "@ant-design/icons";
+import { CloudOutlined, ProfileOutlined, RightOutlined, ScheduleOutlined } from "@ant-design/icons";
 import { useMutation } from "@tanstack/react-query";
 import { Badge, Divider, Layout, Popover, Upload } from "antd";
 import clsx from "clsx";
@@ -205,6 +205,11 @@ const LeftNavBar = memo(() => {
       iconNode: <ScheduleOutlined />,
       title: "任务清单",
       path: "/task-list",
+    },
+    {
+      iconNode: <CloudOutlined />,
+      title: "智能体空间",
+      path: "/agent-workspace",
     },
   ];
 

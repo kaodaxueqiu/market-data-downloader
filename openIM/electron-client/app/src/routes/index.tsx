@@ -59,6 +59,13 @@ const router = createHashRouter([
             },
           },
           {
+            path: "agent-workspace",
+            async lazy() {
+              const { AgentWorkspace } = await import("@/pages/agentWorkspace");
+              return { Component: AgentWorkspace };
+            },
+          },
+          {
             path: "agent-profile",
             async lazy() {
               const { AgentProfile } = await import("@/pages/agentProfile");
