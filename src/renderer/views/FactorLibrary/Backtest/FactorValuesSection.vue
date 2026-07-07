@@ -255,14 +255,18 @@ const loadDates = async () => {
 
       if (dateList.value.length > 0) {
         selectedDate.value = dateList.value[dateList.value.length - 1]
+        // 先关闭 loading，让 v-else-if 分支挂载（distChartRef 才存在），再加载日期数据
+        datesLoading.value = false
         await loadDateData()
+      } else {
+        datesLoading.value = false
       }
     } else {
       ElMessage.warning(res.error || '暂无因子值数据')
+      datesLoading.value = false
     }
   } catch (e: any) {
     ElMessage.error('加载日期列表失败: ' + e.message)
-  } finally {
     datesLoading.value = false
   }
 }
@@ -275,6 +279,8 @@ const onDateChange = () => {
 
 const loadDateData = async () => {
   if (!selectedDate.value) return
+  // 等待 DOM 渲染完成（datesLoading 切换后 v-else-if 分支才挂载，distChartRef 才存在）
+  await nextTick()
   await Promise.all([
     loadStats(),
     loadDistribution(),

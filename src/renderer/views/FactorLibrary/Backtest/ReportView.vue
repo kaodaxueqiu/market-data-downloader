@@ -3,14 +3,32 @@
     <!-- 入库审核看板（仅 admission 模式） -->
     <div class="report-section" v-if="admission">
       <h4 class="report-section-title">入库审核看板</h4>
-      <div class="admission-score" :class="`wq-${wqScoreLevel}`">
+      <div class="admission-score" :class="`wq-${admissionLevel}`">
         <span class="score-label">WQ 综合评分</span>
         <span class="score-value">
           {{ admission.wq_score !== null && admission.wq_score !== undefined ? Number(admission.wq_score).toFixed(4) : '样本不足' }}
         </span>
         <span class="score-hint">
-          {{ wqScoreLevel === 'good' ? '优秀' : wqScoreLevel === 'fair' ? '合格' : wqScoreLevel === 'poor' ? '不合格' : '—' }}
+          {{ admissionLevel === 'pass' ? '通过' : admissionLevel === 'reject' ? '拒绝' : admissionLevel === 'pending' ? '待复核' : '—' }}
         </span>
+      </div>
+
+      <!-- 引擎判定结果（R7：直接读 decision/reject_reasons，不再前端预判） -->
+      <div v-if="admission.decision" class="admission-decision" :class="`decision-${admission.decision}`">
+        <div class="decision-header">
+          <span class="decision-icon">
+            {{ admission.decision === 'pass' ? '✓' : admission.decision === 'reject' ? '✗' : '!' }}
+          </span>
+          <span class="decision-title">
+            {{ admission.decision === 'pass' ? '引擎判定：通过' : admission.decision === 'reject' ? '引擎判定：拒绝' : '引擎判定：待人工复核' }}
+          </span>
+        </div>
+        <ul v-if="admission.decision === 'reject' && admission.reject_reasons?.length" class="reject-reasons">
+          <li v-for="(reason, i) in admission.reject_reasons" :key="i">{{ reason }}</li>
+        </ul>
+        <p v-else-if="admission.decision === 'pending'" class="pending-hint">
+          样本数据不足，无法自动判定，建议人工复核因子质量。
+        </p>
       </div>
 
       <div class="admission-meta">
@@ -128,14 +146,11 @@ const tables = computed<any[]>(() => props.report?.tables ?? [])
 // ========== 入库审核看板 ==========
 const admission = computed<any>(() => props.admissionReport ?? null)
 
-// wq_score 一句话评分：>0.3 绿 / 0~0.3 黄 / <0 红
-const wqScoreLevel = computed<'good' | 'fair' | 'poor' | 'na'>(() => {
-  const s = admission.value?.wq_score
-  if (s === null || s === undefined || isNaN(Number(s))) return 'na'
-  const n = Number(s)
-  if (n > 0.3) return 'good'
-  if (n >= 0) return 'fair'
-  return 'poor'
+// R7：直接读引擎 decision（pass/reject/pending），不再前端预判
+const admissionLevel = computed<'pass' | 'reject' | 'pending' | 'na'>(() => {
+  const d = admission.value?.decision
+  if (d === 'pass' || d === 'reject' || d === 'pending') return d
+  return 'na'
 })
 
 // 样本内外指标对比行（null → 样本不足）
@@ -226,7 +241,7 @@ const setChartRef = (i: number, el: any) => {
   chartRefs[i] = el as HTMLElement | null
 }
 
-const baseGrid = { left: 48, right: 24, top: 48, bottom: 40, containLabel: true }
+const baseGrid = { left: '3%', right: '4%', top: 50, bottom: '8%', containLabel: true }
 
 // 各 chart type → ECharts option（字段严格按真实 JSON）
 const buildOption = (chart: any): echarts.EChartsOption | null => {
@@ -549,34 +564,97 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .report-view {
-  padding: 8px 0;
+  padding: 4px 0;
 }
 .report-section {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 .report-section-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0 0 12px;
-  padding-left: 8px;
-  border-left: 3px solid var(--el-color-primary);
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 16px;
+  padding-left: 10px;
+  border-left: 4px solid var(--el-color-primary);
+  color: var(--el-text-color-primary);
+  line-height: 1.4;
 }
 .admission-score {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 16px 20px;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  padding: 18px 24px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #eef0f4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 
-  &.wq-good { background: rgba(103, 194, 58, 0.12); color: #529b2e; }
-  &.wq-fair { background: rgba(230, 162, 60, 0.12); color: #b88230; }
-  &.wq-poor { background: rgba(245, 108, 108, 0.12); color: #c45656; }
+  &.wq-pass { background: rgba(103, 194, 58, 0.12); color: #529b2e; }
+  &.wq-reject { background: rgba(245, 108, 108, 0.12); color: #c45656; }
+  &.wq-pending { background: rgba(230, 162, 60, 0.12); color: #b88230; }
   &.wq-na { background: var(--el-fill-color-light); color: var(--el-text-color-secondary); }
 }
 .score-label { font-size: 13px; }
 .score-value { font-size: 28px; font-weight: 700; }
 .score-hint { font-size: 14px; font-weight: 600; }
+
+/* R7 引擎判定区块 */
+.admission-decision {
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  border: 1px solid transparent;
+
+  &.decision-pass {
+    background: rgba(103, 194, 58, 0.06);
+    border-color: rgba(103, 194, 58, 0.3);
+  }
+  &.decision-reject {
+    background: rgba(245, 108, 108, 0.06);
+    border-color: rgba(245, 108, 108, 0.3);
+  }
+  &.decision-pending {
+    background: rgba(230, 162, 60, 0.06);
+    border-color: rgba(230, 162, 60, 0.3);
+  }
+}
+.decision-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.decision-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+
+  .decision-pass & { background: #67c23a; }
+  .decision-reject & { background: #f56c6c; }
+  .decision-pending & { background: #e6a23c; }
+}
+.reject-reasons {
+  margin: 10px 0 0;
+  padding-left: 30px;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.8;
+
+  li {
+    list-style: disc;
+  }
+}
+.pending-hint {
+  margin: 8px 0 0 30px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
 .admission-meta {
   display: flex;
   flex-wrap: wrap;
@@ -588,19 +666,26 @@ onBeforeUnmount(() => {
 }
 .report-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
 }
 .report-card {
-  padding: 12px 16px;
-  border-radius: 8px;
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color-lighter);
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #eef0f4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 
-  &.grade-excellent { border-color: #67c23a; background: rgba(103, 194, 58, 0.08); }
-  &.grade-good { border-color: #409eff; background: rgba(64, 158, 255, 0.08); }
-  &.grade-fair { border-color: #e6a23c; background: rgba(230, 162, 60, 0.08); }
-  &.grade-poor { border-color: #f56c6c; background: rgba(245, 108, 108, 0.08); }
+  &:hover {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &.grade-excellent { border-color: #b3e19d; background: linear-gradient(135deg, #f6ffed 0%, #ffffff 100%); }
+  &.grade-good { border-color: #a0cfff; background: linear-gradient(135deg, #ecf5ff 0%, #ffffff 100%); }
+  &.grade-fair { border-color: #f3d19e; background: linear-gradient(135deg, #fdf6ec 0%, #ffffff 100%); }
+  &.grade-poor { border-color: #f8c4c4; background: linear-gradient(135deg, #fef0f0 0%, #ffffff 100%); }
   &.grade-na { border-color: var(--el-border-color); }
 }
 .card-label {
@@ -630,16 +715,31 @@ onBeforeUnmount(() => {
 }
 .report-chart-block,
 .report-table-block {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #eef0f4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 16px 20px 12px;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
 }
 .chart-title {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 8px;
-  color: var(--el-text-color-regular);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--el-text-color-primary);
+  padding-left: 10px;
+  border-left: 3px solid var(--el-color-primary);
+  line-height: 1.4;
 }
 .chart-canvas {
   width: 100%;
   height: 320px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 </style>

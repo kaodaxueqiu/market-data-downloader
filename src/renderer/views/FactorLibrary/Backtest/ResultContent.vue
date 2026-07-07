@@ -160,8 +160,13 @@
                 <span class="config-value">{{ task.task_config.start_date }} ~ {{ task.task_config.end_date }}</span>
               </div>
               <div class="config-item">
-                <span class="config-label">股票池</span>
-                <span class="config-value">{{ getUniverseName(task.task_config.universe) }}</span>
+                <span class="config-label">
+                  股票池
+                  <el-tooltip v-if="showPoolOverrideBadge" content="admission 模式已强制覆盖为 csi1000" placement="top">
+                    <el-tag type="warning" size="small" effect="dark" class="override-badge">强制覆盖</el-tag>
+                  </el-tooltip>
+                </span>
+                <span class="config-value">{{ getUniverseName({ preset_name: displayPool }) }}</span>
               </div>
               <div class="config-item">
                 <span class="config-label">分组数</span>
@@ -169,7 +174,15 @@
               </div>
               <div class="config-item">
                 <span class="config-label">预测周期</span>
-                <span class="config-value">{{ task.task_config.backtest_params?.forward_periods?.join('/') || '-' }}日</span>
+                <span class="config-value">{{ displayForwardPeriods.join('/') || '-' }}日</span>
+              </div>
+              <div class="config-item">
+                <span class="config-label">买入费率</span>
+                <span class="config-value">{{ displayBuyBps !== null ? displayBuyBps + ' bp' : '-' }}</span>
+              </div>
+              <div class="config-item">
+                <span class="config-label">卖出费率</span>
+                <span class="config-value">{{ displaySellBps !== null ? displaySellBps + ' bp' : '-' }}</span>
               </div>
               <div class="config-item" v-if="task.task_config.backtest_params?.factor_direction">
                 <span class="config-label">因子方向</span>
@@ -188,6 +201,16 @@
                 <span class="config-value">{{ getBenchmarkNames(task.task_config.backtest_params.benchmarks) }}</span>
               </div>
             </div>
+            <!-- admission 历史任务降级警告 -->
+            <el-alert
+              v-if="showAdmissionLegacyWarning"
+              type="warning"
+              :closable="false"
+              show-icon
+              style="margin: 8px 0"
+            >
+              此任务由旧版引擎（v0.2.6 及以前）执行，上方参数为用户提交值，可能与引擎实际执行值不同。v0.2.7+ 任务会显示 effective 字段。
+            </el-alert>
           </div>
         </div>
 
@@ -201,8 +224,14 @@
           >
             <template #default>
               <div class="error-content">
-                <p v-if="task.error_message">{{ task.error_message }}</p>
-                <p v-else>未知错误，请联系管理员</p>
+                <!-- R11: 友好化错误信息，原文折叠 -->
+                <p>{{ getFriendlyError(task.error_message).friendly }}</p>
+                <el-collapse v-if="getFriendlyError(task.error_message).hasMatch && task.error_message">
+                  <el-collapse-item title="查看技术详情">
+                    <pre class="error-raw">{{ task.error_message }}</pre>
+                  </el-collapse-item>
+                </el-collapse>
+                <p v-if="!task.error_message">未知错误，请联系管理员</p>
               </div>
             </template>
           </el-alert>
@@ -212,7 +241,7 @@
             <div class="factor-expression-card" v-if="task.task_config.factor_expression">
               <div class="card-title">因子表达式</div>
               <div class="card-content">
-                <code>{{ task.task_config.factor_expression }}</code>
+                <code class="expr-highlight" v-html="highlightExpression(task.task_config.factor_expression)"></code>
               </div>
             </div>
             <div class="factor-expression-card" v-if="task.task_config.factor_code">
@@ -285,9 +314,37 @@
             <div v-if="currentResearchMode === 'admission'" class="analysis-card">
               <div class="analysis-card-header">
                 <span>入库审核</span>
-                <el-tag :type="admissionPending ? 'warning' : 'success'" effect="dark" size="small">
-                  {{ admissionPending ? '待复核' : '通过' }}
+                <el-tag
+                  v-if="admissionReport?.decision"
+                  :type="admissionReport.decision === 'pass' ? 'success' : admissionReport.decision === 'reject' ? 'danger' : 'warning'"
+                  effect="dark"
+                  size="small"
+                >
+                  {{ admissionReport.decision === 'pass' ? '通过' : admissionReport.decision === 'reject' ? '拒绝' : '待复核' }}
                 </el-tag>
+              </div>
+              <!-- P4: 原始数据展示 -->
+              <div v-if="admissionReport" class="admission-raw-data">
+                <div class="raw-data-item">
+                  <span class="label">WQ 评分</span>
+                  <span class="value" :class="(admissionReport.wq_score ?? 0) < 0.3 ? 'negative' : ''">
+                    {{ typeof admissionReport.wq_score === 'number' ? admissionReport.wq_score.toFixed(2) : '-' }}
+                  </span>
+                  <span class="hint">（入库阈值通常 ≥ 0.3）</span>
+                </div>
+                <!-- R7: 引擎拒绝原因 -->
+                <div class="raw-data-item" v-if="admissionReport.decision === 'reject' && admissionReport.reject_reasons?.length">
+                  <span class="label">拒绝原因</span>
+                  <span class="value">
+                    {{ admissionReport.reject_reasons.join('；') }}
+                  </span>
+                </div>
+                <div class="raw-data-item" v-if="admissionReport.in_sample || admissionReport.out_of_sample">
+                  <span class="label">样本对比</span>
+                  <span class="value">
+                    IC 内 {{ formatNumber(admissionReport.in_sample?.ic_mean, 4) }} / 外 {{ formatNumber(admissionReport.out_of_sample?.ic_mean, 4) }}
+                  </span>
+                </div>
               </div>
               <el-descriptions :column="2" border size="small">
                 <el-descriptions-item label="前视快照">
@@ -330,7 +387,20 @@
                 <el-tag :type="getStatusTagType(holdoutValidation.status)" size="small">
                   {{ holdoutValidation.status || '-' }}
                 </el-tag>
+                <span v-if="holdoutDays !== null" class="latency-text">
+                  样本外 {{ holdoutDays }} 天
+                </span>
               </div>
+              <!-- R8: 短样本警告 -->
+              <el-alert
+                v-if="holdoutShortWarning"
+                type="warning"
+                :closable="false"
+                show-icon
+                style="margin-bottom: 10px"
+              >
+                样本外仅 {{ holdoutDays }} 天，统计显著性不足，IC 结果仅供参考
+              </el-alert>
               <el-descriptions :column="2" border size="small">
                 <el-descriptions-item label="样本内截止">{{ holdoutValidation.train_end_date || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="样本外开始">{{ holdoutValidation.holdout_start_date || '-' }}</el-descriptions-item>
@@ -444,7 +514,7 @@
               :class="{ active: activeVariant === vi }" 
               @click="activeVariant = vi"
             >
-              {{ getVariantLabel(vr.variant) }}
+              {{ getVariantLabel(vr.variant, vi) }}
             </div>
           </div>
 
@@ -471,7 +541,7 @@
                 </div>
               </div>
               <div class="factor-code" v-if="factor.factor_code">
-                <code>{{ factor.factor_code }}</code>
+                <code class="expr-highlight" v-html="highlightExpression(factor.factor_code)"></code>
               </div>
             </div>
 
@@ -486,54 +556,71 @@
             />
 
             <!-- 核心指标卡片 -->
-            <div class="metrics-cards">
+            <!-- R2: 加 period-watermark 显示当前周期，避免研究员切几次后忘记在看哪个周期 -->
+            <div class="metrics-cards" :data-period="selectedPeriods[index] ? selectedPeriods[index] + '日' : ''">
               <div class="metric-card ic-metric">
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_mean)">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_mean, 4) }}
                 </div>
-                <div class="metric-label">Rank IC</div>
+                <el-tooltip content="Spearman 秩相关系数均值。衡量因子预测能力，范围 [-1,1]，绝对值越大越强，>0.05 为有效" placement="top">
+                  <div class="metric-label">Rank IC</div>
+                </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_std, 4) }}
                 </div>
-                <div class="metric-label">Rank IC标准差</div>
+                <el-tooltip content="Rank IC 的标准差，衡量因子预测稳定性，越小越稳定" placement="top">
+                  <div class="metric-label">Rank IC标准差</div>
+                </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_ir)">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_ir, 3) }}
                 </div>
-                <div class="metric-label">Rank IC_IR</div>
+                <el-tooltip content="Rank IC 信息比 = IC 均值 / IC 标准差。>0.5 为优秀，<0.3 为弱" placement="top">
+                  <div class="metric-label">Rank IC_IR</div>
+                </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.annual_return)">
                   {{ formatPercent(getCurrentPeriodData(factor, index)?.annual_return) }}
                 </div>
-                <div class="metric-label">年化收益</div>
+                <el-tooltip content="回测区间年化收益率。>0 为正收益" placement="top">
+                  <div class="metric-label">年化收益</div>
+                </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.sharpe_ratio)">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.sharpe_ratio, 2) }}
                 </div>
-                <div class="metric-label">夏普比率</div>
+                <el-tooltip content="风险调整后收益 = (年化收益 - 无风险利率) / 年化波动率。>1 为良好，>2 为优秀" placement="top">
+                  <div class="metric-label">夏普比率</div>
+                </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value negative">
                   {{ formatPercent(getCurrentPeriodData(factor, index)?.max_drawdown) }}
                 </div>
-                <div class="metric-label">最大回撤</div>
+                <el-tooltip content="回测区间内从历史最高点到最低点的最大跌幅，越小越好" placement="top">
+                  <div class="metric-label">最大回撤</div>
+                </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value">
                   {{ formatPercent(getCurrentPeriodData(factor, index)?.win_rate) }}
                 </div>
-                <div class="metric-label">胜率</div>
+                <el-tooltip content="IC > 0 的交易日占比。>50% 表示因子方向多数时间正确" placement="top">
+                  <div class="metric-label">胜率</div>
+                </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value" :class="getMonotonicityClass(getCurrentPeriodData(factor, index)?.monotonicity)">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.monotonicity, 4) }}
                 </div>
-                <div class="metric-label">单调性</div>
+                <el-tooltip content="10 分组收益对组号的 Spearman 相关系数。范围 [-1,1]，绝对值越接近 1 分层越严格单调；>0.4 为优秀，<0.2 为弱" placement="top">
+                  <div class="metric-label">单调性</div>
+                </el-tooltip>
               </div>
             </div>
 
@@ -591,6 +678,10 @@
                     </el-table-column>
                   </el-table>
                   <div class="table-hint">点击行可切换周期，上方指标卡片和分层收益将联动更新</div>
+                  <div class="table-hint">
+                    <el-icon><InfoFilled /></el-icon>
+                    周期 > 1 时仅计算分层累计收益与 IC 类指标，日频年化/夏普/最大回撤需切换到 1 日周期查看
+                  </div>
                 </div>
               </div>
 
@@ -598,7 +689,7 @@
               <div class="detail-panel" v-if="getCurrentPeriodData(factor, index)?.layer_returns?.length">
                 <div class="panel-title">
                   <el-icon><Histogram /></el-icon>
-                  分层收益 ({{ getCurrentPeriodData(factor, index)?.layer_returns?.length }}组)
+                  分层收益 ({{ getCurrentPeriodData(factor, index)?.layer_returns?.length }}组) - {{ layerReturnType === 'annual' ? '年化收益率' : '区间累计收益' }}
                   <span class="period-tag">({{ selectedPeriods[index] }}日)</span>
                   <!-- 年化/累计切换 -->
                   <div class="return-type-switch">
@@ -633,14 +724,18 @@
                       </div>
                     </div>
                   </div>
+                  <div class="table-hint">
+                    <el-icon><InfoFilled /></el-icon>
+                    年化收益率 = 回测区间累计收益按 252 日年化折算；累计收益 = 回测区间内的总累计收益。两者数值差异源于回测天数。
+                  </div>
                 </div>
               </div>
 
-              <!-- 其他指标 -->
+              <!-- 统计分布指标（原"其他指标"，更名以避免暗示次要） -->
               <div class="detail-panel">
                 <div class="panel-title">
                   <el-icon><DataLine /></el-icon>
-                  其他指标 <span class="period-tag" v-if="selectedPeriods[index]">({{ selectedPeriods[index] }}日)</span>
+                  统计分布指标 <span class="period-tag" v-if="selectedPeriods[index]">({{ selectedPeriods[index] }}日)</span>
                 </div>
                 <div class="panel-body">
                   <div class="other-metrics">
@@ -956,7 +1051,7 @@
           <el-empty v-if="!result.factor_results?.length" description="暂无回测结果数据" />
           </el-tab-pane>
 
-          <el-tab-pane label="详细报告 v0.2.6" name="report">
+          <el-tab-pane label="详细报告" name="report">
             <ReportView :report="reportData" :admission-report="admissionReport" :active="activeReportTab === 'report'" />
           </el-tab-pane>
           </el-tabs>
@@ -1025,13 +1120,17 @@ const activeVariant = ref(0)
 const activeReportTab = ref('overview')
 
 // variant 文案映射
-const getVariantLabel = (variant: string) => {
+const getVariantLabel = (variant: string, index?: number) => {
   const map: Record<string, string> = {
     'raw': '原始因子',
-    'neutral_selected': '所选风险剥离',
+    'neutral_selected': '风险中性化',
     'neutral_all': '全风险剥离'
   }
-  return map[variant] || variant || '因子结果'
+  if (variant && map[variant]) return map[variant]
+  // variant 为空时按 index 区分：第一个是原始，第二个是中性化
+  if (index === 0) return '原始因子'
+  if (index === 1) return '风险中性化'
+  return index != null ? `变体 ${index + 1}` : '因子结果'
 }
 
 // ========== 回测三模式：研究分析（summary.*） ==========
@@ -1041,9 +1140,72 @@ const summary = computed<any>(() => {
 })
 // v0.2.6 report（追加式，缺失则子组件显示空态）
 const reportData = computed<any>(() => summary.value?.report ?? null)
+
 // 入库审核报告（仅 admission 模式有）
 const admissionReport = computed<any>(() => summary.value?.admission_report ?? null)
 const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
+
+// ============ admission effective 字段读取（v0.2.7 对接） ============
+// 仅 admission 模式且 v0.2.7+ 任务才会有这些字段；历史任务需降级到 task_config
+const isAdmissionMode = computed<boolean>(() => {
+  const s = summary.value
+  if (s?.admission_overrides === true) return true
+  // 兼容历史任务：从 task_config 读 research_mode（字段已核实存在）
+  return task.value?.task_config?.research_mode === 'admission'
+})
+
+// 股票池：admission 读 effective_pool，其他读用户配置
+const displayPool = computed(() => {
+  if (!task.value?.task_config) return null
+  if (isAdmissionMode.value) {
+    const s = summary.value
+    if (s?.effective_pool && typeof s.effective_pool === 'string') {
+      return s.effective_pool
+    }
+    return task.value.task_config.universe?.preset_name ?? null
+  }
+  return task.value.task_config.universe?.preset_name ?? null
+})
+
+// 是否发生了强制覆盖（仅信任引擎 v0.2.7+ 返回的 pool_override 字段）
+const showPoolOverrideBadge = computed(() => {
+  if (!isAdmissionMode.value) return false
+  return summary.value?.pool_override === true
+})
+
+// 预测周期：admission 读 effective_forward_periods（数组），其他读用户配置
+const displayForwardPeriods = computed<number[]>(() => {
+  const s = summary.value
+  if (isAdmissionMode.value && Array.isArray(s?.effective_forward_periods) && s.effective_forward_periods.length > 0) {
+    return s.effective_forward_periods
+  }
+  return task.value?.task_config?.backtest_params?.forward_periods ?? []
+})
+
+// 买入费率（单位 bp）：admission 读 effective_buy_bps，其他读用户配置
+const displayBuyBps = computed<number | null>(() => {
+  const s = summary.value
+  if (isAdmissionMode.value && typeof s?.effective_buy_bps === 'number') {
+    return s.effective_buy_bps
+  }
+  return task.value?.task_config?.backtest_params?.buy_cost_bps ?? null
+})
+
+// 卖出费率（单位 bp）
+const displaySellBps = computed<number | null>(() => {
+  const s = summary.value
+  if (isAdmissionMode.value && typeof s?.effective_sell_bps === 'number') {
+    return s.effective_sell_bps
+  }
+  return task.value?.task_config?.backtest_params?.sell_cost_bps ?? null
+})
+
+// admission 模式且 effective 字段缺失（历史任务）时显示降级警告
+// 必须加 status === 'completed' 判断：running/pending 时 summary 尚未生成，不是"旧版引擎"
+const showAdmissionLegacyWarning = computed(() => {
+  if (task.value?.status !== 'completed') return false
+  return isAdmissionMode.value && !summary.value?.admission_overrides
+})
 
 // 风险中性化报告
 const neutralizationReport = computed<any>(() => summary.value?.neutralization ?? null)
@@ -1086,6 +1248,27 @@ const isQuickScreeningOnly = computed<boolean>(() =>
   (generalization.value?.findings || []).some((f: any) => f?.code === 'quick_mode_screening_only')
 )
 const holdoutValidation = computed<any>(() => summary.value?.holdout_validation ?? null)
+
+// R8: 样本外天数计算（holdoutValidation 无现成天数字段，从日期算）
+const holdoutDays = computed<number | null>(() => {
+  const hv = holdoutValidation.value
+  if (!hv) return null
+  // 优先用 holdout_end_date - holdout_start_date；否则用 train 天数估算
+  if (hv.holdout_start_date && hv.holdout_end_date) {
+    const start = new Date(hv.holdout_start_date).getTime()
+    const end = new Date(hv.holdout_end_date).getTime()
+    if (!isNaN(start) && !isNaN(end) && end > start) {
+      return Math.round((end - start) / (1000 * 60 * 60 * 24))
+    }
+  }
+  // 兜底：如果 API 直接返回了 holdout_days 或 n_holdout
+  return hv.holdout_days ?? hv.n_holdout ?? null
+})
+// 样本外 < 60 天时警告（统计显著性不足）
+const holdoutShortWarning = computed(() => {
+  const d = holdoutDays.value
+  return d !== null && d < 60
+})
 const cne6NeutralIc = computed<any>(() => summary.value?.cne6_neutral_ic ?? null)
 const cne6ExposureCoverage = computed<any>(() => summary.value?.cne6_exposure_coverage ?? null)
 const coveragePctEntries = computed<Record<string, number>>(() => {
@@ -1143,22 +1326,6 @@ const getStatusTagType = (status: string) => {
   if (['fail', 'failed', 'error', 'reject', 'rejected'].includes(status)) return 'danger'
   return 'info'
 }
-
-// 入库审核：任一缺失/失败 → 待复核
-const admissionPending = computed<boolean>(() => {
-  const s = summary.value
-  if (!s) return true
-  const failed =
-    (s.factor_snapshot_test?.status && s.factor_snapshot_test.status !== 'pass') ||
-    (s.factor_collinearity?.status && s.factor_collinearity.status !== 'ok') ||
-    (s.factor_orthogonality?.status && s.factor_orthogonality.status !== 'ok') ||
-    (s.cne6_neutral_ic?.status && s.cne6_neutral_ic.status !== 'ok') ||
-    (s.generalization?.status && s.generalization.status !== 'initial_pass')
-  const missing =
-    !s.factor_snapshot_test || !s.factor_collinearity ||
-    !s.factor_orthogonality || !s.cne6_neutral_ic || !s.generalization
-  return Boolean(failed || missing)
-})
 
 // 下载状态
 const downloading = ref(false)
@@ -1653,7 +1820,8 @@ const getUniverseName = (universe: any) => {
     'zz500': '中证500',
     'zz1000': '中证1000',
     'sz50': '上证50',
-    'zz2000': '中证2000'
+    'zz2000': '中证2000',
+    'csi1000': '中证1000'  // 引擎 effective_pool 返回的是 csi1000
   }
   return presetMap[presetName] || presetName || '全市场'
 }
@@ -1770,6 +1938,74 @@ const calcDuration = (start: string, end: string) => {
   if (duration < 60) return `${duration}秒`
   if (duration < 3600) return `${Math.floor(duration / 60)}分${duration % 60}秒`
   return `${Math.floor(duration / 3600)}时${Math.floor((duration % 3600) / 60)}分`
+}
+
+// R11: 失败任务错误信息友好化映射
+// 把引擎对研发友好的技术错误，翻译成因子研究员能看懂的建议
+const friendlyErrorMap: Array<{ pattern: RegExp; message: string }> = [
+  {
+    pattern: /有效样本检查失败|没有任何可计算的有效 IC/i,
+    message: '该因子在此股票池和时间区间下没有产生有效信号。可能原因：① 因子全为 NaN（检查字段名是否正确）② 时间区间太短（至少 60 个交易日）③ 股票池与数据源不匹配'
+  },
+  {
+    pattern: /not found:\s*\w+|unknown field/i,
+    message: '因子表达式中使用了未知字段。请检查数据源可用字段，例如 close_price 而非 close。'
+  },
+  {
+    pattern: /expression.*invalid|parse error|syntax error/i,
+    message: '因子表达式语法错误。请检查括号是否配对、算子名是否正确（如 Delay/Mean/Ts_Rank）。'
+  },
+  {
+    pattern: /timeout|timed out/i,
+    message: '计算超时。可能是股票池过大或表达式过于复杂，建议缩小回测区间或简化因子。'
+  }
+]
+
+const getFriendlyError = (rawError: string | undefined): { friendly: string; hasMatch: boolean } => {
+  if (!rawError) return { friendly: '未知错误，请联系管理员', hasMatch: false }
+  for (const item of friendlyErrorMap) {
+    if (item.pattern.test(rawError)) {
+      return { friendly: item.message, hasMatch: true }
+    }
+  }
+  return { friendly: rawError, hasMatch: false }
+}
+
+// R12: 因子表达式语法高亮
+// 注意顺序：必须先转义 HTML，再做高亮替换，否则 <span> 标签的 < 会被转义掉
+const highlightExpression = (expr: string): string => {
+  if (!expr) return ''
+  // 步骤1：先转义 HTML 特殊字符（安全）
+  let s = expr
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  // 步骤2：高亮算子（首字母大写或下划线的标识符，后接括号）
+  const operators = ['Delay', 'Mean', 'Ts_Rank', 'Rank', 'Delta', 'StdDev', 'Sum', 'Min', 'Max',
+    'Abs', 'Sign', 'Log', 'Power', 'Sqrt', 'Greater', 'Less', 'Equal', 'And', 'Or', 'Not',
+    'If', 'Cond', 'Corr', 'Cov', 'Beta', 'Quantile', 'WMA', 'EMA', 'SMA', 'KAMA', 'ROC',
+    'Momentum', 'Reversal', 'Volume', 'Turnover', 'Volatility', 'Skew', 'Kurtosis',
+    'Decay', 'Rescale', 'Normalize', 'Neutralize', 'Winsorize', 'ZScore', 'Scale',
+    'Average', 'Count', 'Last', 'Forward', 'Backward', 'Shift', 'Rolling', 'Apply',
+    'Map', 'Filter', 'Reduce', 'Where', 'Select', 'When', 'Then', 'Else']
+  const opRegex = new RegExp(`\\b(${operators.join('|')})\\b`, 'g')
+  s = s.replace(opRegex, '<span class="expr-op">$1</span>')
+
+  // 步骤3：高亮字段名（小写带下划线的标识符，如 close_price/turnover_rate）
+  s = s.replace(/\b([a-z][a-z0-9_]*)\b(?!["\w]*["\w]*>)/g, (match) => {
+    // 避开已被 span 包裹的内容（粗略：不匹配 op）
+    if (operators.includes(match.charAt(0).toUpperCase() + match.slice(1))) return match
+    return `<span class="expr-field">${match}</span>`
+  })
+
+  // 步骤4：高亮数字
+  s = s.replace(/(\d+\.?\d*)/g, '<span class="expr-num">$1</span>')
+
+  // 步骤5：高亮括号和逗号
+  s = s.replace(/([(),])/g, '<span class="expr-paren">$1</span>')
+
+  return s
 }
 
 const DASH = '—'
@@ -2004,6 +2240,47 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 // ============================================
+// Tab 样式优化 - 圆角分段式
+// ============================================
+.result-tabs {
+  margin-top: 4px;
+  
+  :deep(.el-tabs__header) {
+    margin: 0 0 20px;
+    padding: 0 20px;
+  }
+  :deep(.el-tabs__nav-wrap::after) {
+    height: 1px;
+    background: #eef0f4;
+  }
+  :deep(.el-tabs__item) {
+    font-size: 14px;
+    font-weight: 500;
+    height: 42px;
+    line-height: 42px;
+    padding: 0 24px;
+    color: #64748b;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      color: #4F86F7;
+    }
+    &.is-active {
+      color: #4F86F7;
+      font-weight: 600;
+    }
+  }
+  :deep(.el-tabs__active-bar) {
+    height: 3px;
+    border-radius: 2px;
+    background: #4F86F7;
+  }
+  :deep(.el-tabs__content) {
+    padding: 0 4px;
+  }
+}
+
+// ============================================
 // 设计系统变量 - 清新明亮的 SaaS 风格
 // ============================================
 $primary: #4F86F7;           // 明亮蓝主色（更清新）
@@ -2081,6 +2358,37 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+      }
+
+      .admission-raw-data {
+        background: #f8fafc;
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+
+        .raw-data-item {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          font-size: 13px;
+
+          .label {
+            color: #64748b;
+            min-width: 70px;
+          }
+          .value {
+            font-weight: 600;
+            color: #1e293b;
+            &.negative { color: #dc2626; }
+          }
+          .hint {
+            color: #94a3b8;
+            font-size: 12px;
+          }
+        }
       }
 
       .findings-list {
@@ -2286,6 +2594,17 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
         color: $negative;
         word-break: break-all;
       }
+
+      .error-raw {
+        margin: 8px 0 0;
+        padding: 8px 10px;
+        background: rgba(220, 38, 38, 0.05);
+        border-radius: 4px;
+        font-size: 12px;
+        color: #64748b;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
     }
     
     :deep(.el-alert) {
@@ -2342,6 +2661,14 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
             word-break: break-all;
             white-space: pre-wrap;
             letter-spacing: 0.3px;
+          }
+
+          // R12: 失败页表达式高亮（深色背景版）
+          .expr-highlight {
+            :deep(.expr-op) { color: #60a5fa; font-weight: 600; }
+            :deep(.expr-field) { color: #4ade80; }
+            :deep(.expr-num) { color: #fbbf24; }
+            :deep(.expr-paren) { color: #94a3b8; }
           }
           
           pre {
@@ -2484,6 +2811,9 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
           .config-label {
             font-size: 13px;
             opacity: 0.75;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
           }
           
           .config-value {
@@ -2493,6 +2823,11 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
             padding: 5px 12px;
             border-radius: $radius-sm;
             backdrop-filter: blur(4px);
+          }
+
+          .override-badge {
+            transform: scale(0.85);
+            transform-origin: left center;
           }
         }
       }
@@ -2673,9 +3008,9 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
               }
               
               &.active {
-                background: $bg-card;
-                color: $primary;
-                box-shadow: $shadow-sm;
+                background: $primary;
+                color: #fff;
+                box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
                 font-weight: 600;
               }
             }
@@ -2697,6 +3032,16 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
           white-space: nowrap;
           border: 1px solid $border;
         }
+
+        // R12: 表达式语法高亮
+        .expr-highlight {
+          white-space: pre-wrap;
+          word-break: break-all;
+          :deep(.expr-op) { color: #2563eb; font-weight: 600; }
+          :deep(.expr-field) { color: #16a34a; }
+          :deep(.expr-num) { color: #ea580c; }
+          :deep(.expr-paren) { color: #94a3b8; }
+        }
       }
     }
   }
@@ -2707,6 +3052,21 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 16px;
     margin-bottom: 28px;
+    position: relative;
+
+    // R2: 周期水印（通过 data-period 属性显示，::before 用 attr 取值）
+    &[data-period]:not([data-period=""])::before {
+      content: attr(data-period);
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(37, 99, 235, 0.35);
+      letter-spacing: 0.5px;
+      pointer-events: none;
+      z-index: 0;
+    }
     
     .metric-card {
       background: $bg-card;

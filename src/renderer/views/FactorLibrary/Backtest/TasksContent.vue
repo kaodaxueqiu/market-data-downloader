@@ -36,8 +36,9 @@
         <div class="stat-value">{{ stats.running }}</div>
         <div class="stat-label">正在执行</div>
       </div>
+      <!-- 排队中：优先显示 deferred，若为 0 则显示 pending（数据库现状无 deferred，实际显示 pending 数） -->
       <div class="stat-card deferred">
-        <div class="stat-value">{{ stats.deferred }}</div>
+        <div class="stat-value">{{ stats.deferred || stats.pending }}</div>
         <div class="stat-label">排队中</div>
       </div>
       <div class="stat-card completed">
@@ -48,7 +49,22 @@
         <div class="stat-value">{{ stats.failed }}</div>
         <div class="stat-label">执行失败</div>
       </div>
+      <!-- 新增：已取消卡 -->
+      <div class="stat-card cancelled">
+        <div class="stat-value">{{ stats.cancelled }}</div>
+        <div class="stat-label">已取消</div>
+      </div>
     </div>
+    <!-- 总数对账告警 -->
+    <el-alert
+      v-if="statsBreakdownMismatch"
+      type="warning"
+      :closable="false"
+      show-icon
+      style="margin: 8px 0"
+    >
+      统计不闭合：各状态总和（{{ statsSum }}）≠ 全部（{{ stats.total }}），可能存在未归类状态
+    </el-alert>
 
     <!-- 任务列表 - 现代风格 -->
     <el-table 
@@ -111,6 +127,16 @@
             <span :class="['status-text', row.status]">
               {{ getStatusName(row.status) }}
             </span>
+            <!-- P4: admission 预审角标（基于 wq_score 前端预判，wq<0.3 显示红标） -->
+            <el-tag
+              v-if="row.status === 'completed' && typeof row.admission_wq_score === 'number' && row.admission_wq_score < 0.3"
+              type="danger"
+              size="small"
+              effect="dark"
+              style="margin-left: 4px; transform: scale(0.85); transform-origin: left center;"
+            >
+              预审未过
+            </el-tag>
             <!-- 运行中显示详细进度 -->
             <template v-if="row.status === 'running'">
               <div class="progress-info">
@@ -176,6 +202,17 @@
             {{ formatRankIc(getPeriodRankIc(row, 10)) }}
           </span>
           <span v-else>-</span>
+        </template>
+      </el-table-column>
+      
+      <el-table-column 
+        label="引擎版本" 
+        align="center"
+        width="90"
+      >
+        <template #default="{ row }">
+          <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
+          <span v-else style="color: #cbd5e1;">-</span>
         </template>
       </el-table-column>
       
@@ -458,31 +495,47 @@ const statsData = ref({
   total: 0,
   running: 0,
   deferred: 0,
+  pending: 0,
   completed: 0,
-  failed: 0
+  failed: 0,
+  cancelled: 0
 })
 
 const stats = computed(() => statsData.value)
 
+// 各状态总和，用于对账（pending 和 deferred 都计入，以防万一）
+const statsSum = computed(() => {
+  const s = statsData.value
+  return s.running + s.pending + s.deferred + s.completed + s.failed + s.cancelled
+})
+// 总数与各状态和不闭合时告警
+const statsBreakdownMismatch = computed(() => {
+  return statsData.value.total > 0 && statsSum.value !== statsData.value.total
+})
+
 // 加载各状态的统计数据
 const loadStats = async () => {
   try {
-    // 并行请求各状态的数量（只请求 page_size=1 来获取 total）
-    const [allRes, runningRes, pendingRes, deferredRes, completedRes, failedRes] = await Promise.all([
+    // 当前实现是 7 次并发请求（各状态各发一次 page_size=1 仅为拿 total）。
+    // 真正的优化需后端提供 /tasks/summary 聚合接口，属网关增强项，就绪前保持现状。
+    // 保留 deferred 查询（数据库当前无此状态，返回 0，无害；若未来调度器恢复 deferred 可自动适配）
+    const [allRes, runningRes, pendingRes, deferredRes, completedRes, failedRes, cancelledRes] = await Promise.all([
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1 }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'running' }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'pending' }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'deferred' }),
       window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'completed' }),
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'failed' })
+      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'failed' }),
+      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'cancelled' })
     ])
-    
     statsData.value = {
       total: allRes.success ? allRes.data.total : 0,
-      running: (runningRes.success ? runningRes.data.total : 0) + (pendingRes.success ? pendingRes.data.total : 0),
-      deferred: deferredRes.success ? deferredRes.data.total : 0,
+      running: runningRes.success ? runningRes.data.total : 0,    // 修复：不再合并 pending
+      pending: pendingRes.success ? pendingRes.data.total : 0,    // pending 独立计入
+      deferred: deferredRes.success ? deferredRes.data.total : 0, // 数据库现状=0，保留兼容
       completed: completedRes.success ? completedRes.data.total : 0,
-      failed: failedRes.success ? failedRes.data.total : 0
+      failed: failedRes.success ? failedRes.data.total : 0,
+      cancelled: cancelledRes.success ? cancelledRes.data.total : 0
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
@@ -494,7 +547,8 @@ const getTaskTypeName = (type: string) => {
     'single_factor': '单因子',
     'multi_factor': '多因子',
     'factor_compare': '因子对比',
-    'daily_update': '每日更新'
+    'daily_update': '每日更新',
+    'paramscan': '参数扫描'
   }
   return map[type] || type
 }
@@ -1033,6 +1087,11 @@ onUnmounted(() => stopPolling())
       &.failed {
         background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
         .stat-value { color: #dc2626; }
+      }
+      
+      &.cancelled {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        .stat-value { color: #64748b; }
       }
     }
   }
