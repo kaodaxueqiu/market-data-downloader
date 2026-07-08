@@ -188,11 +188,15 @@
                 <span class="config-label">因子方向</span>
                 <span class="config-value">{{ getDirectionName(task.task_config.backtest_params.factor_direction) }}</span>
               </div>
-              <div class="config-item" v-if="task.task_config.backtest_params?.buy_price_type">
+              <div class="config-item" v-if="task.task_config.backtest_params?.rebalance_price_type">
+                <span class="config-label">调仓价格</span>
+                <span class="config-value">{{ getRebalancePriceTypeName(task.task_config.backtest_params.rebalance_price_type) }}</span>
+              </div>
+              <div class="config-item" v-if="!task.task_config.backtest_params?.rebalance_price_type && task.task_config.backtest_params?.buy_price_type">
                 <span class="config-label">买入价格</span>
                 <span class="config-value">{{ getBuyPriceTypeName(task.task_config.backtest_params.buy_price_type) }}</span>
               </div>
-              <div class="config-item" v-if="task.task_config.backtest_params?.sell_price_type">
+              <div class="config-item" v-if="!task.task_config.backtest_params?.rebalance_price_type && task.task_config.backtest_params?.sell_price_type">
                 <span class="config-label">卖出价格</span>
                 <span class="config-value">{{ getSellPriceTypeName(task.task_config.backtest_params.sell_price_type) }}</span>
               </div>
@@ -200,7 +204,36 @@
                 <span class="config-label">比对基准</span>
                 <span class="config-value">{{ getBenchmarkNames(task.task_config.backtest_params.benchmarks) }}</span>
               </div>
+              <div class="config-item" v-if="isSelfComputedLimit">
+                <span class="config-label">涨跌停</span>
+                <span class="config-value">
+                  <el-tooltip content="命中涨跌停收益不计入，与历史结果可能有差异" placement="top">
+                    <el-tag size="small" type="info">引擎自算</el-tag>
+                  </el-tooltip>
+                </span>
+              </div>
             </div>
+
+            <!-- 数据加载诊断（2.4） -->
+            <el-collapse v-if="loadSummaryList.length" style="margin: 8px 0">
+              <el-collapse-item title="数据加载诊断" name="load-summary">
+                <el-table :data="loadSummaryList" size="small" border stripe>
+                  <el-table-column prop="name" label="数据源" min-width="120" />
+                  <el-table-column prop="table" label="表" min-width="120" />
+                  <el-table-column prop="final_rows" label="行数" width="90" />
+                  <el-table-column prop="final_columns" label="列数" width="70" />
+                  <el-table-column label="日期范围" min-width="180">
+                    <template #default="{ row }">{{ row.min_date || '—' }} ~ {{ row.max_date || '—' }}</template>
+                  </el-table-column>
+                  <el-table-column label="覆盖警告" min-width="160">
+                    <template #default="{ row }">
+                      <span v-if="row.coverage_warning" style="color: #e6a23c; font-weight: 600">{{ row.coverage_warning }}</span>
+                      <span v-else style="color: #909399">—</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-collapse-item>
+            </el-collapse>
             <!-- admission 历史任务降级警告 -->
             <el-alert
               v-if="showAdmissionLegacyWarning"
@@ -1052,7 +1085,13 @@
           </el-tab-pane>
 
           <el-tab-pane label="详细报告" name="report">
-            <ReportView :report="reportData" :admission-report="admissionReport" :active="activeReportTab === 'report'" />
+            <ReportV03View
+              v-if="reportV03"
+              :report="reportV03.report"
+              :mode="reportV03Mode"
+              :active="activeReportTab === 'report'"
+            />
+            <ReportView v-else :report="reportData" :admission-report="admissionReport" :active="activeReportTab === 'report'" />
           </el-tab-pane>
           </el-tabs>
         </template>
@@ -1091,6 +1130,7 @@ import {
 import * as echarts from 'echarts'
 import FactorValuesSection from './FactorValuesSection.vue'
 import ReportView from './ReportView.vue'
+import ReportV03View from './ReportV03View.vue'
 
 // electronAPI 类型已在 preload/index.ts 中全局定义
 
@@ -1144,6 +1184,24 @@ const reportData = computed<any>(() => summary.value?.report ?? null)
 // 入库审核报告（仅 admission 模式有）
 const admissionReport = computed<any>(() => summary.value?.admission_report ?? null)
 const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
+
+// v0.3.1 report_v03（跳过或缺失时降级到旧 reportData/admissionReport）
+const reportV03 = computed<any>(() => {
+  const rv = summary.value?.report_v03
+  if (!rv || rv.skipped === true) return null
+  return rv
+})
+const reportV03Mode = computed<string | null>(() => reportV03.value?.mode ?? null) // 'research' | 'admission'
+
+// 涨跌停口径（2.3）：正常回测为 self_computed_price_limits（引擎自算）
+const limitFilterSource = computed<string | null>(() => summary.value?.data_alignment?.limit_filter_source ?? null)
+const isSelfComputedLimit = computed<boolean>(() => limitFilterSource.value === 'self_computed_price_limits')
+
+// 数据加载诊断（2.4）：SourceLoadSummary 列表
+const loadSummaryList = computed<any[]>(() => {
+  const ls = summary.value?.load_summary
+  return Array.isArray(ls) ? ls : []
+})
 
 // ============ admission effective 字段读取（v0.2.7 对接） ============
 // 仅 admission 模式且 v0.2.7+ 任务才会有这些字段；历史任务需降级到 task_config
@@ -1828,11 +1886,24 @@ const getUniverseName = (universe: any) => {
 
 // 基准指数缓存
 const benchmarkCache = ref<Map<string, string>>(new Map())
+// 调仓价格 value→label 缓存（来自网关，避免前端硬编码全量档位）
+const rebalancePriceNameCache = ref<Map<string, string>>(new Map())
 
 // 加载基准指数映射
 const loadBenchmarkMapping = async () => {
   try {
     const result = await window.electronAPI.backtest.getPriceTypeOptions()
+    if (result.success && result.data) {
+      // 顺带缓存调仓价格映射（优先新字段 rebalance_price_types，回退旧 buy/sell）
+      const priceMap = new Map<string, string>()
+      const addPrice = (arr: any) => {
+        if (Array.isArray(arr)) arr.forEach((p: any) => { if (p && p.value) priceMap.set(p.value, p.label) })
+      }
+      addPrice(result.data.rebalance_price_types)
+      addPrice(result.data.buy_price_types)
+      addPrice(result.data.sell_price_types)
+      rebalancePriceNameCache.value = priceMap
+    }
     if (result.success && result.data?.benchmarks) {
       const cache = new Map<string, string>()
       const bm: any = result.data.benchmarks
@@ -1903,6 +1974,12 @@ const getDirectionName = (direction: string) => {
     'auto': '自动'
   }
   return map[direction] || direction
+}
+
+const getRebalancePriceTypeName = (type: string) => {
+  if (!type) return '-'
+  // 优先查网关返回的选项 label；未命中（如网关未就绪）回退显示原始 value
+  return rebalancePriceNameCache.value.get(type) || type
 }
 
 const getBuyPriceTypeName = (type: string) => {

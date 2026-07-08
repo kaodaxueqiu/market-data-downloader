@@ -71,6 +71,24 @@
                     @input="onCodeContentChange"
                   />
                 </el-form-item>
+                <el-row :gutter="16">
+                  <el-col :span="8">
+                    <el-form-item label="聚合方式">
+                      <el-select v-model="factorAggregation" style="width: 100%;">
+                        <el-option label="均值 (mean)" value="mean" />
+                        <el-option label="最新 (last)" value="last" />
+                        <el-option label="求和 (sum)" value="sum" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="16">
+                    <el-form-item label="依赖库">
+                      <el-select v-model="factorRequires" multiple collapse-tags placeholder="默认无额外依赖" style="width: 100%;">
+                        <el-option v-for="lib in factorRequireOptions" :key="lib" :label="lib" :value="lib" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
                 <!-- 代码检查结果 -->
                 <div v-if="Object.keys(codeCheckResult).length > 0" class="code-check-panel">
                   <div class="code-check-header">
@@ -482,6 +500,15 @@
                   </el-col>
                 </el-row>
               </el-form-item>
+
+              <!-- 防前视自检（研究模式 quick/deep 显示；admission 引擎强制执行） -->
+              <el-form-item v-if="researchMode !== 'admission'" label="防前视自检">
+                <el-switch v-model="lookaheadCheckEnabled" active-text="开启前视检测" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  用样本前 70% 数据重算因子，比对是否存在未来信息泄漏，会增加耗时
+                </div>
+              </el-form-item>
             </div>
           </div>
 
@@ -524,34 +551,29 @@
               
               <el-row :gutter="16" class="param-row">
                 <el-col :span="12">
-                  <el-form-item label="买入价格">
-                    <el-select v-model="formData.backtest_params.buy_price_type" style="width: 100%;">
-                      <el-option 
-                        v-for="opt in buyPriceTypes" 
-                        :key="opt.value" 
-                        :label="opt.label" 
-                        :value="opt.value" 
-                      />
+                  <el-form-item label="调仓价格">
+                    <el-select v-model="formData.backtest_params.rebalance_price_type" style="width: 100%;">
+                      <el-option-group
+                        v-for="grp in rebalancePriceGroups"
+                        :key="grp.category"
+                      >
+                        <template #label>
+                          <span>{{ grp.category }}</span>
+                          <el-tooltip v-if="grp.isVwapCum" content="需 vwap_cum 缓存就绪，未就绪回测会报错" placement="right">
+                            <el-icon style="margin-left: 4px; vertical-align: middle;"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </template>
+                        <el-option
+                          v-for="opt in grp.options"
+                          :key="opt.value"
+                          :label="opt.label"
+                          :value="opt.value"
+                        />
+                      </el-option-group>
                     </el-select>
                     <div class="form-hint">
                       <el-icon><InfoFilled /></el-icon>
-                      T+1日买入价格，VWAP模拟大资金分批建仓
-                    </div>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="12">
-                  <el-form-item label="卖出价格">
-                    <el-select v-model="formData.backtest_params.sell_price_type" style="width: 100%;">
-                      <el-option 
-                        v-for="opt in sellPriceTypes" 
-                        :key="opt.value" 
-                        :label="opt.label" 
-                        :value="opt.value" 
-                      />
-                    </el-select>
-                    <div class="form-hint">
-                      <el-icon><InfoFilled /></el-icon>
-                      T+1+N日卖出价格，VWAP模拟大资金分批出货
+                      T+1日按此价格调仓，VWAP模拟大资金分批成交
                     </div>
                   </el-form-item>
                 </el-col>
@@ -697,6 +719,14 @@
                   <el-checkbox value="calc_turnover">换手率</el-checkbox>
                   <el-checkbox value="calc_drawdown">最大回撤</el-checkbox>
                 </el-checkbox-group>
+              </div>
+              <div class="warmup-option" style="margin-top: 12px;">
+                <span style="margin-right: 8px;">预热天数</span>
+                <el-input-number v-model="warmupDays" :min="0" :max="750" :step="10" controls-position="right" placeholder="自动" style="width: 160px;" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  留空则引擎自动（默认 60，上限 750）
+                </div>
               </div>
             </div>
           </div>
@@ -917,12 +947,25 @@ interface PriceTypeOption {
   description?: string
   category?: string
 }
-const buyPriceTypes = ref<PriceTypeOption[]>([
+const rebalancePriceTypes = ref<PriceTypeOption[]>([
   { value: 'daily_open', label: '日线开盘价' }
 ])
-const sellPriceTypes = ref<PriceTypeOption[]>([
-  { value: 'daily_close', label: '日线收盘价' }
-])
+
+// 调仓价按 category 分组（1.1 第6点）：vwap_cum 动态档单独分组并提示需缓存就绪
+const rebalancePriceGroups = computed(() => {
+  const groups = new Map<string, PriceTypeOption[]>()
+  for (const opt of rebalancePriceTypes.value) {
+    const key = opt.category || '常用'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(opt)
+  }
+  return Array.from(groups.entries()).map(([category, options]) => ({
+    category,
+    // 动态开盘累计档：category 含 vwap_cum，或选项 value 全是纯动态档 vwap_{N}min
+    isVwapCum: /vwap_?cum/i.test(category) || options.every(o => /^vwap_\d+min$/i.test(o.value)),
+    options
+  }))
+})
 
 // 时段筛选预设选项
 const timeFilterPresets = ref<TimeFilterPreset[]>([])
@@ -1038,6 +1081,17 @@ const calcOptions = ref([
   'calc_long_short', 'calc_turnover', 'calc_drawdown'
 ])
 
+// 预热天数（高级选项，留空则引擎自动，默认 60，上限 750）
+const warmupDays = ref<number | null>(null)
+
+// Python 因子高级 meta（1.4）
+const factorAggregation = ref<'mean' | 'last' | 'sum'>('mean')
+const factorRequires = ref<string[]>([])
+const factorRequireOptions = [
+  'numpy', 'pandas', 'pyarrow', 'polars', 'numba',
+  'scipy', 'sklearn', 'statsmodels', 'lightgbm', 'xgboost'
+]
+
 // 日期快捷选项
 const dateShortcuts = [
   { text: '近1年', value: () => { const e = new Date(); const s = new Date(); s.setFullYear(s.getFullYear() - 1); return [s, e] } },
@@ -1078,8 +1132,7 @@ const formData = reactive({
     num_groups: 10,
     forward_periods: [1, 5, 10, 20],
     factor_direction: 'positive',
-    buy_price_type: 'daily_open',
-    sell_price_type: 'daily_close',
+    rebalance_price_type: 'daily_open',
     benchmarks: [] as string[],
     // 费率三件套（单位 bp），留空则引擎回退 A 股拆分模型
     risk_free_rate: null as number | null,
@@ -1116,6 +1169,9 @@ const walkForward = reactive({
   train_fraction: 0.8,
   min_test_days: 20
 })
+
+// 防前视自检开关（研究模式 quick/deep 可选；admission 引擎强制执行，前端不传）
+const lookaheadCheckEnabled = ref(false)
 
 const formRules: FormRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
@@ -1663,13 +1719,12 @@ const handleStockFileChange = (file: any) => {
   reader.readAsText(file.raw)
 }
 
-// 分钟 VWAP 价类型（与日频 daily_vwap 区分）：形如 vwap_30min_xxx / vwap_60min_xxx
-const isMinuteVwap = (t?: string) => !!t && /vwap_\d+min/i.test(t)
+// 动态开盘累计档 vwap_15min ~ vwap_240min（结尾无 _HHMM），依赖 vwap_cum 视图扫描
+// 固定档如 vwap_30min_0930 走 Redis 缓存不重，不触发长区间告警，故加 ^...$ 锚点
+const isMinuteVwap = (t?: string) => !!t && /^vwap_\d+min$/i.test(t)
 
 const minuteVwapLongRangeWarning = computed(() => {
-  const buy = formData.backtest_params.buy_price_type
-  const sell = formData.backtest_params.sell_price_type
-  if (!isMinuteVwap(buy) && !isMinuteVwap(sell)) return false
+  if (!isMinuteVwap(formData.backtest_params.rebalance_price_type)) return false
   if (!dateRange.value || dateRange.value.length !== 2) return false
   const [start, end] = dateRange.value
   const days = (new Date(end).getTime() - new Date(start).getTime()) / 86400000
@@ -1820,7 +1875,8 @@ const handleSubmit = async () => {
           calc_layer_return: calcOptions.value.includes('calc_layer_return'),
           calc_long_short: calcOptions.value.includes('calc_long_short'),
           calc_turnover: calcOptions.value.includes('calc_turnover'),
-          calc_drawdown: calcOptions.value.includes('calc_drawdown')
+          calc_drawdown: calcOptions.value.includes('calc_drawdown'),
+          warmup_days: warmupDays.value || undefined
         }
       }))
       
@@ -1833,7 +1889,10 @@ const handleSubmit = async () => {
           entrypoint: 'factor',
           allow_pandas: true,
           timeout_secs: 600,
-          result_mode: 'dataframe'
+          result_mode: 'dataframe',
+          factor_aggregation: factorAggregation.value,
+          requires: factorRequires.value
+          // isolation 省略 → 引擎按 None 处理（ML 自动选，否则 in_process）
         }
       }
 
@@ -1847,6 +1906,11 @@ const handleSubmit = async () => {
         }
       }
       
+      // 防前视自检（仅研究模式 quick/deep 且开启时传；admission 引擎强制执行）
+      if (researchMode.value !== 'admission' && lookaheadCheckEnabled.value) {
+        requestData.lookahead_check = { enabled: true, fractions: [0.7] }
+      }
+
       const result = await window.electronAPI.backtest.submit(requestData)
       
       if (result.success && result.data) {
@@ -1931,8 +1995,8 @@ const loadPriceTypeOptions = async () => {
     const result = await window.electronAPI.backtest.getPriceTypeOptions()
     console.log('📊 价格类型选项接口返回:', result)
     if (result.success && result.data) {
-      buyPriceTypes.value = result.data.buy_price_types || []
-      sellPriceTypes.value = result.data.sell_price_types || []
+      // 优先用网关新字段 rebalance_price_types；过渡期网关未返回时回退到 buy_price_types
+      rebalancePriceTypes.value = result.data.rebalance_price_types || result.data.buy_price_types || []
       
       // 获取时段筛选预设选项（转换后端格式到前端格式）
       if (result.data.time_filter_presets) {
