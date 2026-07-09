@@ -229,7 +229,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     plazaVersions: (factorId: string) => ipcRenderer.invoke('factor:plazaVersions', factorId),
     // 表达式字典
     getExpressionFunctions: (category?: string) => ipcRenderer.invoke('factor:getExpressionFunctions', category),
-    getExpressionFunctionList: () => ipcRenderer.invoke('factor:getExpressionFunctionList')
+    getExpressionFunctionList: () => ipcRenderer.invoke('factor:getExpressionFunctionList'),
+    syncExpressionCatalog: () => ipcRenderer.invoke('factor:syncExpressionCatalog')
   },
 
   // 因子回测API
@@ -783,6 +784,7 @@ declare global {
         // 表达式字典
         getExpressionFunctions: (category?: string) => Promise<{ success: boolean; data?: any; error?: string }>
         getExpressionFunctionList: () => Promise<{ success: boolean; data?: any[]; error?: string }>
+        syncExpressionCatalog: () => Promise<{ success: boolean; data?: { synced_count: number; source: string; message: string }; error?: string }>
       }
       backtest: {
         submit: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>

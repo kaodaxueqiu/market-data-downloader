@@ -104,12 +104,23 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
         meta: { menuId: 'workorder_my' }
       },
-      // 数据缓存管理
+      // 回测引擎配置（容器页，子路由承载三级 tab）
+      {
+        path: 'engine-config/cache',
+        name: 'EngineConfigCache',
+        component: () => import('../views/FactorLibrary/EngineConfig/Main.vue'),
+        meta: { menuId: 'cache_management' }
+      },
+      {
+        path: 'engine-config/dict-sync',
+        name: 'EngineConfigDictSync',
+        component: () => import('../views/FactorLibrary/EngineConfig/Main.vue'),
+        meta: { menuId: 'factor_dict_sync' }
+      },
+      // 兼容旧路径：老书签/外链仍可用
       {
         path: 'cache-manager',
-        name: 'CacheManager',
-        component: () => import('../views/FactorLibrary/CacheManager/Main.vue'),
-        meta: { menuId: 'cache_management' }
+        redirect: '/factor-library/engine-config/cache'
       }
     ]
   },
@@ -468,6 +479,24 @@ router.beforeEach((to, _from, next) => {
     } else if (userMenuPermissions.includes('factor_backtest')) {
       // 有二级菜单权限但没有三级菜单权限
       console.warn('⚠️ 有因子回测权限，但没有三级菜单权限')
+      next('/')
+      return
+    }
+  }
+  
+  // 特殊处理：访问 /factor-library/engine-config 时，自动跳转到第一个有权限的三级菜单
+  if (to.path === '/factor-library/engine-config') {
+    const subRoutes = [
+      { path: '/factor-library/engine-config/cache', menuId: 'cache_management' },
+      { path: '/factor-library/engine-config/dict-sync', menuId: 'factor_dict_sync' }
+    ]
+    const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
+    if (allowedRoute) {
+      console.log('🔀 自动跳转到:', allowedRoute.path)
+      next(allowedRoute.path)
+      return
+    } else if (userMenuPermissions.includes('backtest_engine_config')) {
+      console.warn('⚠️ 有回测引擎配置权限，但没有三级菜单权限')
       next('/')
       return
     }

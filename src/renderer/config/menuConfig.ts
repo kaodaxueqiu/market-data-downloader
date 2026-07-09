@@ -89,7 +89,16 @@ export const allMenus: MenuItem[] = [
           { id: 'workorder_manage', name: '工单管理', path: '/factor-library/workorder/admin', icon: null }
         ]
       },
-      { id: 'cache_management', name: '数据缓存管理', path: '/factor-library/cache-manager', icon: null }
+      {
+        id: 'backtest_engine_config',
+        name: '回测引擎配置',
+        path: '/factor-library/engine-config',
+        icon: null,
+        children: [
+          { id: 'cache_management', name: '数据缓存管理', path: '/factor-library/engine-config/cache', icon: null },
+          { id: 'factor_dict_sync', name: '因子字典同步', path: '/factor-library/engine-config/dict-sync', icon: null }
+        ]
+      }
     ]
   },
   { 

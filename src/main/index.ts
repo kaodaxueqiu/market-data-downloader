@@ -3835,6 +3835,28 @@ ipcMain.handle('factor:getExpressionFunctions', async (_event, category?: string
   }
 })
 
+// 同步因子字典（从回测引擎拉取最新算子清单并更新字典库）
+ipcMain.handle('factor:syncExpressionCatalog', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    // EXPRESSION_API_BASE = '.../api/v1/factor/expression' → 目标 '.../api/v1/factor/expression/sync'
+    const response = await axios.post(`${EXPRESSION_API_BASE}/sync`, {}, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 30000
+    })
+
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('同步因子字典失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
 // 获取函数列表（扁平结构）
 ipcMain.handle('factor:getExpressionFunctionList', async () => {
   try {
