@@ -1598,7 +1598,8 @@ const loadFieldList = async (index: number) => {
   fieldListLoading.value[index] = true
   try {
     console.log('🔍 加载字段列表:', ds.table, 'datasource:', ds.database)
-    const result = await window.electronAPI.dbdict.getTableDetail(ds.database, ds.database, ds.table)
+    // 不传 engine/database，让后端按表名自动定位所属库（ds.database 是 "clickhouse" 之类的库类型，不是合法 engine 标识）
+    const result = await window.electronAPI.dbdict.getTableDetail('', '', ds.table)
     console.log('✅ 字段列表返回:', result)
     if (result.code === 200 && result.data?.columns) {
       // 使用展开运算符确保 Vue 响应式更新

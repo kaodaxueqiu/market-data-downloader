@@ -1377,26 +1377,25 @@
           
           <el-row :gutter="16">
             <el-col :span="12">
-              <el-form-item label="买入价格">
-                <el-select v-model="backtestForm.buy_price_type" style="width: 100%">
-                  <el-option 
-                    v-for="opt in buyPriceTypes" 
-                    :key="opt.value" 
-                    :label="opt.label" 
-                    :value="opt.value" 
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="卖出价格">
-                <el-select v-model="backtestForm.sell_price_type" style="width: 100%">
-                  <el-option 
-                    v-for="opt in sellPriceTypes" 
-                    :key="opt.value" 
-                    :label="opt.label" 
-                    :value="opt.value" 
-                  />
+              <el-form-item label="调仓价格">
+                <el-select v-model="backtestForm.rebalance_price_type" style="width: 100%">
+                  <el-option-group
+                    v-for="grp in rebalancePriceGroups"
+                    :key="grp.category"
+                  >
+                    <template #label>
+                      <span>{{ grp.category }}</span>
+                      <el-tooltip v-if="grp.isVwapCum" content="需 vwap_cum 缓存就绪，未就绪回测会报错" placement="right">
+                        <el-icon style="margin-left: 4px; vertical-align: middle;"><InfoFilled /></el-icon>
+                      </el-tooltip>
+                    </template>
+                    <el-option
+                      v-for="opt in grp.options"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-option-group>
                 </el-select>
               </el-form-item>
             </el-col>
@@ -3502,8 +3501,7 @@ const backtestForm = reactive({
   num_groups: 10,
   forward_periods: [1, 5, 10, 20],
   factor_direction: 'positive',
-  buy_price_type: 'daily_open',
-  sell_price_type: 'daily_close',
+  rebalance_price_type: 'daily_open',
   benchmarks: [] as string[],
   // 费率三件套（单位 bp），留空则引擎回退 A 股拆分模型
   risk_free_rate: null as number | null,
@@ -3541,12 +3539,23 @@ const walkForward = reactive({
 })
 
 // 价格类型和基准指数选项
-const buyPriceTypes = ref<Array<{ value: string; label: string }>>([
+const rebalancePriceTypes = ref<Array<{ value: string; label: string; category?: string }>>([
   { value: 'daily_open', label: '日线开盘价' }
 ])
-const sellPriceTypes = ref<Array<{ value: string; label: string }>>([
-  { value: 'daily_close', label: '日线收盘价' }
-])
+// 调仓价按 category 分组：vwap_cum 动态档单独分组并提示需缓存就绪
+const rebalancePriceGroups = computed(() => {
+  const groups = new Map<string, Array<{ value: string; label: string; category?: string }>>()
+  for (const opt of rebalancePriceTypes.value) {
+    const key = opt.category || '常用'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(opt)
+  }
+  return Array.from(groups.entries()).map(([category, options]) => ({
+    category,
+    isVwapCum: /vwap_?cum/i.test(category) || options.every(o => /^vwap_\d+min$/i.test(o.value)),
+    options
+  }))
+})
 
 // 基准指数数据
 interface BenchmarkOption {
@@ -3653,8 +3662,7 @@ const loadPriceTypeOptions = async () => {
     const result = await window.electronAPI.backtest.getPriceTypeOptions()
     console.log('📊 [MyFactors] 价格类型选项接口返回:', result)
     if (result.success && result.data) {
-      buyPriceTypes.value = result.data.buy_price_types || []
-      sellPriceTypes.value = result.data.sell_price_types || []
+      rebalancePriceTypes.value = result.data.rebalance_price_types || result.data.buy_price_types || []
       
       // 获取时段筛选预设选项（转换后端格式到前端格式）
       if (result.data.time_filter_presets) {
@@ -3896,8 +3904,7 @@ const submitBacktest = async () => {
         num_groups: Number(backtestForm.num_groups),
         forward_periods: [...backtestForm.forward_periods],
         factor_direction: backtestForm.factor_direction,
-        buy_price_type: backtestForm.buy_price_type,
-        sell_price_type: backtestForm.sell_price_type,
+        rebalance_price_type: backtestForm.rebalance_price_type,
         benchmarks: [...selectedBenchmarks.value],
         // 费率留空则不提交，交由引擎回退默认模型（admission 模式引擎强制覆盖）
         risk_free_rate: backtestForm.risk_free_rate ?? undefined,
