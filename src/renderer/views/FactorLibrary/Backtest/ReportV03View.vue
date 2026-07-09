@@ -83,6 +83,24 @@
     <!-- ============ 图表区（两种模式共用动态渲染）============ -->
     <div class="rv-section" v-if="chartSpecs.length">
       <h4 class="rv-title">图表分析</h4>
+      <div class="rv-strip-controls" v-if="mode === 'admission' && allStripFactors.length">
+        <el-radio-group v-model="stripSeg" size="small">
+          <el-radio-button label="all">全部</el-radio-button>
+          <el-radio-button label="in">样本内</el-radio-button>
+          <el-radio-button label="out">样本外</el-radio-button>
+        </el-radio-group>
+        <el-select
+          v-model="stripFactors"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          size="small"
+          placeholder="选择风险因子"
+          class="rv-strip-select"
+        >
+          <el-option v-for="f in allStripFactors" :key="f" :label="f" :value="f" />
+        </el-select>
+      </div>
       <div
         v-for="(spec, i) in chartSpecs"
         :key="spec.id"
@@ -112,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps<{
@@ -178,6 +196,17 @@ const conclusionClass = computed(() => {
 const mainResult = computed<any>(() => report.value?.main_result ?? null)
 const cne6Rows = computed<any[]>(() => report.value?.cne6_correlation_page?.rows ?? [])
 const cne6Threshold = computed<any>(() => report.value?.cne6_correlation_page?.threshold ?? null)
+const cne6StripPages = computed<any[]>(() => report.value?.cne6_strip_pages ?? [])
+
+// CNE6 剥离图展示控制：样本切换 + 因子过滤
+const allStripFactors = computed<string[]>(() =>
+  cne6StripPages.value.map((p: any, i: number) => p.risk_factor || `因子${i + 1}`)
+)
+const stripSeg = ref<'all' | 'in' | 'out'>('all')
+// 选中的因子；空数组视为"全部显示"（避免 immediate watch 的初始化时机问题）
+const stripFactors = ref<string[]>([])
+const isFactorVisible = (factor: string) =>
+  stripFactors.value.length === 0 || stripFactors.value.includes(factor)
 
 // ---------- 动态图表规格 ----------
 // 每个 spec: { id, title, option }
@@ -281,6 +310,35 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
     }
   }
 
+  if (mode.value === 'admission' && cne6StripPages.value.length) {
+    cne6StripPages.value.forEach((page: any, idx: number) => {
+      const factor = page.risk_factor || `因子${idx + 1}`
+      if (!isFactorVisible(factor)) return
+      for (const seg of ['in', 'out'] as const) {
+        if (stripSeg.value !== 'all' && stripSeg.value !== seg) continue
+        const s = page[seg]
+        if (!s?.dates) continue
+        const series: any[] = [
+          { name: '净值', type: 'line', showSymbol: false, connectNulls: true, data: nz(s.nav) }
+        ]
+        if (Array.isArray(s.benchmark_nav)) {
+          series.push({ name: '基准', type: 'line', showSymbol: false, connectNulls: true, lineStyle: { type: 'dashed' }, data: nz(s.benchmark_nav) })
+        }
+        if (Array.isArray(s.excess_nav_series)) {
+          series.push({ name: '超额', type: 'line', showSymbol: false, connectNulls: true, data: nz(s.excess_nav_series) })
+        }
+        specs.push({
+          id: `cne6-strip-${idx}-${seg}`,
+          title: `剥离 ${factor} · ${seg === 'in' ? '样本内' : '样本外'}净值`,
+          option: {
+            tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
+            xAxis: { type: 'category', data: s.dates }, yAxis: { type: 'value', scale: true }, series
+          }
+        })
+      }
+    })
+  }
+
   return specs
 })
 
@@ -297,7 +355,7 @@ const renderCharts = async () => {
   await new Promise(r => requestAnimationFrame(() => r(null)))
   chartSpecs.value.forEach((spec, i) => {
     const el = chartRefs[i]
-    if (!el || el.clientWidth === 0) return
+    if (!el) return
     let inst = chartInstances[i]
     if (!inst) {
       inst = echarts.init(el)
@@ -317,6 +375,14 @@ watch([() => props.report, () => props.mode, () => props.active], ([, , active],
   if (props.report !== oldReport) disposeCharts()
   if (active !== false) renderCharts()
 }, { immediate: true })
+
+// 筛选变化导致图表数量/内容变化时，重新渲染（先清掉旧实例避免错位）
+watch(chartSpecs, () => {
+  if (props.active !== false) {
+    disposeCharts()
+    renderCharts()
+  }
+})
 
 const onResize = () => {
   Object.values(chartInstances).forEach(inst => inst.resize())
@@ -369,6 +435,16 @@ onBeforeUnmount(() => {
 }
 .rv-chart-block {
   margin-bottom: 16px;
+}
+.rv-strip-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.rv-strip-select {
+  min-width: 240px;
 }
 .rv-chart-title {
   margin-bottom: 6px;
