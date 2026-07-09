@@ -183,7 +183,7 @@ const cne6Threshold = computed<any>(() => report.value?.cne6_correlation_page?.t
 // 每个 spec: { id, title, option }
 const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.EChartsOption }>>(() => {
   const specs: Array<{ id: string; title: string; option: echarts.EChartsOption }> = []
-  const baseGrid = { left: 48, right: 24, top: 40, bottom: 40 }
+  const baseGrid = { left: 48, right: 24, top: 40, bottom: 80, containLabel: true }
 
   if (mode.value === 'research' && layers.value) {
     const dates = layers.value.dates || []
@@ -204,7 +204,7 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
         id: 'layers-nav',
         title: '分层净值曲线',
         option: {
-          tooltip: { trigger: 'axis' }, legend: { type: 'scroll' }, grid: baseGrid,
+          tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
           xAxis: { type: 'category', data: dates }, yAxis: { type: 'value', scale: true },
           series
         }
@@ -231,7 +231,7 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
         id: `ic-page-${idx}`,
         title: `IC 时序（周期 ${page.period}）`,
         option: {
-          tooltip: { trigger: 'axis' }, legend: { data: ['IC', 'Rank IC'], type: 'scroll' }, grid: baseGrid,
+          tooltip: { trigger: 'axis' }, legend: { data: ['IC', 'Rank IC'], type: 'scroll', bottom: 0 }, grid: baseGrid,
           xAxis: { type: 'category', data: page.dates || [] }, yAxis: { type: 'value' },
           series: [
             { name: 'IC', type: 'line', showSymbol: false, connectNulls: true, data: nz(page.ic_series) },
@@ -274,7 +274,7 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
         id: `main-${seg}`,
         title: seg === 'in' ? '样本内净值' : '样本外净值',
         option: {
-          tooltip: { trigger: 'axis' }, legend: { type: 'scroll' }, grid: baseGrid,
+          tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
           xAxis: { type: 'category', data: s.dates }, yAxis: { type: 'value', scale: true }, series
         }
       })
