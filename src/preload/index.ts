@@ -245,6 +245,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     cancelTask: (taskId: string) => ipcRenderer.invoke('backtest:cancelTask', taskId),
     getStockPools: () => ipcRenderer.invoke('backtest:getStockPools'),
     getPriceTypeOptions: () => ipcRenderer.invoke('backtest:getPriceTypeOptions'),
+    getAdmissionConfig: () => ipcRenderer.invoke('backtest:getAdmissionConfig'),
+    saveAdmissionConfig: (yaml: string) => ipcRenderer.invoke('backtest:saveAdmissionConfig', yaml),
     download: (taskId: string, options?: { format?: 'csv' | 'xlsx'; type?: 'summary' | 'daily' | 'all'; period?: number }) =>
       ipcRenderer.invoke('backtest:download', taskId, options),
     report: (taskId: string, options?: { period?: number }) =>
@@ -795,6 +797,8 @@ declare global {
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
         getPriceTypeOptions: () => Promise<{ success: boolean; data?: { rebalance_price_types?: Array<{ value: string; label: string; description?: string; category?: string }>; buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }>; time_filter_presets?: Array<{ name: string; start: string; end: string; description?: string }> }; error?: string }>
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getAdmissionConfig: () => Promise<{ success: boolean; data?: { yaml: string }; error?: string }>
+        saveAdmissionConfig: (yaml: string) => Promise<{ success: boolean; data?: any; error?: string }>
         download: (taskId: string, options: { format: 'csv' | 'xlsx'; type: 'summary' | 'daily' | 'all'; period?: number }) => Promise<{ success: boolean; filePath?: string; error?: string }>
         report: (taskId: string, options: any) => Promise<{ success: boolean; filePath?: string; error?: string }>
         getFactorValues: (taskId: string, params?: { trade_date?: string; stock_code?: string; sort_by?: string; sort_order?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>

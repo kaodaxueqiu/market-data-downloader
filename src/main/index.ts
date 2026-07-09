@@ -5717,6 +5717,46 @@ ipcMain.handle('backtest:getStockPools', async () => {
   }
 })
 
+// 回测: 读取入库审核配置 admission.yaml
+ipcMain.handle('backtest:getAdmissionConfig', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${BACKTEST_API_BASE}/admission-config`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('❌ 读取入库审核配置失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 回测: 保存入库审核配置 admission.yaml（网关校验，不通过返回错误）
+ipcMain.handle('backtest:saveAdmissionConfig', async (_event, yaml: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.put(`${BACKTEST_API_BASE}/admission-config`,
+      { yaml },
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('❌ 保存入库审核配置失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
 // 回测: 获取价格类型选项
 ipcMain.handle('backtest:getPriceTypeOptions', async () => {
   try {

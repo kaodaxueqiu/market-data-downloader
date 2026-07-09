@@ -96,7 +96,8 @@ export const allMenus: MenuItem[] = [
         icon: null,
         children: [
           { id: 'cache_management', name: '数据缓存管理', path: '/factor-library/engine-config/cache', icon: null },
-          { id: 'factor_dict_sync', name: '因子字典同步', path: '/factor-library/engine-config/dict-sync', icon: null }
+          { id: 'factor_dict_sync', name: '因子字典同步', path: '/factor-library/engine-config/dict-sync', icon: null },
+          { id: 'admission_config', name: '入库审核配置', path: '/factor-library/engine-config/admission-config', icon: null }
         ]
       }
     ]

@@ -117,6 +117,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../views/FactorLibrary/EngineConfig/Main.vue'),
         meta: { menuId: 'factor_dict_sync' }
       },
+      {
+        path: 'engine-config/admission-config',
+        name: 'EngineConfigAdmission',
+        component: () => import('../views/FactorLibrary/EngineConfig/Main.vue'),
+        meta: { menuId: 'admission_config' }
+      },
       // 兼容旧路径：老书签/外链仍可用
       {
         path: 'cache-manager',
@@ -488,7 +494,8 @@ router.beforeEach((to, _from, next) => {
   if (to.path === '/factor-library/engine-config') {
     const subRoutes = [
       { path: '/factor-library/engine-config/cache', menuId: 'cache_management' },
-      { path: '/factor-library/engine-config/dict-sync', menuId: 'factor_dict_sync' }
+      { path: '/factor-library/engine-config/dict-sync', menuId: 'factor_dict_sync' },
+      { path: '/factor-library/engine-config/admission-config', menuId: 'admission_config' }
     ]
     const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
     if (allowedRoute) {
