@@ -680,14 +680,29 @@
                 >
                   发起 v{{ selectedVersion || Number(currentFactorDetail?.version) }} 回测
                 </el-button>
-                <el-button 
-                  type="warning" 
-                  :icon="Upload"
-                  @click="handleSubmitPlaza(currentFactorDetail)"
-                  :disabled="submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version))"
+                <!-- 入库审核（仅表达式因子；发起 admission 模式回测，审核通过才能提交广场） -->
+                <el-button
+                  v-if="hasPermission(FACTOR_BACKTEST_PERMISSION) && !isPyFileFactor(currentFactorDetail)"
+                  class="admission-btn"
+                  :icon="CircleCheck"
+                  @click="openAdmission(currentFactorDetail)"
                 >
-                  {{ submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) ? `v${selectedVersion || Number(currentFactorDetail?.version)} 已提交` : `提交 v${selectedVersion || Number(currentFactorDetail?.version)} 到广场` }}
+                  入库审核
                 </el-button>
+                <el-tooltip
+                  :disabled="isPyFileFactor(currentFactorDetail) || currentVersionAdmissionPassed || submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version))"
+                  content="需先通过入库审核（发起并跑出「通过」的入库审核）后才能提交到广场"
+                  placement="top"
+                >
+                  <el-button
+                    type="warning"
+                    :icon="Upload"
+                    @click="handleSubmitPlaza(currentFactorDetail)"
+                    :disabled="submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) || (!isPyFileFactor(currentFactorDetail) && !currentVersionAdmissionPassed)"
+                  >
+                    {{ submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) ? `v${selectedVersion || Number(currentFactorDetail?.version)} 已提交` : `提交 v${selectedVersion || Number(currentFactorDetail?.version)} 到广场` }}
+                  </el-button>
+                </el-tooltip>
                 <!-- 整体删除已移至版本历史，按版本删除 -->
               </div>
             </div>
@@ -1199,7 +1214,7 @@
     <!-- 回测配置对话框 -->
     <el-dialog
       v-model="backtestDialogVisible"
-      :title="backtestFactors.length > 1 ? `批量回测（${backtestFactors.length}个因子）` : '发起因子回测'"
+      :title="backtestFactors.length > 1 ? `批量回测（${backtestFactors.length}个因子）` : (admissionLocked ? '入库审核' : '发起因子回测')"
       width="900px"
       top="5vh"
       destroy-on-close
@@ -1314,19 +1329,20 @@
 
           <el-form-item label="研究模式">
             <el-radio-group v-model="researchMode" style="width: 100%">
-              <el-radio-button value="quick">快速初筛</el-radio-button>
-              <el-radio-button value="deep">深度研究</el-radio-button>
-              <el-radio-button value="admission">入库审核</el-radio-button>
+              <el-radio-button v-if="!admissionLocked" value="quick">快速初筛</el-radio-button>
+              <el-radio-button v-if="!admissionLocked" value="deep">深度研究</el-radio-button>
+              <el-radio-button v-if="admissionLocked" value="admission">入库审核</el-radio-button>
             </el-radio-group>
 
             <!-- 递进包含关系可视化 -->
             <div class="research-tiers">
-              <div class="tiers-note">
+              <div class="tiers-note" v-if="!admissionLocked">
                 <el-icon><InfoFilled /></el-icon>
                 三档为递进包含：选高档自动包含低档全部能力，无需多选
               </div>
               <div
                 v-for="(tier, i) in researchTiers"
+                v-show="admissionLocked ? tier.mode === 'admission' : tier.mode !== 'admission'"
                 :key="tier.mode"
                 class="tier-row"
                 :class="{ included: i <= currentModeIndex, current: tier.mode === researchMode }"
@@ -1344,7 +1360,16 @@
             </div>
           </el-form-item>
 
-          <el-form-item v-if="researchMode !== 'quick'" label="walk-forward">
+          <!-- 防前视自检（研究模式 quick/deep 显示；admission 引擎强制执行） -->
+          <el-form-item v-if="researchMode !== 'admission'" label="防前视自检">
+            <el-switch v-model="lookaheadCheckEnabled" active-text="开启前视检测" />
+            <div class="form-hint">
+              <el-icon><InfoFilled /></el-icon>
+              用样本前 70% 数据重算因子，比对是否存在未来信息泄漏，会增加耗时
+            </div>
+          </el-form-item>
+
+          <el-form-item v-if="researchMode === 'deep'" label="walk-forward">
             <el-switch v-model="walkForward.enabled" active-text="开启滚动验证" />
             <div style="color: #909399; font-size: 12px; margin-top: 4px;">
               开启 walk-forward 会多次重算因子和回测，耗时明显增加
@@ -2959,6 +2984,17 @@ const activeDetail = ref<any>(null)
 
 const submittedVersions = ref<number[]>([])
 
+// 当前版本是否已通过入库审核：从回测历史筛 admission 且通过、且版本匹配当前版本
+const currentVersionAdmissionPassed = computed(() => {
+  const ver = String(selectedVersion.value || Number(currentFactorDetail.value?.version) || '')
+  if (!ver) return false
+  return backtestHistory.value.some((t: any) =>
+    t.research_mode === 'admission' &&
+    t.admission_passed === true &&
+    String(t.version) === ver
+  )
+})
+
 const loadVersionHistory = async () => {
   if (!currentFactorDetail.value?.factor_id) return
   loadingVersions.value = true
@@ -3511,6 +3547,8 @@ const backtestForm = reactive({
 
 // 研究模式（顶层字段）
 const researchMode = ref<'quick' | 'deep' | 'admission'>('quick')
+// 入库审核锁定：由「入库审核」按钮发起时锁定 admission 档，禁止改选 quick/deep
+const admissionLocked = ref(false)
 const researchModeHints: Record<string, string> = {
   quick: '快速初筛，仅用于调参/筛选，不可直接入库或实盘',
   deep: '深度研究：含 CNE6 风格中性化、泛化性诊断',
@@ -3529,6 +3567,9 @@ const currentModeIndex = computed(() => researchModeOrder.indexOf(researchMode.v
 
 // admission 模式：universe / forward_periods / 费率会被引擎强制覆盖
 const isAdmissionMode = computed(() => researchMode.value === 'admission')
+
+// 防前视自检开关（研究模式 quick/deep 可选；admission 引擎强制执行，前端不传）
+const lookaheadCheckEnabled = ref(false)
 
 // walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
 const walkForward = reactive({
@@ -3835,6 +3876,8 @@ const openBatchBacktest = async () => {
 // 单因子发起回测（详情卡片入口）
 const openBacktest = async (factor: any) => {
   if (!factor) return
+  admissionLocked.value = false
+  researchMode.value = 'quick'
   backtestFactor.value = factor
   backtestFactors.value = [factor]
   // 确保选项已加载
@@ -3845,6 +3888,24 @@ const openBacktest = async (factor: any) => {
     await loadStockPools()
   }
   // 重置选择
+  selectedBenchmarks.value = []
+  stockPoolTab.value = 'index'
+  backtestDialogVisible.value = true
+}
+
+// 发起入库审核（详情卡片入口）：复用回测弹窗，但锁定 admission 档
+const openAdmission = async (factor: any) => {
+  if (!factor) return
+  admissionLocked.value = true
+  researchMode.value = 'admission'
+  backtestFactor.value = factor
+  backtestFactors.value = [factor]
+  if (standardIndexes.value.length === 0) {
+    await loadPriceTypeOptions()
+  }
+  if (!stockPoolData.value) {
+    await loadStockPools()
+  }
   selectedBenchmarks.value = []
   stockPoolTab.value = 'index'
   backtestDialogVisible.value = true
@@ -3921,14 +3982,19 @@ const submitBacktest = async () => {
       }
     }
 
-    // walk-forward（顶层，仅 deep / admission 且开启时传）
-    if (researchMode.value !== 'quick' && walkForward.enabled) {
+    // walk-forward（顶层，仅 deep 且开启时传；admission 引擎全权接管，前端不传）
+    if (researchMode.value === 'deep' && walkForward.enabled) {
       data.walk_forward = {
         enabled: true,
         max_folds: walkForward.max_folds,
         train_fraction: walkForward.train_fraction,
         min_test_days: walkForward.min_test_days
       }
+    }
+
+    // 防前视自检（仅研究模式 quick/deep 且开启时传；admission 引擎强制执行）
+    if (researchMode.value !== 'admission' && lookaheadCheckEnabled.value) {
+      data.lookahead_check = { enabled: true, fractions: [0.7] }
     }
     
     console.log('📊 selectedBenchmarks:', selectedBenchmarks.value)
@@ -4351,6 +4417,17 @@ onMounted(() => {
   margin: 6px 0 10px;
   font-size: 12px;
   color: #909399;
+}
+
+// 表单提示文字（防前视自检等）
+.form-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
 }
 
 // 三档递进包含可视化（回测弹窗内）
@@ -4948,11 +5025,39 @@ onMounted(() => {
     }
     
     .action-buttons {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-top: 20px;
       padding-top: 20px;
       border-top: 1px solid #e4e7ed;
+
+      // el-tooltip 包裹的按钮也要占满格子
+      > .el-tooltip,
+      :deep(.el-tooltip) {
+        width: 100%;
+      }
+
+      .el-button {
+        margin-left: 0;
+        width: 100%;
+        height: 40px;
+        font-size: 14px;
+      }
+
+      // 入库审核：紫色，与蓝/绿/橙区分
+      .admission-btn {
+        background-color: #8b5cf6;
+        border-color: #8b5cf6;
+        color: #fff;
+
+        &:hover,
+        &:focus {
+          background-color: #a78bfa;
+          border-color: #a78bfa;
+          color: #fff;
+        }
+      }
     }
     
     .section-header-with-action {

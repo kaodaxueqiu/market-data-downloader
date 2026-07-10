@@ -215,7 +215,7 @@
             </div>
 
             <!-- 数据加载诊断（2.4） -->
-            <el-collapse v-if="loadSummaryList.length" style="margin: 8px 0">
+            <el-collapse v-if="loadSummaryList.length" class="load-diag-collapse" style="margin: 8px 16px; border-radius: 6px; overflow: hidden;">
               <el-collapse-item title="数据加载诊断" name="load-summary">
                 <el-table :data="loadSummaryList" size="small" border stripe>
                   <el-table-column prop="name" label="数据源" min-width="120" />
@@ -2316,6 +2316,17 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+// 数据加载诊断折叠条：标题、内容左右留白，不贴边
+.load-diag-collapse {
+  :deep(.el-collapse-item__header) {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  :deep(.el-collapse-item__content) {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
 // ============================================
 // Tab 样式优化 - 圆角分段式
 // ============================================

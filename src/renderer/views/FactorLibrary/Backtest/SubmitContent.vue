@@ -450,7 +450,6 @@
                 <el-radio-group v-model="researchMode" class="research-mode-group">
                   <el-radio-button value="quick">快速初筛</el-radio-button>
                   <el-radio-button value="deep">深度研究</el-radio-button>
-                  <el-radio-button value="admission">入库审核</el-radio-button>
                 </el-radio-group>
 
                 <!-- 递进包含关系可视化 -->
@@ -479,7 +478,7 @@
               </el-form-item>
 
               <!-- walk-forward 高级选项（仅 deep / admission 显示） -->
-              <el-form-item v-if="researchMode !== 'quick'" label="walk-forward">
+              <el-form-item v-if="researchMode === 'deep'" label="walk-forward">
                 <el-switch v-model="walkForward.enabled" active-text="开启滚动验证" />
                 <div class="form-hint">
                   <el-icon><InfoFilled /></el-icon>
@@ -1154,8 +1153,7 @@ const researchModeHint = computed(() => researchModeHints[researchMode.value] ||
 const researchModeOrder = ['quick', 'deep', 'admission']
 const researchTiers = [
   { mode: 'quick', label: '快速初筛', adds: ['核心：IC / 分层 / 样本外摘要'] },
-  { mode: 'deep', label: '深度研究', adds: ['CNE6 风格中性化', '泛化诊断'] },
-  { mode: 'admission', label: '入库审核', adds: ['前视快照', '库级共线性 / 正交', '治理结论'] }
+  { mode: 'deep', label: '深度研究', adds: ['CNE6 风格中性化', '泛化诊断'] }
 ]
 const currentModeIndex = computed(() => researchModeOrder.indexOf(researchMode.value))
 
@@ -1897,8 +1895,8 @@ const handleSubmit = async () => {
         }
       }
 
-      // walk-forward（顶层，仅 deep / admission 且开启时传）
-      if (researchMode.value !== 'quick' && walkForward.enabled) {
+      // walk-forward（顶层，仅 deep 且开启时传；admission 引擎全权接管，前端不传）
+      if (researchMode.value === 'deep' && walkForward.enabled) {
         requestData.walk_forward = {
           enabled: true,
           max_folds: walkForward.max_folds,
