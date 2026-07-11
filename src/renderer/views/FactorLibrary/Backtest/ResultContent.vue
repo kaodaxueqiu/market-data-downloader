@@ -879,7 +879,7 @@
           </div>
 
           <!-- 风险中性化报告 -->
-          <el-collapse v-if="neutralizationReport && hasMultipleVariants" v-model="neutralCollapseActive" class="report-collapse neutralization-collapse">
+          <el-collapse v-if="neutralizationReport && (hasNeutralizationData || hasMultipleVariants)" v-model="neutralCollapseActive" class="report-collapse neutralization-collapse">
             <el-collapse-item name="neutral">
               <template #title>
                 <div class="collapse-title">
@@ -888,6 +888,8 @@
                 </div>
               </template>
               <div class="report-body">
+                <!-- 剥离前后对比柱状图（raw / selected / all） -->
+                <div v-if="neutralCompareData.length" ref="neutralCompareChartRef" class="neutral-compare-chart" style="width: 100%; height: 260px; margin-bottom: 12px;"></div>
                 <!-- Rank IC 衰减 -->
                 <div class="report-row" v-if="rankIcDecayRatio !== null">
                   <span class="report-label">Rank IC 衰减 (all/raw):</span>
@@ -930,15 +932,27 @@
                     </el-tag>
                   </div>
                 </div>
-                <!-- 原始 Rank IC 对比（数值在 neutralization.raw / neutralization.all） -->
-                <div class="report-row" v-if="neutralizationReport?.raw || neutralizationReport?.all">
+                <!-- 原始 Rank IC 对比（数值在 neutralization.raw / selected / all） -->
+                <div class="report-row" v-if="neutralizationReport?.raw || neutralizationReport?.selected || neutralizationReport?.all">
                   <span class="report-label">Rank IC 对比:</span>
                   <span class="report-sub" v-if="neutralizationReport?.raw">
                     raw = {{ formatNumber(neutralizationReport.raw.rank_ic_mean, 4) }}
                   </span>
+                  <span class="report-sub" v-if="typeof neutralizationReport?.selected?.rank_ic_mean === 'number'">
+                    | selected = {{ formatNumber(neutralizationReport.selected.rank_ic_mean, 4) }}
+                  </span>
                   <span class="report-sub" v-if="typeof neutralizationReport?.all?.rank_ic_mean === 'number'">
                     | all = {{ formatNumber(neutralizationReport.all.rank_ic_mean, 4) }}
                   </span>
+                </div>
+                <!-- 实际剥离的因子（selected_risks） -->
+                <div class="report-row" v-if="neutralizationReport?.selected_risks?.length">
+                  <span class="report-label">本次剥离因子:</span>
+                  <div class="report-tags">
+                    <el-tag v-for="r in neutralizationReport.selected_risks" :key="r" type="success" size="small" style="margin-right: 6px;">
+                      {{ r }}
+                    </el-tag>
+                  </div>
                 </div>
               </div>
             </el-collapse-item>
@@ -1159,17 +1173,16 @@ const activeVariant = ref(0)
 // v0.2.6 详细报告 Tab
 const activeReportTab = ref('overview')
 
-// variant 文案映射
+// variant 文案映射（后端已返回真实 variant 值，直接命中 map）
 const getVariantLabel = (variant: string, index?: number) => {
   const map: Record<string, string> = {
     'raw': '原始因子',
-    'neutral_selected': '风险中性化',
+    'neutral_selected': '指定风险剥离',
     'neutral_all': '全风险剥离'
   }
   if (variant && map[variant]) return map[variant]
-  // variant 为空时按 index 区分：第一个是原始，第二个是中性化
+  // 兜底：极旧任务 variant 可能为空，按 index 粗略区分
   if (index === 0) return '原始因子'
-  if (index === 1) return '风险中性化'
   return index != null ? `变体 ${index + 1}` : '因子结果'
 }
 
@@ -1271,9 +1284,66 @@ const neutralizationReport = computed<any>(() => summary.value?.neutralization ?
 const autoFieldReport = computed<any>(() => summary.value?.auto_field_report ?? null)
 // 是否多 variant（>1 才展示 neutralization 报告）
 const hasMultipleVariants = computed<boolean>(() => (result.value?.factor_results?.length ?? 0) > 1)
+// 是否有实际中性化数据可展示（quick/deep 单 factor_result 也会带 neutralization，
+// 不能只靠 hasMultipleVariants 判断，否则剥离结果被挡住不显示）
+const hasNeutralizationData = computed<boolean>(() => {
+  const n = neutralizationReport.value
+  if (!n) return false
+  return !!(n.raw || n.all || n.selected || (Array.isArray(n.variants) && n.variants.length > 0))
+})
+
+// 剥离前后对比图：raw / selected / all 三组，各展示 Rank IC / Sharpe / 年化收益
+const neutralCompareChartRef = ref<HTMLDivElement | null>(null)
+let neutralCompareChart: echarts.ECharts | null = null
+// 组装对比数据（只保留后端实际返回的组）
+const neutralCompareData = computed<Array<{ key: string; label: string; color: string; g: any }>>(() => {
+  const n = neutralizationReport.value
+  if (!n) return []
+  const groups = [
+    { key: 'raw', label: '原始', color: '#909399', g: n.raw },
+    { key: 'selected', label: '剥离所选', color: '#409eff', g: n.selected },
+    { key: 'all', label: '剥离全部', color: '#67c23a', g: n.all }
+  ]
+  return groups.filter(x => x.g && typeof x.g.rank_ic_mean === 'number')
+})
+const renderNeutralCompareChart = () => {
+  const el = neutralCompareChartRef.value
+  const rows = neutralCompareData.value
+  if (!el || !rows.length) return
+  if (neutralCompareChart) { neutralCompareChart.dispose(); neutralCompareChart = null }
+  neutralCompareChart = echarts.init(el)
+  const metrics = [
+    { name: 'Rank IC', pick: (g: any) => g.rank_ic_mean },
+    { name: 'Sharpe', pick: (g: any) => g.sharpe_ratio },
+    { name: '年化收益', pick: (g: any) => g.annual_return }
+  ]
+  neutralCompareChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (v: any) => (typeof v === 'number' ? v.toFixed(4) : v) },
+    legend: { data: rows.map(r => r.label), top: 0 },
+    grid: { left: 8, right: 16, top: 36, bottom: 8, containLabel: true },
+    xAxis: { type: 'category', data: metrics.map(m => m.name) },
+    yAxis: { type: 'value', scale: true },
+    series: rows.map(r => ({
+      name: r.label,
+      type: 'bar',
+      itemStyle: { color: r.color },
+      barMaxWidth: 40,
+      label: { show: true, position: 'top', formatter: (p: any) => Number(p.value).toFixed(3), fontSize: 10 },
+      data: metrics.map(m => {
+        const v = m.pick(r.g)
+        return typeof v === 'number' ? Number(v.toFixed(4)) : null
+      })
+    }))
+  })
+  neutralCompareChart.resize()
+}
 // 折叠面板展开状态
 const neutralCollapseActive = ref<string[]>(['neutral'])
 const autoFieldCollapseActive = ref<string[]>([])
+// 数据到位或折叠展开后渲染对比图（watch 需在 neutralCollapseActive 定义之后）
+watch([neutralCompareData, neutralCollapseActive], () => {
+  nextTick(() => setTimeout(renderNeutralCompareChart, 60))
+})
 
 // Rank IC 衰减比率（直接读引擎预计算的 all_vs_raw）
 const rankIcDecayRatio = computed<number | null>(() => {
@@ -1659,6 +1729,7 @@ const renderExcessReturnChart = () => {
 // 监听窗口大小变化，调整图表
 const handleResize = () => {
   excessReturnChart?.resize()
+  neutralCompareChart?.resize()
 }
 
 // 每个因子选中的周期
@@ -2311,6 +2382,10 @@ onUnmounted(() => {
   if (excessReturnChart) {
     excessReturnChart.dispose()
     excessReturnChart = null
+  }
+  if (neutralCompareChart) {
+    neutralCompareChart.dispose()
+    neutralCompareChart = null
   }
 })
 </script>

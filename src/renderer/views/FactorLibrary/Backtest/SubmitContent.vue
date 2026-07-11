@@ -508,6 +508,32 @@
                   用样本前 70% 数据重算因子，比对是否存在未来信息泄漏，会增加耗时
                 </div>
               </el-form-item>
+
+              <!-- 风险因子剥离（研究模式 quick/deep 显示；admission 引擎强制全剥） -->
+              <el-form-item v-if="researchMode !== 'admission'" label="风险因子剥离">
+                <el-switch v-model="riskNeutralization.enabled" active-text="开启剥离" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  剥离所选风险因子后重算因子有效性，用于判断超额是否主要来自风格暴露
+                </div>
+                <el-select
+                  v-if="riskNeutralization.enabled"
+                  v-model="riskNeutralization.selected"
+                  multiple
+                  clearable
+                  collapse-tags
+                  collapse-tags-tooltip
+                  placeholder="选择要剥离的风险因子（不选则默认剥离全部）"
+                  style="width: 100%; margin-top: 8px;"
+                >
+                  <el-option
+                    v-for="opt in RISK_FACTOR_OPTIONS"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </el-form-item>
             </div>
           </div>
 
@@ -902,7 +928,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { 
   Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts,
@@ -1170,6 +1196,29 @@ const walkForward = reactive({
 
 // 防前视自检开关（研究模式 quick/deep 可选；admission 引擎强制执行，前端不传）
 const lookaheadCheckEnabled = ref(false)
+
+// 风险因子剥离配置（仅 quick/deep；admission 引擎强制全剥，前端不传）
+// selected 传值必须为引擎精确英文值，展示中文
+const RISK_FACTOR_OPTIONS = [
+  { value: 'beta', label: 'Beta' },
+  { value: 'size', label: '市值' },
+  { value: 'nonlinear_size', label: '非线性市值' },
+  { value: 'value', label: '价值' },
+  { value: 'momentum', label: '动量' },
+  { value: 'volatility', label: '波动率' },
+  { value: 'liquidity', label: '流动性' },
+  { value: 'industry', label: '行业' }
+]
+// quick 默认关、deep 默认开（deep 引擎本就会剥离）
+const riskNeutralization = reactive({
+  enabled: false,
+  selected: [] as string[]
+})
+// 切换研究模式时联动剥离默认值：deep 默认开、quick 默认关（用户可再手动调整）
+watch(researchMode, (mode) => {
+  if (mode === 'deep') riskNeutralization.enabled = true
+  else if (mode === 'quick') riskNeutralization.enabled = false
+})
 
 const formRules: FormRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
@@ -1908,6 +1957,20 @@ const handleSubmit = async () => {
       // 防前视自检（仅研究模式 quick/deep 且开启时传；admission 引擎强制执行）
       if (researchMode.value !== 'admission' && lookaheadCheckEnabled.value) {
         requestData.lookahead_check = { enabled: true, fractions: [0.7] }
+      }
+
+      // 风险因子剥离（仅 quick/deep；admission 引擎强制全剥，前端不传）
+      if (researchMode.value !== 'admission') {
+        if (riskNeutralization.enabled) {
+          requestData.risk_neutralization = {
+            enabled: true,
+            selected: [...riskNeutralization.selected],  // 引擎精确英文值
+            include_all: true,    // 额外出"全部一起剥"(neutral_all)
+            include_each: false
+          }
+        } else {
+          requestData.risk_neutralization = { enabled: false }
+        }
       }
 
       const result = await window.electronAPI.backtest.submit(requestData)
