@@ -489,12 +489,16 @@ const pageTitle = computed(() => {
     '/factor-library/plaza': '因子广场',
     '/factor-library/my-factors': '我的因子',
     '/factor-library/submit': '提交因子',
-    '/factor-library/backtest': '因子回测',
-    '/factor-library/backtest/submit': '因子回测',
-    '/factor-library/backtest/tasks': '因子回测',
-    '/factor-library/backtest/result': '因子回测',
+    '/factor-library/backtest': '单因子回测',
+    '/factor-library/backtest/submit': '单因子回测',
+    '/factor-library/backtest/tasks': '任务详情',
+    '/factor-library/backtest/result': '任务详情',
     '/factor-library/expression-dict': '表达式字典',
     '/factor-library/research-results': '研究成果',
+    '/factor-library/engine-config': '回测引擎配置',
+    '/factor-library/engine-config/cache': '回测引擎配置',
+    '/factor-library/engine-config/dict-sync': '回测引擎配置',
+    '/factor-library/engine-config/admission-config': '回测引擎配置',
     '/fund-management': '基金管理',
     '/fund-management/list': '基金列表',
     '/fund-management/performance': '业绩分析',
@@ -528,7 +532,7 @@ const pageTitle = computed(() => {
   }
   // 处理动态路由
   if (route.path.startsWith('/factor-library/backtest/result/')) {
-    return '因子回测'
+    return '任务详情'
   }
   if (route.path.startsWith('/factor-library/workorder/detail/')) {
     return '数据工单'
@@ -1003,9 +1007,8 @@ const checkBacktestTaskUpdates = async () => {
   try {
     // 检查是否有因子回测权限
     const hasBacktestPermission = menuPermissions.value.length === 0 || 
-      menuPermissions.value.includes('factor_backtest') ||
-      menuPermissions.value.includes('backtest_submit') ||
-      menuPermissions.value.includes('backtest_list')
+      menuPermissions.value.includes('backtest_tasks') ||
+      menuPermissions.value.includes('factor_backtest')
     
     if (!hasBacktestPermission) {
       console.log('🔕 无回测权限，跳过任务检查')

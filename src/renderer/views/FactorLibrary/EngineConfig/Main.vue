@@ -63,7 +63,7 @@
         </div>
         <div class="editor-toolbar">
           <el-button :icon="Refresh" @click="loadAdmissionYaml" :loading="admissionLoading">重新加载</el-button>
-          <el-button type="primary" :icon="Check" @click="saveAdmissionYaml" :loading="admissionSaving">保存</el-button>
+          <el-button type="primary" :icon="Check" @click="saveAdmissionYaml" :loading="admissionSaving" :disabled="!isDirty">保存</el-button>
         </div>
         <div ref="yamlEditorRef" class="yaml-editor"></div>
         <div v-if="admissionError" class="admission-error">
@@ -160,12 +160,24 @@ let yamlEditor: EditorView | null = null
 const admissionLoading = ref(false)
 const admissionSaving = ref(false)
 const admissionError = ref('')
+// 记录加载时的原始内容，用于判断是否有改动
+const originalYaml = ref('')
+const isDirty = ref(false)
 
 const initEditor = (initialValue = '') => {
   if (!yamlEditorRef.value || yamlEditor) return
   yamlEditor = new EditorView({
     doc: initialValue,
-    extensions: [basicSetup, yamlLang()],
+    extensions: [
+      basicSetup,
+      yamlLang(),
+      // 监听文档变化，实时更新是否有改动
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          isDirty.value = update.state.doc.toString() !== originalYaml.value
+        }
+      })
+    ],
     parent: yamlEditorRef.value
   })
 }
@@ -183,7 +195,11 @@ const loadAdmissionYaml = async () => {
   try {
     const res = await window.electronAPI.backtest.getAdmissionConfig()
     if (res.success) {
-      setEditorValue(res.data?.yaml || '')
+      const yaml = res.data?.yaml || ''
+      setEditorValue(yaml)
+      // 记录原始内容，重置改动状态
+      originalYaml.value = yaml
+      isDirty.value = false
     } else {
       admissionError.value = res.error || '加载失败'
     }
@@ -202,6 +218,9 @@ const saveAdmissionYaml = async () => {
     const res = await window.electronAPI.backtest.saveAdmissionConfig(yaml)
     if (res.success) {
       ElMessage.success('已保存，下一个入库审核任务生效')
+      // 保存成功后，当前内容成为新的原始内容
+      originalYaml.value = yaml
+      isDirty.value = false
     } else {
       admissionError.value = res.error || '保存失败：yaml 校验未通过'
     }

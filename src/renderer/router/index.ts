@@ -42,7 +42,7 @@ const routes: RouteRecordRaw[] = [
         path: 'backtest/submit',
         name: 'FactorBacktestSubmit',
         component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
-        meta: { menuId: 'backtest_submit' }
+        meta: { menuId: 'factor_backtest' }
       },
       {
         path: 'backtest/tasks',
@@ -54,13 +54,13 @@ const routes: RouteRecordRaw[] = [
         path: 'backtest/result',
         name: 'FactorBacktestResults',
         component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
-        meta: { menuId: 'backtest_result' }
+        meta: { menuId: 'backtest_tasks' }
       },
       {
         path: 'backtest/result/:taskId',
         name: 'FactorBacktestResultDetail',
         component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
-        meta: { menuId: 'backtest_result' }
+        meta: { menuId: 'backtest_tasks' }
       },
       {
         path: 'expression-dict',
@@ -467,12 +467,11 @@ router.beforeEach((to, _from, next) => {
     }
   }
   
-  // 特殊处理：访问 /factor-library/backtest 时，自动跳转到第一个有权限的三级菜单
+  // 特殊处理：访问 /factor-library/backtest 时，自动跳转到第一个有权限的回测页
   if (to.path === '/factor-library/backtest') {
     const subRoutes = [
-      { path: '/factor-library/backtest/submit', menuId: 'backtest_submit' },
-      { path: '/factor-library/backtest/tasks', menuId: 'backtest_tasks' },
-      { path: '/factor-library/backtest/result', menuId: 'backtest_result' }
+      { path: '/factor-library/backtest/submit', menuId: 'factor_backtest' },
+      { path: '/factor-library/backtest/tasks', menuId: 'backtest_tasks' }
     ]
     
     // 找到第一个有权限的子路由
@@ -481,11 +480,6 @@ router.beforeEach((to, _from, next) => {
     if (allowedRoute) {
       console.log('🔀 自动跳转到:', allowedRoute.path)
       next(allowedRoute.path)
-      return
-    } else if (userMenuPermissions.includes('factor_backtest')) {
-      // 有二级菜单权限但没有三级菜单权限
-      console.warn('⚠️ 有因子回测权限，但没有三级菜单权限')
-      next('/')
       return
     }
   }

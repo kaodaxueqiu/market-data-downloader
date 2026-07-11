@@ -66,17 +66,8 @@ export const allMenus: MenuItem[] = [
       { id: 'factor_plaza', name: '因子广场', path: '/factor-library/plaza', icon: null },
       { id: 'factor_submit', name: '因子提交', path: '/factor-library/submit', icon: null },
       { id: 'research_results', name: '研究成果', path: '/factor-library/research-results', icon: null },
-      { 
-        id: 'factor_backtest', 
-        name: '因子回测', 
-        path: '/factor-library/backtest/submit', 
-        icon: null,
-        children: [
-          { id: 'backtest_submit', name: '单因子回测', path: '/factor-library/backtest/submit', icon: null },
-          { id: 'backtest_tasks', name: '回测任务', path: '/factor-library/backtest/tasks', icon: null },
-          { id: 'backtest_result', name: '回测结果', path: '/factor-library/backtest/result', icon: null }
-        ]
-      },
+      { id: 'factor_backtest', name: '单因子回测', path: '/factor-library/backtest/submit', icon: null },
+      { id: 'backtest_tasks', name: '任务详情', path: '/factor-library/backtest/tasks', icon: null },
       { id: 'expression_dict', name: '表达式字典', path: '/factor-library/expression-dict', icon: null },
       { 
         id: 'data_workorder', 
