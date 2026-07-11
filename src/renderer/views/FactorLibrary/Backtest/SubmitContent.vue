@@ -155,18 +155,30 @@
               <span>回测时间</span>
             </div>
             <div class="section-body">
-              <el-form-item label="时间范围">
-                <el-date-picker
-                  v-model="dateRange"
-                  type="daterange"
-                  range-separator="~"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                  value-format="YYYY-MM-DD"
-                  :shortcuts="dateShortcuts"
-                  style="width: 100%;"
-                />
-              </el-form-item>
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item label="开始日期">
+                    <el-date-picker
+                      v-model="startDate"
+                      type="date"
+                      placeholder="开始日期"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%;"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="结束日期">
+                    <el-date-picker
+                      v-model="endDate"
+                      type="date"
+                      placeholder="结束日期"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%;"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </div>
           </div>
 
@@ -560,6 +572,8 @@
                 </el-col>
               </el-row>
               
+              <div class="param-divider"></div>
+
               <el-form-item label="预测周期">
                 <el-select v-model="formData.backtest_params.forward_periods" multiple style="width: 100%;">
                   <el-option label="1日" :value="1" />
@@ -574,6 +588,8 @@
                 </div>
               </el-form-item>
               
+              <div class="param-divider"></div>
+
               <el-row :gutter="16" class="param-row">
                 <el-col :span="12">
                   <el-form-item label="调仓价格">
@@ -655,7 +671,7 @@
                   </el-form-item>
                 </el-col>
               </el-row>
-              <div class="form-hint">
+              <div class="form-hint form-hint-indent">
                 <el-icon><InfoFilled /></el-icon>
                 费率单位为 bp（万分之一），留空则由引擎回退 A 股拆分成本模型
               </div>
@@ -671,7 +687,9 @@
               />
 
               
-              <el-form-item label="基准指数">
+              <div class="param-divider"></div>
+              
+              <el-form-item label="基准指数" class="benchmark-item">
                 <el-tabs v-model="benchmarkTab" class="benchmark-tabs">
                   <!-- 标准指数 Tab -->
                   <el-tab-pane label="标准指数" name="standard">
@@ -944,6 +962,21 @@ const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const factorSource = ref('expression')
 const dateRange = ref<[string, string] | null>(null)
+// 分离式开始/结束日期：底层仍读写 dateRange，保证提交/校验逻辑不变
+const startDate = computed<string | null>({
+  get: () => dateRange.value?.[0] || null,
+  set: (val) => {
+    const end = dateRange.value?.[1] || ''
+    dateRange.value = [val || '', end] as [string, string]
+  }
+})
+const endDate = computed<string | null>({
+  get: () => dateRange.value?.[1] || null,
+  set: (val) => {
+    const start = dateRange.value?.[0] || ''
+    dateRange.value = [start, val || ''] as [string, string]
+  }
+})
 
 // 股票池列表
 interface StockPool {
@@ -1115,14 +1148,6 @@ const factorRequires = ref<string[]>([])
 const factorRequireOptions = [
   'numpy', 'pandas', 'pyarrow', 'polars', 'numba',
   'scipy', 'sklearn', 'statsmodels', 'lightgbm', 'xgboost'
-]
-
-// 日期快捷选项
-const dateShortcuts = [
-  { text: '近1年', value: () => { const e = new Date(); const s = new Date(); s.setFullYear(s.getFullYear() - 1); return [s, e] } },
-  { text: '近2年', value: () => { const e = new Date(); const s = new Date(); s.setFullYear(s.getFullYear() - 2); return [s, e] } },
-  { text: '近3年', value: () => { const e = new Date(); const s = new Date(); s.setFullYear(s.getFullYear() - 3); return [s, e] } },
-  { text: '今年以来', value: () => { const e = new Date(); return [new Date(e.getFullYear(), 0, 1), e] } }
 ]
 
 // 表单数据
@@ -2133,27 +2158,30 @@ const initApiKey = async () => {
   .submit-form {
     .form-section {
       background: #fff;
-      border-radius: 12px;
-      margin-bottom: 20px;
+      border-radius: 16px;
+      margin-bottom: 18px;
       overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-      border: 1px solid rgba(0, 0, 0, 0.05);
-      transition: all 0.3s ease;
+      border: 1px solid #eef2f7;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -18px rgba(15, 23, 42, 0.14);
+      transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
+                  box-shadow 0.5s cubic-bezier(0.32, 0.72, 0, 1);
       
       &:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        transform: translateY(-2px);
+        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05), 0 16px 36px -20px rgba(15, 23, 42, 0.22);
       }
       
       .section-header {
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 14px 20px;
-        background: #fff;
-        border-bottom: 1px solid #f0f0f0;
+        padding: 15px 20px;
+        background: linear-gradient(180deg, #fcfdfe 0%, #ffffff 100%);
+        border-bottom: 1px solid #f1f5f9;
         font-weight: 600;
         font-size: 15px;
-        color: #1f2937;
+        color: #0f172a;
+        letter-spacing: -0.01em;
         
         .section-icon {
           width: 28px;
@@ -2161,9 +2189,10 @@ const initApiKey = async () => {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-          border-radius: 8px;
-          color: #0284c7;
+          background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+          border: 1px solid #e0ecfb;
+          border-radius: 9px;
+          color: #2563eb;
           font-size: 15px;
         }
         
@@ -2321,7 +2350,6 @@ const initApiKey = async () => {
       font-size: 12px;
       color: #909399;
       margin-top: 4px;
-      
       .el-icon {
         font-size: 14px;
       }
@@ -2339,6 +2367,11 @@ const initApiKey = async () => {
         font-weight: 500;
       }
     }
+
+    // 独立于 form-item 的提示，手动缩进对齐到内容区（label-width: 100px）
+    .form-hint-indent {
+      margin-left: 100px;
+    }
     
     // 回测参数行间距（el-row 不是 form-item，需手动留白）
     .param-row {
@@ -2347,6 +2380,13 @@ const initApiKey = async () => {
       :deep(.el-form-item) {
         margin-bottom: 0;
       }
+    }
+
+    // 分割线：灰色虚线
+    .param-divider {
+      height: 0;
+      margin: 20px 0;
+      border-top: 1px dashed #e2e8f0;
     }
 
     // 研究模式 / walk-forward
@@ -2454,6 +2494,18 @@ const initApiKey = async () => {
       }
     }
     
+    // 基准指数 form-item：label 与 Tab 头文字顶部对齐
+    .benchmark-item {
+      :deep(.el-form-item) {
+        align-items: flex-start;
+      }
+      :deep(.el-form-item__label) {
+        align-self: flex-start;
+        height: auto;
+        padding-top: 4px;
+      }
+    }
+
     // 基准指数Tab样式
     .benchmark-tabs {
       :deep(.el-tabs__header) {
@@ -2941,6 +2993,8 @@ const initApiKey = async () => {
     }
     
     .calc-options {
+      margin-left: 96px;
+
       :deep(.el-checkbox-group) {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -2951,6 +3005,27 @@ const initApiKey = async () => {
         margin-right: 0;
       }
     }
+
+    // 预热天数行：label 右对齐占位到 label-width，与上方卡片对齐
+    .warmup-option {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+
+      > span:first-child {
+        width: 88px;
+        margin-right: 12px !important;
+        text-align: right;
+        font-size: 14px;
+        color: #4b5563;
+        font-weight: 500;
+      }
+
+      .form-hint {
+        width: 100%;
+        margin-left: 100px;
+      }
+    }
     
     .form-footer {
       display: flex;
@@ -2958,21 +3033,25 @@ const initApiKey = async () => {
       padding: 32px 0 12px;
       
       .el-button {
-        min-width: 200px;
-        height: 44px;
+        min-width: 220px;
+        height: 46px;
         font-size: 15px;
         font-weight: 600;
-        border-radius: 10px;
-        box-shadow: 0 4px 14px rgba(64, 158, 255, 0.3);
-        transition: all 0.3s ease;
+        letter-spacing: 0.02em;
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        box-shadow: 0 8px 20px -6px rgba(37, 99, 235, 0.5);
+        transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
+                    box-shadow 0.5s cubic-bezier(0.32, 0.72, 0, 1);
         
         &:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
+          box-shadow: 0 14px 30px -8px rgba(37, 99, 235, 0.6);
         }
         
         &:active {
-          transform: translateY(0);
+          transform: translateY(0) scale(0.98);
         }
       }
     }

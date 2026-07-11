@@ -6209,9 +6209,12 @@ const RESEARCH_API_BASE = 'http://61.151.241.233:8080/api/v1/research'
 ipcMain.handle('research:getList', async (_event, params: {
   page?: number
   page_size?: number
-  created_by?: string
+  researcher?: string
   status?: string
   keyword?: string
+  research_mode?: string
+  start_date?: string
+  end_date?: string
   sort_by?: string
   sort_order?: string
 }) => {
@@ -6235,9 +6238,12 @@ ipcMain.handle('research:getList', async (_event, params: {
         params: {
           page: params.page || 1,
           page_size: params.page_size || 20,
-          created_by: params.created_by,
+          researcher: params.researcher,
           status: params.status,
           keyword: params.keyword,
+          research_mode: params.research_mode,
+          start_date: params.start_date,
+          end_date: params.end_date,
           sort_by: params.sort_by || 'updated_at',
           sort_order: params.sort_order || 'desc'
         },

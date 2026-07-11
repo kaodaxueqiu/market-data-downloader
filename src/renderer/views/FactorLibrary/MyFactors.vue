@@ -271,10 +271,12 @@
             <div
               v-for="factor in factors"
               :key="factor.factor_id"
+              :data-factor-id="factor.factor_id"
               class="factor-card"
               :class="{ 
                 active: selectedFactor?.factor_id === factor.factor_id,
-                selected: selectedFactorIds.includes(factor.factor_id)
+                selected: selectedFactorIds.includes(factor.factor_id),
+                'locate-highlight': highlightFactorId === String(factor.factor_id)
               }"
               @click="selectFactor(factor)"
             >
@@ -1808,8 +1810,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch, inject } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, computed, watch, nextTick, inject } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { 
   Loading, Box, Plus, Search, Edit, Delete, DataAnalysis, WarningFilled, Refresh,
@@ -1818,6 +1820,9 @@ import {
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
+// 从回测任务页跳转过来时高亮的因子ID
+const highlightFactorId = ref<string | null>(null)
 
 // 菜单权限（从 App.vue 注入），用于控制回测相关按钮的显示
 const menuPermissions = inject<{ value: string[] }>('menuPermissions', { value: [] })
@@ -2866,6 +2871,35 @@ const selectFactor = async (factor: any) => {
   } finally {
     loadingDetail.value = false
   }
+}
+
+// 从 URL query.factorId 定位并选中因子（回测任务页点因子ID跳转过来）
+const locateFactorFromQuery = async () => {
+  const fid = route.query.factorId
+  if (!fid || typeof fid !== 'string') return
+  // 先在当前已加载的因子里找
+  let target = factors.value.find((f: any) => String(f.factor_id) === fid)
+  // 当前页找不到（可能因子不在第一页）→ 用因子ID作为关键词搜索再找
+  if (!target) {
+    searchKeyword.value = fid
+    page.value = 1
+    await loadFactors()
+    target = factors.value.find((f: any) => String(f.factor_id) === fid)
+  }
+  if (target) {
+    highlightFactorId.value = fid
+    await selectFactor(target)
+    // 滚动到该因子卡片并高亮
+    await nextTick()
+    const el = document.querySelector(`[data-factor-id="${fid}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // 3 秒后取消高亮
+    setTimeout(() => { highlightFactorId.value = null }, 3000)
+  } else {
+    ElMessage.warning('未找到该因子，可能已被删除')
+  }
+  // 清掉 query，避免刷新/返回时重复定位
+  router.replace({ path: route.path, query: {} })
 }
 
 // 加载回测历史
@@ -4469,9 +4503,11 @@ const formatFullTime = (time: string) => {
   return new Date(time).toLocaleString('zh-CN')
 }
 
-onMounted(() => {
-  checkStatus()
+onMounted(async () => {
+  await checkStatus()
   loadPriceTypeOptions()
+  // 若从回测任务页带 factorId 跳转过来，自动定位到该因子
+  locateFactorFromQuery()
 })
 </script>
 
@@ -4943,6 +4979,11 @@ onMounted(() => {
       margin-bottom: 10px;
       cursor: pointer;
       transition: all 0.3s;
+
+      // 从回测任务页跳转定位时的高亮动画
+      &.locate-highlight {
+        animation: locatePulse 3s ease;
+      }
       
       &:hover {
         border-color: #409EFF;
@@ -5836,5 +5877,12 @@ onMounted(() => {
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.5;
+}
+
+// 因子定位高亮脉冲动画
+@keyframes locatePulse {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); border-color: #3b82f6; background: #eff6ff; }
+  30% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); border-color: #3b82f6; background: #eff6ff; }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 }
 </style>
