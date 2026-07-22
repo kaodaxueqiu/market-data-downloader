@@ -33,6 +33,12 @@ const routes: RouteRecordRaw[] = [
         meta: { menuId: 'my_factors' }
       },
       {
+        path: 'private-warehouse',
+        name: 'PrivateWarehouse',
+        component: () => import('../views/FactorLibrary/PrivateWarehouse.vue'),
+        meta: { menuId: 'private_warehouse' }
+      },
+      {
         path: 'submit',
         name: 'FactorSubmit',
         component: () => import('../views/FactorLibrary/Submit.vue'),
@@ -449,6 +455,7 @@ router.beforeEach((to, _from, next) => {
     const subRoutes = [
       { path: '/factor-library/plaza', menuId: 'factor_plaza' },
       { path: '/factor-library/my-factors', menuId: 'my_factors' },
+      { path: '/factor-library/private-warehouse', menuId: 'private_warehouse' },
       { path: '/factor-library/submit', menuId: 'factor_submit' }
     ]
     

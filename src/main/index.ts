@@ -2906,6 +2906,51 @@ ipcMain.handle('factor:myInit', async () => {
   }
 })
 
+// 检查 CH 专属库状态（私有数据仓库）
+ipcMain.handle('factor:myCHStatus', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/ch-status`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    console.error('检查CH专属库状态失败:', error.response?.status, error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 初始化 CH 专属库（私有数据仓库）
+ipcMain.handle('factor:myCHInit', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/ch-init`,
+      {},
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 30000
+      }
+    )
+    return { success: true, data: response.data.data, message: response.data.message }
+  } catch (error: any) {
+    console.error('初始化CH专属库失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
 // 获取因子分类
 ipcMain.handle('factor:myCategories', async () => {
   try {

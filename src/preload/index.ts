@@ -184,6 +184,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 我的因子专属库
     myStatus: () => ipcRenderer.invoke('factor:myStatus'),
     myInit: () => ipcRenderer.invoke('factor:myInit'),
+    // 私有数据仓库 · CH 专属库
+    myCHStatus: () => ipcRenderer.invoke('factor:myCHStatus'),
+    myCHInit: () => ipcRenderer.invoke('factor:myCHInit'),
     myCategories: () => ipcRenderer.invoke('factor:myCategories'),
     myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) =>
       ipcRenderer.invoke('factor:myList', params || {}),
@@ -742,6 +745,9 @@ declare global {
         // 我的因子专属库
         myStatus: () => Promise<{ success: boolean; data?: { initialized: boolean; database_name: string; user_name: string }; error?: string }>
         myInit: () => Promise<{ success: boolean; data?: { database_name: string }; message?: string; error?: string }>
+        // 私有数据仓库 · CH 专属库（字段为 database / factor_user，与 PG 库不同）
+        myCHStatus: () => Promise<{ success: boolean; data?: { initialized: boolean; database: string; factor_user?: string }; error?: string }>
+        myCHInit: () => Promise<{ success: boolean; message?: string; data?: { initialized: boolean; database: string; created: boolean }; error?: string }>
         myCategories: () => Promise<{ success: boolean; data?: any[]; error?: string }>
         myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
         myCreate: (data: any) => Promise<{ success: boolean; data?: { factor_id: string | number; factor_code: string }; message?: string; error?: string }>

@@ -63,6 +63,7 @@ export const allMenus: MenuItem[] = [
     description: '因子数据管理与查询',
     children: [
       { id: 'my_factors', name: '我的因子', path: '/factor-library/my-factors', icon: null },
+      { id: 'private_warehouse', name: '私有数据仓库', path: '/factor-library/private-warehouse', icon: null },
       { id: 'factor_plaza', name: '因子广场', path: '/factor-library/plaza', icon: null },
       { id: 'factor_submit', name: '因子提交', path: '/factor-library/submit', icon: null },
       { id: 'research_results', name: '研究成果', path: '/factor-library/research-results', icon: null },

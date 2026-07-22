@@ -488,6 +488,7 @@ const pageTitle = computed(() => {
     '/factor-library': '因子库',
     '/factor-library/plaza': '因子广场',
     '/factor-library/my-factors': '我的因子',
+    '/factor-library/private-warehouse': '私有数据仓库',
     '/factor-library/submit': '提交因子',
     '/factor-library/backtest': '单因子回测',
     '/factor-library/backtest/submit': '单因子回测',
