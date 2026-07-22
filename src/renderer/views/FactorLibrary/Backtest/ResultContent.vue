@@ -411,6 +411,140 @@
                   </el-tag>
                 </el-descriptions-item>
               </el-descriptions>
+
+              <!-- v0.3.2 方案D：因子共线性详情 -->
+              <div v-if="collinearity" class="collinearity-detail">
+                <div class="collinearity-header">
+                  <span class="collinearity-title">因子共线性检测</span>
+                  <!-- 方法徽章 -->
+                  <el-tag
+                    size="small"
+                    :type="collinearityMethodBadge(collinearity.method).type"
+                    effect="plain"
+                  >
+                    {{ collinearityMethodBadge(collinearity.method).text }}
+                  </el-tag>
+                  <!-- 缓存状态：hit 绿 / miss 红（需 DBA 重跑 factor_cluster_build） -->
+                  <el-tag
+                    v-if="collinearity.cache_status"
+                    size="small"
+                    :type="collinearity.cache_status === 'hit' ? 'success' : 'danger'"
+                    effect="plain"
+                  >
+                    缓存 {{ collinearity.cache_status === 'hit' ? '命中' : '未命中' }}
+                  </el-tag>
+                </div>
+
+                <!-- 缓存未命中提示 -->
+                <el-alert
+                  v-if="collinearity.cache_status === 'miss'"
+                  type="warning"
+                  :closable="false"
+                  show-icon
+                  title="聚类缓存未命中，需 DBA 重跑 factor_cluster_build，当前为回退模式（功能正常但较慢）"
+                  style="margin-bottom: 8px"
+                />
+
+                <!-- 无相似因子（通过唯一性检查） -->
+                <el-empty
+                  v-if="collinearityUnique"
+                  description="无相似因子（通过唯一性检查）"
+                  :image-size="60"
+                />
+
+                <template v-else>
+                  <!-- 核心指标：max_abs_corr 大字号 + 色阶 -->
+                  <div class="collinearity-core">
+                    <div class="core-metric">
+                      <span class="core-label">最大相似度 |corr|</span>
+                      <span
+                        class="core-value"
+                        :class="{
+                          'corr-green': corrLevelType(collinearity.max_abs_corr) === 'success',
+                          'corr-orange': corrIsOrange(collinearity.max_abs_corr),
+                          'corr-red': corrLevelType(collinearity.max_abs_corr) === 'danger',
+                          'corr-yellow': corrLevelType(collinearity.max_abs_corr) === 'warning' && !corrIsOrange(collinearity.max_abs_corr),
+                        }"
+                      >
+                        {{ formatNumber(collinearity.max_abs_corr, 4) }}
+                      </span>
+                    </div>
+                    <!-- 风险等级 -->
+                    <el-tag :type="riskLevelTagType(collinearity.risk_level)" effect="dark" size="small">
+                      {{ riskLevelText(collinearity.risk_level) }}
+                    </el-tag>
+                    <!-- topk 均值 -->
+                    <span class="core-sub">
+                      Top{{ collinearity.topk_n ?? '-' }} 均值 {{ formatNumber(collinearity.topk_mean_abs_corr, 4) }}
+                    </span>
+                  </div>
+
+                  <!-- 决策建议 -->
+                  <div v-if="collinearity.decision" class="collinearity-decision">
+                    <span class="label">决策建议</span>
+                    <span class="value">{{ collinearity.decision }}</span>
+                  </div>
+
+                  <!-- 候选数不足警示：应=30 -->
+                  <el-alert
+                    v-if="typeof collinearity.candidate_count === 'number' && collinearity.candidate_count < 30"
+                    type="info"
+                    :closable="false"
+                    show-icon
+                    :title="`候选数 ${collinearity.candidate_count}（<30），投影检索召回不足`"
+                    style="margin: 8px 0"
+                  />
+
+                  <!-- 相似因子表 matches[] -->
+                  <el-table
+                    v-if="collinearityMatches.length"
+                    :data="collinearityMatches"
+                    size="small"
+                    border
+                    style="margin-top: 8px"
+                  >
+                    <el-table-column label="因子编号" min-width="120">
+                      <template #default="{ row }">{{ row.factor_code ?? '-' }}</template>
+                    </el-table-column>
+                    <el-table-column label="|corr|" min-width="90">
+                      <template #default="{ row }">
+                        <el-tag
+                          size="small"
+                          :type="corrLevelType(row.abs_pearson_corr ?? Math.abs(row.pearson_corr))"
+                          :class="{ 'corr-orange-tag': corrIsOrange(row.abs_pearson_corr ?? Math.abs(row.pearson_corr)) }"
+                          effect="plain"
+                        >
+                          {{ formatNumber(row.abs_pearson_corr ?? Math.abs(row.pearson_corr), 4) }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="重叠样本数" min-width="100">
+                      <template #default="{ row }">{{ row.overlap_count ?? '-' }}</template>
+                    </el-table-column>
+                    <el-table-column label="风险等级" min-width="110">
+                      <template #default="{ row }">
+                        <el-tag size="small" :type="riskLevelTagType(row.risk_level)" effect="plain">
+                          {{ riskLevelText(row.risk_level) }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+
+                  <!-- 辅助信息 -->
+                  <div class="collinearity-meta">
+                    <span>库内因子 {{ collinearity.library_factor_count ?? '-' }}</span>
+                    <span>候选 {{ collinearity.candidate_count ?? '-' }}</span>
+                    <span>样本数 {{ collinearity.current_sample_count ?? '-' }}</span>
+                    <!-- 网格覆盖：grid_match_count=新因子在全库网格上的有值点数；
+                         grid_total_count=全库网格观测点总数（百万级）。两者量纲差异极大，
+                         仅作中性信息展示，不做比率阈值警示。 -->
+                    <span v-if="collinearity.grid_match_count != null">
+                      网格覆盖 {{ collinearity.grid_match_count }} / {{ collinearity.grid_total_count ?? '-' }}
+                    </span>
+                    <span v-if="collinearity.projection_dim">投影维度 {{ collinearity.projection_dim }}</span>
+                  </div>
+                </template>
+              </div>
             </div>
 
             <!-- 样本外黑盒（所有模式） -->
@@ -1197,6 +1331,74 @@ const reportData = computed<any>(() => summary.value?.report ?? null)
 // 入库审核报告（仅 admission 模式有）
 const admissionReport = computed<any>(() => summary.value?.admission_report ?? null)
 const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
+
+// ============ v0.3.2 方案D 因子共线性报告 ============
+// 入库审核 summary.factor_collinearity（结构见对接手册 §1.3.1）
+const collinearity = computed<any>(() => summary.value?.factor_collinearity ?? null)
+
+// matches[] 兜底为数组，供表格 v-for
+const collinearityMatches = computed<any[]>(() => {
+  const m = collinearity.value?.matches
+  return Array.isArray(m) ? m : []
+})
+
+// 是否"无相似因子"（通过唯一性检查）：matches 为空 且 max_abs_corr 确实为 0
+// 注意：只在 max_abs_corr 为有限数且 ===0 时才算唯一；若字段缺失(undefined/null)
+// 不误判为唯一，改走核心指标区（值显示 —），语义更准。
+const collinearityUnique = computed<boolean>(() => {
+  const c = collinearity.value
+  if (!c) return false
+  const v = c.max_abs_corr
+  return collinearityMatches.value.length === 0 && Number.isFinite(v) && v === 0
+})
+
+// method → 徽章文案与颜色（对接手册 §1.3.1）
+// ann_projection_top30=方案D投影检索(绿)；single_stage_fallback/two_stage_retrieval_top3=回退(黄)
+const collinearityMethodBadge = (method?: string): { text: string; type: string } => {
+  switch (method) {
+    case 'ann_projection_top30':
+      return { text: '方案D投影检索', type: 'success' }
+    case 'single_stage_fallback':
+      return { text: '单阶段回退（建议重跑缓存）', type: 'warning' }
+    case 'two_stage_retrieval_top3':
+      return { text: '两阶段回退（建议重跑缓存）', type: 'warning' }
+    default:
+      return { text: method || '未知', type: 'info' }
+  }
+}
+
+// max_abs_corr 色阶（对接手册 §1.3.1）：<0.6 绿 / 0.6-0.8 黄 / 0.8-0.9 橙 / >0.9 红
+// 返回 el-tag 的 type；橙色 el-tag 无内建，用行内 class 'corr-orange' 处理（见 style）
+const corrLevelType = (v?: number): string => {
+  if (v === null || v === undefined || !Number.isFinite(v)) return 'info'
+  if (v < 0.6) return 'success'
+  // 0.6-0.9 统一 warning；其中 0.8-0.9 由 corrIsOrange 额外标橙（class corr-orange）
+  if (v < 0.9) return 'warning'
+  return 'danger'
+}
+const corrIsOrange = (v?: number): boolean =>
+  Number.isFinite(v as number) && (v as number) >= 0.8 && (v as number) < 0.9
+
+// risk_level → 中文文案（对接手册 §1.3.1）
+const riskLevelText = (rl?: string): string => {
+  const map: Record<string, string> = {
+    pass_initial_uniqueness_check: '通过唯一性检查',
+    moderate_overlap: '中度重叠',
+    high_collinearity: '高共线性',
+    critical_duplicate: '严重重复',
+    unknown: '未计算/超时',
+  }
+  return rl ? (map[rl] ?? rl) : '-'
+}
+const riskLevelTagType = (rl?: string): string => {
+  switch (rl) {
+    case 'pass_initial_uniqueness_check': return 'success'
+    case 'moderate_overlap': return 'warning'
+    case 'high_collinearity': return 'warning'
+    case 'critical_duplicate': return 'danger'
+    default: return 'info'
+  }
+}
 
 // v0.3.1 report_v03（跳过或缺失时降级到旧 reportData/admissionReport）
 const reportV03 = computed<any>(() => {
@@ -2391,6 +2593,55 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+// v0.3.2 方案D：因子共线性详情区块
+.collinearity-detail {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+}
+.collinearity-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.collinearity-title { font-weight: 600; }
+.collinearity-core {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin: 8px 0;
+}
+.core-metric { display: flex; flex-direction: column; }
+.core-label { font-size: 12px; color: var(--el-text-color-secondary); }
+.core-value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.core-value.corr-green  { color: var(--el-color-success); }
+.core-value.corr-yellow { color: var(--el-color-warning); }
+.core-value.corr-orange { color: #e6a23c; }   /* 0.8-0.9 橙 */
+.core-value.corr-red    { color: var(--el-color-danger); }
+.core-sub { font-size: 12px; color: var(--el-text-color-secondary); }
+.collinearity-decision {
+  margin: 6px 0;
+  font-size: 13px;
+}
+.collinearity-decision .label {
+  color: var(--el-text-color-secondary);
+  margin-right: 8px;
+}
+.collinearity-meta {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+/* 表格内 0.8-0.9 橙色 tag */
+:deep(.corr-orange-tag) {
+  color: #e6a23c;
+  border-color: #e6a23c;
+}
+
 // 数据加载诊断折叠条：标题、内容左右留白，不贴边
 .load-diag-collapse {
   :deep(.el-collapse-item__header) {
