@@ -236,10 +236,10 @@ const loadTypes = async () => {
 }
 
 const openCreateDialog = () => {
-  form.value = { table_name: '', columns: [{ name: '', type: '' }], engine: 'MergeTree', order_by: [], primary_key: [] }
+  form.value = { table_name: '', columns: [{ name: '', type: '', comment: '' }], engine: 'MergeTree', order_by: [], primary_key: [] }
   createVisible.value = true
 }
-const addColumn = () => form.value.columns.push({ name: '', type: '' })
+const addColumn = () => form.value.columns.push({ name: '', type: '', comment: '' })
 
 // 删列时联动：把已从列里消失的名字从排序键中剔除；主键的收敛交给 watch(order_by)
 const removeColumn = (idx: number) => {
