@@ -156,15 +156,24 @@
             <span :class="['status-text', row.status]">
               {{ getStatusName(row.status) }}
             </span>
-            <!-- P4: admission 预审角标（基于 wq_score 前端预判，wq<0.3 显示红标） -->
+            <!-- P0: admission 预审角标（基于后端 decision 字段） -->
             <el-tag
-              v-if="row.status === 'completed' && typeof row.admission_wq_score === 'number' && row.admission_wq_score < 0.3"
+              v-if="row.status === 'completed' && row.admission_decision === 'reject'"
               type="danger"
               size="small"
               effect="dark"
               style="margin-left: 4px; transform: scale(0.85); transform-origin: left center;"
             >
               预审未过
+            </el-tag>
+            <el-tag
+              v-if="row.status === 'completed' && row.admission_decision === 'pending'"
+              type="warning"
+              size="small"
+              effect="dark"
+              style="margin-left: 4px; transform: scale(0.85); transform-origin: left center;"
+            >
+              待复核
             </el-tag>
             <!-- 运行中显示详细进度 -->
             <template v-if="row.status === 'running'">
@@ -264,7 +273,7 @@
               @click="handleViewResult(row)"
             >结果</button>
             <button
-              v-if="row.status === 'pending' || row.status === 'deferred'"
+              v-if="row.status === 'pending' || row.status === 'deferred' || row.status === 'running'"
               class="action-btn danger"
               @click="cancelTask(row)"
             >取消</button>
@@ -811,11 +820,11 @@ const handleViewResult = (task: any) => {
 
 const cancelTask = async (task: any) => {
   try {
-    await ElMessageBox.confirm(`确定要取消任务「${task.task_name}」吗？`, '确认取消', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
+    await ElMessageBox.confirm(
+      `确认取消任务「${task.task_name}」？正在进行的计算将被终止（worker 在 30s 内检测到并停止）。`,
+      '确认取消',
+      { confirmButtonText: '确认取消', cancelButtonText: '再想想', type: 'warning' }
+    )
     
     const result = await window.electronAPI.backtest.cancelTask(task.task_id)
     

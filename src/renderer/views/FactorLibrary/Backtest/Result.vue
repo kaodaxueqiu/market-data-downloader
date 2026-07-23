@@ -49,6 +49,12 @@
             </div>
           </div>
           <div class="info-actions">
+            <el-button
+              v-if="['running', 'pending', 'deferred'].includes(task.status)"
+              type="danger"
+              size="small"
+              @click="handleCancelTask"
+            >取消任务</el-button>
             <el-button @click="loadData" :loading="loading">
               <el-icon><Refresh /></el-icon>
               刷新
@@ -209,7 +215,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Calendar, Timer, Refresh } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -302,6 +308,27 @@ const getValueClass = (value: number | undefined) => {
 // 返回列表
 const goBack = () => {
   router.push('/factor-library/backtest/result')
+}
+
+// 取消任务
+const handleCancelTask = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确认取消该任务？正在进行的计算将被终止。',
+      '确认取消',
+      { confirmButtonText: '确认取消', cancelButtonText: '再想想', type: 'warning' }
+    )
+    const result = await window.electronAPI.backtest.cancelTask(task.value.task_id)
+    if (result.success) {
+      ElMessage.success('取消请求已发送，worker 将在 30s 内停止计算')
+      task.value.status = 'cancelled'
+      stopPolling()
+    } else {
+      ElMessage.error(result.error || '取消失败')
+    }
+  } catch {
+    // 用户点了"再想想"
+  }
 }
 
 // 加载数据

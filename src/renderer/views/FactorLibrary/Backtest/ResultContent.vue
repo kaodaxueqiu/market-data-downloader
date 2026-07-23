@@ -360,7 +360,7 @@
               <div v-if="admissionReport" class="admission-raw-data">
                 <div class="raw-data-item">
                   <span class="label">WQ 评分</span>
-                  <span class="value" :class="(admissionReport.wq_score ?? 0) < 0.3 ? 'negative' : ''">
+                  <span class="value" :class="typeof admissionReport.wq_score === 'number' && admissionReport.wq_score < 0.3 ? 'negative' : ''">
                     {{ typeof admissionReport.wq_score === 'number' ? admissionReport.wq_score.toFixed(2) : '-' }}
                   </span>
                   <span class="hint">（入库阈值通常 ≥ 0.3）</span>
@@ -544,6 +544,48 @@
                     <span v-if="collinearity.projection_dim">投影维度 {{ collinearity.projection_dim }}</span>
                   </div>
                 </template>
+              </div>
+              <!-- 正交性详情卡片 -->
+              <div v-if="orthogonality && orthogonality.status === 'ok'" class="collinearity-detail">
+                <div class="collinearity-header">
+                  <span class="collinearity-title">正交性诊断</span>
+                  <el-tag size="small" type="success" effect="plain">ok</el-tag>
+                </div>
+                <div class="collinearity-core">
+                  <div class="core-metric">
+                    <span class="core-label">多因子线性可解释度 R²</span>
+                    <span class="core-value">
+                      {{ typeof orthogonality.explained_r_squared === 'number'
+                          ? orthogonality.explained_r_squared.toFixed(4)
+                          : '—' }}
+                    </span>
+                  </div>
+                  <div class="core-metric">
+                    <span class="core-label">增量价值代理</span>
+                    <span class="core-value">
+                      {{ typeof orthogonality.incremental_value_proxy === 'number'
+                          ? orthogonality.incremental_value_proxy.toFixed(4)
+                          : '—' }}
+                    </span>
+                  </div>
+                </div>
+                <div v-if="orthogonality.reason" class="collinearity-meta">
+                  <span>备注：{{ orthogonality.reason }}</span>
+                </div>
+              </div>
+              <div v-else-if="orthogonality && orthogonality.status === 'skipped'" class="collinearity-detail">
+                <div class="collinearity-header">
+                  <span class="collinearity-title">正交性诊断</span>
+                  <el-tag size="small" type="info" effect="plain">已跳过</el-tag>
+                </div>
+                <p style="color: var(--el-text-color-secondary); font-size: 12px; margin: 4px 0 0;">未开启库级诊断（BACKTEST_LIBRARY_DIAGNOSTICS 未设为 1）</p>
+              </div>
+              <div v-else-if="orthogonality && orthogonality.status === 'error'" class="collinearity-detail">
+                <div class="collinearity-header">
+                  <span class="collinearity-title">正交性诊断</span>
+                  <el-tag size="small" type="danger" effect="plain">计算异常</el-tag>
+                </div>
+                <p style="color: var(--el-text-color-secondary); font-size: 12px; margin: 4px 0 0;">{{ orthogonality.message || '计算异常' }}</p>
               </div>
             </div>
 
@@ -1335,6 +1377,7 @@ const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
 // ============ v0.3.2 方案D 因子共线性报告 ============
 // 入库审核 summary.factor_collinearity（结构见对接手册 §1.3.1）
 const collinearity = computed<any>(() => summary.value?.factor_collinearity ?? null)
+const orthogonality = computed<any>(() => summary.value?.factor_orthogonality ?? null)
 
 // matches[] 兜底为数组，供表格 v-for
 const collinearityMatches = computed<any[]>(() => {

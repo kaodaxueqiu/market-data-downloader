@@ -5841,12 +5841,16 @@ ipcMain.handle('backtest:cancelTask', async (_event, taskId: string) => {
     }
 
     const axios = require('axios')
-    const response = await axios.delete(
-      `${BACKTEST_API_BASE}/task/${taskId}`,
+    const response = await axios.put(
+      `${BACKTEST_API_BASE}/task/${taskId}/status`,
       {
-        headers: {
-          'X-API-Key': apiKey
-        },
+        status: 'cancelled',
+        progress: null,
+        error_message: '用户手动取消',
+        progress_detail: null
+      },
+      {
+        headers: { 'X-API-Key': apiKey },
         timeout: 15000
       }
     )

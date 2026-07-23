@@ -62,11 +62,18 @@
                     v-model="formData.factor_code"
                     type="textarea"
                     :rows="10"
-                    placeholder="def calculate_factor(data):
-    stock_daily = data['stock_daily']
-    return stock_daily['close'] / stock_daily['open'] - 1
+                    placeholder="# 函数一（可选）：对 CH 表操作得到中间统计表
+def prepare_data(sources, context):
+    df = sources[list(sources)[0]]
+    return df  # 也可不定义，直接在 calculate_factor 里拉表
 
-# 回测引擎会自动识别入口函数，函数名随意"
+# 函数二（必填）：拉取中间统计表计算因子值
+def calculate_factor(data, context):
+    df = data[list(data)[0]]
+    df['factor_value'] = df['close'] / df['open'] - 1
+    return df[['trade_date', 'stock_code', 'factor_value']]
+
+# 回测引擎自动识别 prepare_data / calculate_factor 入口"
                     class="code-textarea"
                     @input="onCodeContentChange"
                   />
@@ -1249,20 +1256,50 @@ const formRules: FormRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
 }
 
-const PYTHON_TEMPLATE_SINGLE = `def factor(df):
-    # df 为所选数据源的 DataFrame
-    # 可调用 ops.eval("Mean(close_price, 20)") 使用表达式算子
-    return df[['trade_date', 'stock_code']].assign(
-        factor_value=df['close'] / df['open'] - 1
-    )`
+const PYTHON_TEMPLATE_SINGLE = `# ===== 函数一（可选）：对 CH 表操作得到中间统计表 =====
+def prepare_data(sources, context):
+    # sources 键为 ClickHouse 表全名；聚合/过滤后返回中间统计表（也可不定义）
+    df = sources[list(sources)[0]]
+    return df.groupby(['stock_code', 'trade_date']).agg({
+        'close': 'last', 'volume': 'sum',
+    })
 
-const PYTHON_TEMPLATE_MULTI = `def factor(data, context):
-    # data['表名'] 获取对应 DataFrame
-    # 示例：取行情表
-    df = data['stock_daily']
-    return df[['trade_date', 'stock_code']].assign(
-        factor_value=df['close'] / df['open'] - 1
-    )`
+# ===== 函数二（必填）：拉取中间统计表计算因子值 =====
+def calculate_factor(data, context):
+    # data 键为数据源配置的 name；若定义了 prepare_data 则自动重定向到物化中间表
+    df = data[list(data)[0]]
+    df['factor_value'] = df['close'].pct_change(5)
+    return df[['trade_date', 'stock_code', 'factor_value']]`
+
+const PYTHON_TEMPLATE_MULTI = `# ===== 函数一（可选）：对 CH 表操作得到中间统计表 =====
+def prepare_data(sources, context):
+    # sources 键为 ClickHouse 表全名；可关联多表后返回中间统计表
+    daily = sources[list(sources)[0]]
+    extra = sources[list(sources)[1]]
+    merged = daily.merge(extra, on=['stock_code', 'trade_date'])
+    return merged
+
+# ===== 函数二（必填）：拉取中间统计表计算因子值 =====
+def calculate_factor(data, context):
+    # data 键为数据源配置的 name；若定义了 prepare_data 则自动重定向到物化中间表
+    df = data[list(data)[0]]
+    df['factor_value'] = df['close'] / df['open'] - 1
+    return df[['trade_date', 'stock_code', 'factor_value']]`
+
+// 拆分双函数代码：提取 prepare_data（可选）和 calculate_factor（必填）
+function splitFactorCode(fullCode: string) {
+  const prepareMatch = fullCode.match(
+    /def\s+prepare_data\s*\([\s\S]*?(?=\ndef\s+|\n#\s*=====|$)/
+  )
+  const calcMatch = fullCode.match(
+    /def\s+calculate_factor\s*\([\s\S]*?(?=\ndef\s+|\n#\s*=====|$)/
+  )
+  const imports = fullCode.match(/^(?:import|from)\s.*$/gm)?.join('\n') ?? ''
+  const prepare_data_code = prepareMatch ? prepareMatch[0].trim() : null
+  const factor_code = [imports, calcMatch ? calcMatch[0].trim() : fullCode]
+    .filter(Boolean).join('\n\n')
+  return { factor_code, prepare_data_code }
+}
 
 const onFactorSourceChange = () => {
   formData.factor_expression = ''
@@ -1957,15 +1994,22 @@ const handleSubmit = async () => {
       if (factorSource.value === 'expression') {
         requestData.factor_expression = formData.factor_expression
       } else if (factorSource.value === 'code') {
-        requestData.factor_code = formData.factor_code
+        // P0: 校验必须包含 calculate_factor 入口
+        if (!formData.factor_code.includes('def calculate_factor')) {
+          ElMessage.warning('请定义 calculate_factor 函数作为因子计算入口')
+          return
+        }
+        const { factor_code, prepare_data_code } = splitFactorCode(formData.factor_code)
+        requestData.factor_code = factor_code
+        if (prepare_data_code) {
+          requestData.prepare_data_code = prepare_data_code
+        }
         requestData.factor_code_meta = {
-          entrypoint: 'factor',
+          entrypoint: 'calculate_factor',
           allow_pandas: true,
-          timeout_secs: 600,
           result_mode: 'dataframe',
           factor_aggregation: factorAggregation.value,
           requires: factorRequires.value
-          // isolation 省略 → 引擎按 None 处理（ML 自动选，否则 in_process）
         }
       }
 
