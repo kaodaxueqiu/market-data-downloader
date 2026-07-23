@@ -2951,6 +2951,139 @@ ipcMain.handle('factor:myCHInit', async () => {
   }
 })
 
+// 取支持的类型/引擎白名单（私有数据仓库建表）
+ipcMain.handle('factor:myCHTypes', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.get(`${MY_FACTOR_API_BASE}/ch-types`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 列出专属库里的表（私有数据仓库）
+ipcMain.handle('factor:myCHTables', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.get(`${MY_FACTOR_API_BASE}/ch-tables`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 建表（私有数据仓库）
+ipcMain.handle('factor:myCHCreateTable', async (_event, data) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MY_FACTOR_API_BASE}/ch-create-table`, data, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 30000
+    })
+    return { success: true, data: response.data.data, message: response.data.message }
+  } catch (error: any) {
+    console.error('私有数据仓库建表失败:', error.response?.data || error.message)
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 清空表数据（私有数据仓库）
+ipcMain.handle('factor:myCHTruncateTable', async (_event, tableName: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MY_FACTOR_API_BASE}/ch-truncate-table`, { table_name: tableName }, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 30000
+    })
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 删除表（私有数据仓库；后端：有数据拒绝）
+ipcMain.handle('factor:myCHDropTable', async (_event, tableName: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MY_FACTOR_API_BASE}/ch-drop-table`, { table_name: tableName }, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 30000
+    })
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 读表结构（私有数据仓库；编辑时回填）
+ipcMain.handle('factor:myCHTableSchema', async (_event, tableName: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.get(`${MY_FACTOR_API_BASE}/ch-table-schema`, {
+      params: { table_name: tableName },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 预览表数据（私有数据仓库；前100行+总行数）
+ipcMain.handle('factor:myCHPreviewTable', async (_event, tableName: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.get(`${MY_FACTOR_API_BASE}/ch-preview-table`, {
+      params: { table_name: tableName },
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 编辑表结构（私有数据仓库）
+ipcMain.handle('factor:myCHAlterTable', async (_event, data) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MY_FACTOR_API_BASE}/ch-alter-table`, data, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 30000
+    })
+    return { success: true, data: response.data.data, message: response.data.message }
+  } catch (error: any) {
+    // 后端失败响应里可能带 executed/failed，透传给前端便于提示部分成功
+    const resp = error.response?.data || {}
+    return { success: false, error: resp.error || error.message, executed: resp.executed, failed: resp.failed }
+  }
+})
+
 // 获取因子分类
 ipcMain.handle('factor:myCategories', async () => {
   try {

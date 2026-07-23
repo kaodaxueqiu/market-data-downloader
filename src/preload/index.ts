@@ -187,6 +187,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 私有数据仓库 · CH 专属库
     myCHStatus: () => ipcRenderer.invoke('factor:myCHStatus'),
     myCHInit: () => ipcRenderer.invoke('factor:myCHInit'),
+    // 私有数据仓库 · 建表
+    myCHTypes: () => ipcRenderer.invoke('factor:myCHTypes'),
+    myCHTables: () => ipcRenderer.invoke('factor:myCHTables'),
+    myCHCreateTable: (data: {
+      table_name: string
+      columns: { name: string; type: string; comment?: string }[]
+      engine: string
+      order_by: string[]
+      primary_key?: string[]
+    }) => ipcRenderer.invoke('factor:myCHCreateTable', data),
+    myCHTruncateTable: (tableName: string) => ipcRenderer.invoke('factor:myCHTruncateTable', tableName),
+    myCHDropTable: (tableName: string) => ipcRenderer.invoke('factor:myCHDropTable', tableName),
+    myCHTableSchema: (tableName: string) => ipcRenderer.invoke('factor:myCHTableSchema', tableName),
+    myCHPreviewTable: (tableName: string) => ipcRenderer.invoke('factor:myCHPreviewTable', tableName),
+    myCHAlterTable: (data: {
+      table_name: string
+      actions: { action: string; name: string; new_name?: string; type?: string; comment?: string; after?: string }[]
+    }) => ipcRenderer.invoke('factor:myCHAlterTable', data),
     myCategories: () => ipcRenderer.invoke('factor:myCategories'),
     myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) =>
       ipcRenderer.invoke('factor:myList', params || {}),
@@ -748,6 +766,15 @@ declare global {
         // 私有数据仓库 · CH 专属库（字段为 database / factor_user，与 PG 库不同）
         myCHStatus: () => Promise<{ success: boolean; data?: { initialized: boolean; database: string; factor_user?: string }; error?: string }>
         myCHInit: () => Promise<{ success: boolean; message?: string; data?: { initialized: boolean; database: string; created: boolean }; error?: string }>
+        // 私有数据仓库 · 建表
+        myCHTypes: () => Promise<{ success: boolean; data?: { types: string[]; engines: string[] }; error?: string }>
+        myCHTables: () => Promise<{ success: boolean; data?: { database: string; tables: { name: string; engine: string; total_rows: number }[] }; error?: string }>
+        myCHCreateTable: (data: { table_name: string; columns: { name: string; type: string; comment?: string }[]; engine: string; order_by: string[]; primary_key?: string[] }) => Promise<{ success: boolean; message?: string; data?: { database: string; table: string; ddl: string }; error?: string }>
+        myCHTruncateTable: (tableName: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        myCHDropTable: (tableName: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        myCHTableSchema: (tableName: string) => Promise<{ success: boolean; data?: { database: string; table: string; columns: { name: string; type: string; comment: string; in_sorting_key: boolean; in_primary_key: boolean }[] }; error?: string }>
+        myCHPreviewTable: (tableName: string) => Promise<{ success: boolean; data?: { database: string; table: string; columns: string[]; rows: Record<string, any>[]; total_rows: number; limit: number }; error?: string }>
+        myCHAlterTable: (data: { table_name: string; actions: { action: string; name: string; new_name?: string; type?: string; comment?: string; after?: string }[] }) => Promise<{ success: boolean; message?: string; data?: { executed: string[] }; error?: string; executed?: string[]; failed?: string }>
         myCategories: () => Promise<{ success: boolean; data?: any[]; error?: string }>
         myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
         myCreate: (data: any) => Promise<{ success: boolean; data?: { factor_id: string | number; factor_code: string }; message?: string; error?: string }>
