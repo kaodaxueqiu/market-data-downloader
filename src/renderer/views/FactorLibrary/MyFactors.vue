@@ -1395,6 +1395,13 @@
                 :value="opt.value"
               />
             </el-select>
+            <div v-if="riskNeutralization.enabled" style="margin-top: 10px;">
+              <el-switch v-model="riskNeutralization.includeEach" active-text="逐风格剥离" />
+              <div class="form-hint">
+                <el-icon><InfoFilled /></el-icon>
+                对 CNE6 20 个风格逐个单独剥离，额外计算 20 组风格残差，任务耗时明显增加
+              </div>
+            </div>
           </el-form-item>
 
           <el-form-item v-if="researchMode === 'deep'" label="walk-forward">
@@ -2083,7 +2090,10 @@ const doDialogSearch = async () => {
 // 选择搜索结果
 const selectSearchResult = async (item: any) => {
   const source = dataSources.value[currentSearchIndex.value]
-  source.table = item.table_name
+  // 全限定表名：库.表。ClickHouse 需要库前缀才能唯一定位；已带前缀则不重复拼
+  const db = item.database || ''
+  const rawTable = item.table_name || ''
+  source.table = (db && !rawTable.includes('.')) ? `${db}.${rawTable}` : rawTable
   source.engine = item.engine
   source.database = item.database
   source.fields = []
@@ -2123,7 +2133,9 @@ const handleTableChange = async (index: number) => {
   
   try {
     // 按 engine+database 精确路由，与后端多库精细化改造对齐
-    const result = await window.electronAPI.dbdict.getTableFields(source.engine, source.database, source.table)
+    // source.table 可能是全限定名（库.表），getTableFields 期望裸表名（database 已单独传参）
+    const bareTable = source.table.includes('.') ? source.table.split('.').pop()! : source.table
+    const result = await window.electronAPI.dbdict.getTableFields(source.engine, source.database, bareTable)
     if (result.code === 200) {
       source.availableFields = result.data || []
     }
@@ -3646,7 +3658,8 @@ const RISK_FACTOR_OPTIONS = [
 // quick 默认关、deep 默认开（deep 引擎本就会剥离）
 const riskNeutralization = reactive({
   enabled: false,
-  selected: [] as string[]
+  selected: [] as string[],
+  includeEach: false  // 逐风格剥离：额外产出 20 个 neutral_each_* variant
 })
 // 切换研究模式时联动剥离默认值：deep 默认开、quick 默认关（用户可再手动调整）
 watch(researchMode, (mode) => {
@@ -3955,6 +3968,7 @@ const openBatchBacktest = async () => {
   stockPoolTab.value = 'index'
   riskNeutralization.enabled = false
   riskNeutralization.selected = []
+  riskNeutralization.includeEach = false
   backtestDialogVisible.value = true
 }
 
@@ -3965,6 +3979,7 @@ const openBacktest = async (factor: any) => {
   researchMode.value = 'quick'
   riskNeutralization.enabled = false
   riskNeutralization.selected = []
+  riskNeutralization.includeEach = false
   backtestFactor.value = factor
   backtestFactors.value = [factor]
   // 确保选项已加载
@@ -4091,7 +4106,7 @@ const submitBacktest = async () => {
           enabled: true,
           selected: [...riskNeutralization.selected],  // 引擎精确英文值
           include_all: true,    // 额外出"全部一起剥"(neutral_all)
-          include_each: false
+          include_each: riskNeutralization.includeEach  // 逐风格剥离（20 个）
         }
       } else {
         data.risk_neutralization = { enabled: false }

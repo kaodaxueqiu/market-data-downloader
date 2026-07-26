@@ -1349,6 +1349,30 @@ const activeVariant = ref(0)
 // v0.2.6 详细报告 Tab
 const activeReportTab = ref('overview')
 
+// CNE6 SW21 风格因子中文名映射（与后端 CNE6_STYLE_FACTORS_SW21 对应）
+const CNE6_STYLE_LABELS: Record<string, string> = {
+  beta:       'Beta',
+  momentum:   '动量',
+  size:       '市值',
+  earnyild:   '盈利收益',
+  resvol:     '残差波动',
+  growth:     '成长',
+  btop:       '账面市值比',
+  leverage:   '杠杆',
+  liquidty:   '流动性',
+  midcap:     '中市值',
+  divyild:    '股息收益',
+  earnqlty:   '盈利质量',
+  earnvar:    '盈利波动',
+  invsqlty:   '投资质量',
+  ltrevrsl:   '长期反转',
+  profit:     '盈利能力',
+  analsenti:  '分析师情绪',
+  indmom:     '行业动量',
+  season:     '季节性',
+  strevrsl:   '短期反转'
+}
+
 // variant 文案映射（后端已返回真实 variant 值，直接命中 map）
 const getVariantLabel = (variant: string, index?: number) => {
   const map: Record<string, string> = {
@@ -1357,6 +1381,16 @@ const getVariantLabel = (variant: string, index?: number) => {
     'neutral_all': '全风险剥离'
   }
   if (variant && map[variant]) return map[variant]
+
+  // CNE6 SW21 逐风格剥离：neutral_each_{style} → "剥离 {中文风格名}"
+  if (variant && variant.startsWith('neutral_each_')) {
+    const styleKey = variant.replace('neutral_each_', '')
+    const styleName = CNE6_STYLE_LABELS[styleKey]
+    if (styleName) return `剥离 ${styleName}`
+    // 未命中的风格因子直接显示英文
+    return `剥离 ${styleKey}`
+  }
+
   // 兜底：极旧任务 variant 可能为空，按 index 粗略区分
   if (index === 0) return '原始因子'
   return index != null ? `变体 ${index + 1}` : '因子结果'
@@ -3294,28 +3328,30 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   // 因子结果区域 - 现代卡片设计
   .variant-tabs {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 16px;
-  border-bottom: 1px solid #e4e7ed;
-  padding-bottom: 0;
 
   .variant-tab {
-    padding: 8px 20px;
-    font-size: 14px;
+    padding: 6px 14px;
+    font-size: 13px;
     font-weight: 500;
     color: #606266;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
+    background: #f4f5f7;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    white-space: nowrap;
     transition: all 0.2s;
-    margin-bottom: -1px;
 
     &:hover {
       color: #409eff;
+      background: #ecf5ff;
     }
 
     &.active {
-      color: #409eff;
-      border-bottom-color: #409eff;
+      color: #fff;
+      background: #409eff;
       font-weight: 600;
     }
   }

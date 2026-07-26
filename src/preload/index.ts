@@ -205,6 +205,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       table_name: string
       actions: { action: string; name: string; new_name?: string; type?: string; comment?: string; after?: string }[]
     }) => ipcRenderer.invoke('factor:myCHAlterTable', data),
+    // 填充数据（第三步）
+    myCHFillCreateConfig: (data: any) => ipcRenderer.invoke('factor:myCHFillCreateConfig', data),
+    myCHFillListConfigs: () => ipcRenderer.invoke('factor:myCHFillListConfigs'),
+    myCHFillDeleteConfig: (configId: number) => ipcRenderer.invoke('factor:myCHFillDeleteConfig', configId),
+    myCHFillExecute: (configId: number) => ipcRenderer.invoke('factor:myCHFillExecute', configId),
+    myCHFillListTasks: (configId?: number) => ipcRenderer.invoke('factor:myCHFillListTasks', configId),
+    myCHFillCancelTask: (taskId: string) => ipcRenderer.invoke('factor:myCHFillCancelTask', taskId),
+    myCHFillToggleSchedule: (data: { config_id: number; enabled: boolean }) => ipcRenderer.invoke('factor:myCHFillToggleSchedule', data),
     myCategories: () => ipcRenderer.invoke('factor:myCategories'),
     myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) =>
       ipcRenderer.invoke('factor:myList', params || {}),
@@ -630,6 +638,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
 // 类型定义
 declare global {
+  interface FillConfig {
+    id: number
+    username: string
+    config_name: string
+    target_database: string
+    target_table: string
+    source_type: string
+    source_config: any
+    write_mode: string
+    schedule_cron: string
+    schedule_enabled: boolean
+    created_at: string
+    updated_at: string
+  }
+  interface FillTask {
+    task_id: string
+    config_id: number | null
+    username: string
+    status: string
+    triggered_by: string
+    generated_sql: string
+    rows_affected: number
+    error_message: string
+    started_at: string | null
+    completed_at: string | null
+    created_at: string
+  }
   interface Window {
     electronAPI: {
       app: {
@@ -775,6 +810,14 @@ declare global {
         myCHTableSchema: (tableName: string) => Promise<{ success: boolean; data?: { database: string; table: string; columns: { name: string; type: string; comment: string; in_sorting_key: boolean; in_primary_key: boolean }[] }; error?: string }>
         myCHPreviewTable: (tableName: string) => Promise<{ success: boolean; data?: { database: string; table: string; columns: string[]; rows: Record<string, any>[]; total_rows: number; limit: number }; error?: string }>
         myCHAlterTable: (data: { table_name: string; actions: { action: string; name: string; new_name?: string; type?: string; comment?: string; after?: string }[] }) => Promise<{ success: boolean; message?: string; data?: { executed: string[] }; error?: string; executed?: string[]; failed?: string }>
+        // 填充数据（第三步）
+        myCHFillCreateConfig: (data: any) => Promise<{ success: boolean; data?: { config_id: number }; message?: string; error?: string }>
+        myCHFillListConfigs: () => Promise<{ success: boolean; data?: FillConfig[]; error?: string }>
+        myCHFillDeleteConfig: (configId: number) => Promise<{ success: boolean; message?: string; error?: string }>
+        myCHFillExecute: (configId: number) => Promise<{ success: boolean; data?: { task_id: string }; message?: string; error?: string }>
+        myCHFillListTasks: (configId?: number) => Promise<{ success: boolean; data?: FillTask[]; error?: string }>
+        myCHFillCancelTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>
+        myCHFillToggleSchedule: (data: { config_id: number; enabled: boolean }) => Promise<{ success: boolean; message?: string; error?: string }>
         myCategories: () => Promise<{ success: boolean; data?: any[]; error?: string }>
         myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
         myCreate: (data: any) => Promise<{ success: boolean; data?: { factor_id: string | number; factor_code: string }; message?: string; error?: string }>

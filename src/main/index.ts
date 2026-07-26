@@ -3084,6 +3084,131 @@ ipcMain.handle('factor:myCHAlterTable', async (_event, data) => {
   }
 })
 
+// ============== 填充数据（第三步）==============
+
+// 创建填充配置
+ipcMain.handle('factor:myCHFillCreateConfig', async (_event, data) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/ch-fill-config`,
+      data,
+      { headers: { 'X-API-Key': apiKey }, timeout: 30000 }
+    )
+    return { success: true, data: response.data.data, message: response.data.message }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 列出填充配置
+ipcMain.handle('factor:myCHFillListConfigs', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.get(
+      `${MY_FACTOR_API_BASE}/ch-fill-configs`,
+      { headers: { 'X-API-Key': apiKey }, timeout: 15000 }
+    )
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 删除填充配置
+ipcMain.handle('factor:myCHFillDeleteConfig', async (_event, configId: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.delete(
+      `${MY_FACTOR_API_BASE}/ch-fill-config`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        data: { config_id: configId },
+        timeout: 15000
+      }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 手动触发执行
+ipcMain.handle('factor:myCHFillExecute', async (_event, configId: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/ch-fill-execute`,
+      { config_id: configId },
+      { headers: { 'X-API-Key': apiKey }, timeout: 30000 }
+    )
+    return { success: true, data: response.data.data, message: response.data.message }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 查询填充任务记录
+ipcMain.handle('factor:myCHFillListTasks', async (_event, configId?: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const url = configId
+      ? `${MY_FACTOR_API_BASE}/ch-fill-tasks?config_id=${configId}`
+      : `${MY_FACTOR_API_BASE}/ch-fill-tasks`
+    const response = await axios.get(url, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    return { success: true, data: response.data.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 取消填充任务
+ipcMain.handle('factor:myCHFillCancelTask', async (_event, taskId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.put(
+      `${MY_FACTOR_API_BASE}/ch-fill-task/cancel`,
+      { task_id: taskId },
+      { headers: { 'X-API-Key': apiKey }, timeout: 15000 }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
+// 启停调度
+ipcMain.handle('factor:myCHFillToggleSchedule', async (_event, data: { config_id: number; enabled: boolean }) => {
+  try {
+    const apiKey = getDefaultApiKeyForMyFactor()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(
+      `${MY_FACTOR_API_BASE}/ch-fill-config/toggle`,
+      data,
+      { headers: { 'X-API-Key': apiKey }, timeout: 15000 }
+    )
+    return { success: true, message: response.data.message }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message }
+  }
+})
+
 // 获取因子分类
 ipcMain.handle('factor:myCategories', async () => {
   try {

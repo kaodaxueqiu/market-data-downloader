@@ -552,6 +552,13 @@ def calculate_factor(data, context):
                     :value="opt.value"
                   />
                 </el-select>
+                <div v-if="riskNeutralization.enabled" style="margin-top: 10px;">
+                  <el-switch v-model="riskNeutralization.includeEach" active-text="逐风格剥离" />
+                  <div class="form-hint">
+                    <el-icon><InfoFilled /></el-icon>
+                    对 CNE6 20 个风格逐个单独剥离，额外计算 20 组风格残差，任务耗时明显增加
+                  </div>
+                </div>
               </el-form-item>
             </div>
           </div>
@@ -1244,7 +1251,8 @@ const RISK_FACTOR_OPTIONS = [
 // quick 默认关、deep 默认开（deep 引擎本就会剥离）
 const riskNeutralization = reactive({
   enabled: false,
-  selected: [] as string[]
+  selected: [] as string[],
+  includeEach: false  // 逐风格剥离：额外产出 20 个 neutral_each_* variant
 })
 // 切换研究模式时联动剥离默认值：deep 默认开、quick 默认关（用户可再手动调整）
 watch(researchMode, (mode) => {
@@ -2035,7 +2043,7 @@ const handleSubmit = async () => {
             enabled: true,
             selected: [...riskNeutralization.selected],  // 引擎精确英文值
             include_all: true,    // 额外出"全部一起剥"(neutral_all)
-            include_each: false
+            include_each: riskNeutralization.includeEach  // 逐风格剥离（20 个）
           }
         } else {
           requestData.risk_neutralization = { enabled: false }
