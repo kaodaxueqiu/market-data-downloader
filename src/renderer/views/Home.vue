@@ -5,7 +5,7 @@
       <div class="welcome-content">
         <div class="welcome-text">
           <h1>资舟量化研究平台 ✨</h1>
-          <p>专业的量化研究与数据管理系统，集成数据中心、因子库、基金管理、任务管理等核心功能</p>
+          <p>专业的量化研究与数据管理系统，集成数据中心、因子库、基金管理等核心功能</p>
         </div>
         <div class="welcome-icon">
           <el-icon :size="100" color="rgba(255,255,255,0.8)"><DataAnalysis /></el-icon>

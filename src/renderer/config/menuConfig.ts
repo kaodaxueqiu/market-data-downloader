@@ -10,7 +10,6 @@ import {
   Box,
   Coin,
   Folder,
-  List,
   Clock,
   Download,
   Monitor,
@@ -65,22 +64,10 @@ export const allMenus: MenuItem[] = [
       { id: 'my_factors', name: '我的因子', path: '/factor-library/my-factors', icon: null },
       { id: 'private_warehouse', name: '私有数据仓库', path: '/factor-library/private-warehouse', icon: null },
       { id: 'factor_plaza', name: '因子广场', path: '/factor-library/plaza', icon: null },
-      { id: 'factor_submit', name: '因子提交', path: '/factor-library/submit', icon: null },
       { id: 'research_results', name: '研究成果', path: '/factor-library/research-results', icon: null },
       { id: 'factor_backtest', name: '单因子回测', path: '/factor-library/backtest/submit', icon: null },
       { id: 'backtest_tasks', name: '任务详情', path: '/factor-library/backtest/tasks', icon: null },
       { id: 'expression_dict', name: '表达式字典', path: '/factor-library/expression-dict', icon: null },
-      { 
-        id: 'data_workorder', 
-        name: '数据工单', 
-        path: '/factor-library/workorder/submit', 
-        icon: null,
-        children: [
-          { id: 'workorder_submit', name: '提交申请', path: '/factor-library/workorder/submit', icon: null },
-          { id: 'workorder_my', name: '我的申请', path: '/factor-library/workorder/my', icon: null },
-          { id: 'workorder_manage', name: '工单管理', path: '/factor-library/workorder/admin', icon: null }
-        ]
-      },
       {
         id: 'backtest_engine_config',
         name: '回测引擎配置',
@@ -135,23 +122,7 @@ export const allMenus: MenuItem[] = [
       { id: 'repo_admin', name: '仓库管理', path: '/code-repository/admin', icon: null }
     ]
   },
-  { 
-    id: 'task_management', 
-    name: '任务管理', 
-    path: '/tasks', 
-    icon: List,
-    color: '#F56C6C',
-    description: '查看数据任务状态'
-  },
-  { 
-    id: 'history', 
-    name: '历史记录', 
-    path: '/history', 
-    icon: Clock,
-    color: '#909399',
-    description: '查看操作历史'
-  },
-  { 
+  {
     id: 'sdk_download', 
     name: 'SDK下载', 
     path: '/sdk-download', 

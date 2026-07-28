@@ -36,7 +36,7 @@ extraMetadata:
   main: dist/electron/main/index.js
 mac:
   target:
-    - target: dmg
+    - target: pkg
   category: public.app-category.finance
   hardenedRuntime: false
   gatekeeperAssess: false
@@ -52,7 +52,7 @@ dmg:
   icon: build/icon.icns
 win:
   target:
-    - target: portable
+    - target: nsis
       arch:
         - x64
   icon: build/icon.ico

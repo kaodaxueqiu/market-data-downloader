@@ -177,7 +177,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg-${{ matrix.arch }}
-          path: dist/*.dmg
+          path: dist/*.pkg
           
       - name: Get version from package.json
         id: package-version
@@ -201,6 +201,6 @@ jobs:
       - name: Upload Release Assets (macOS)
         if: matrix.platform == 'mac'
         shell: bash
-        run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.dmg dist/*.yml --clobber
+        run: gh release upload "v${{ steps.package-version.outputs.version }}" dist/*.pkg dist/*.yml --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2071,14 +2071,31 @@ const openSearchDialog = (index: number) => {
 // 执行搜索
 const doDialogSearch = async () => {
   if (!dialogSearchKeyword.value.trim()) return
-  
+
   dialogSearchLoading.value = true
   try {
-    // 不指定数据源，由后端自适应在 postgresql / clickhouse / clickhouse_data(行情镜像库) 中搜索
-    const result = await window.electronAPI.dbdict.search(dialogSearchKeyword.value)
-    if (result.code === 200) {
-      dialogSearchResults.value = result.data || []
+    // 使用 search.global（与数据中心/单因子回测同源，覆盖私有数据仓库）
+    const result = await window.electronAPI.search.global(dialogSearchKeyword.value, 30)
+    const data = result.data
+    const flat: any[] = []
+    const seen = new Set<string>()
+    const push = (items: any[]) => {
+      items?.forEach((item: any) => {
+        if (item.match_type === 'field') return
+        if (!item.table_name || seen.has(item.table_name)) return
+        seen.add(item.table_name)
+        flat.push(item)
+      })
     }
+    // 新格式：data.results[]
+    if (Array.isArray(data?.results)) {
+      push(data.results)
+    }
+    // 旧格式兼容
+    push(data?.static?.results?.map((x: any) => ({ ...x, database: x.database || 'finance_db', engine: 'postgresql' })))
+    push(data?.processed?.results?.map((x: any) => ({ ...x, database: x.database || 'market_mart', engine: 'clickhouse' })))
+    push(data?.mirror?.results?.map((x: any) => ({ ...x, database: x.database || 'market_data', engine: 'clickhouse' })))
+    dialogSearchResults.value = flat
   } catch (error: any) {
     console.error('搜索失败:', error)
     dialogSearchResults.value = []

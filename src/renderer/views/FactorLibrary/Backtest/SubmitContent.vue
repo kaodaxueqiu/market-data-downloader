@@ -851,102 +851,50 @@ def calculate_factor(data, context):
           </div>
           
           <div v-else class="results-content">
-            <!-- 静态元数据 -->
-            <div v-if="getDialogResultsByType('static').length" class="result-section">
-              <div class="section-header static">
-                <el-icon><Document /></el-icon>
-                <span>静态元数据</span>
-                <el-tag size="small" type="success">{{ getDialogResultsByType('static').length }} 个表</el-tag>
+            <!-- 动态分组：按 engine + database 分组渲染（兼容私有数据仓库等任意库） -->
+            <div
+              v-for="engGroup in dialogGroupedResults"
+              :key="engGroup.engine"
+              class="result-section"
+            >
+              <div class="section-header" :class="engGroup.engine === 'postgresql' ? 'static' : 'processed'">
+                <el-icon><Document v-if="engGroup.engine === 'postgresql'" /><Operation v-else /></el-icon>
+                <span>{{ engGroup.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse' }}</span>
+                <el-tag size="small" :type="engGroup.engine === 'postgresql' ? 'success' : 'warning'">
+                  {{ engGroup.databases.reduce((s: number, g: any) => s + g.results.length, 0) }} 个表
+                </el-tag>
               </div>
               <div class="section-body">
-                <div 
-                  v-for="item in getDialogResultsByType('static')" 
-                  :key="item.table_name"
-                  class="table-card"
-                  @click="selectDialogResult(item, 'postgresql')"
+                <div
+                  v-for="dbGroup in engGroup.databases"
+                  :key="dbGroup.database"
                 >
-                  <div class="card-header">
-                    <span class="table-name">{{ item.table_name }}</span>
-                    <el-tag size="small" type="success">PostgreSQL</el-tag>
+                  <div v-if="engGroup.databases.length > 1" class="db-sub-header">
+                    <el-tag size="small" type="info">{{ dbGroup.database }}</el-tag>
                   </div>
-                  <div class="card-body">
-                    <div class="table-comment">{{ item.table_comment || '暂无描述' }}</div>
-                    <div class="table-meta">
-                      <span v-if="item.category" class="meta-item">
-                        <el-icon><Folder /></el-icon>
-                        {{ item.category }}
-                      </span>
-                      <span v-if="item.match_score" class="meta-item score">
-                        匹配度: {{ Math.round(item.match_score) }}
-                      </span>
+                  <div
+                    v-for="item in dbGroup.results"
+                    :key="item.table_name"
+                    class="table-card"
+                    @click="selectDialogResult(item, dbGroup.database)"
+                  >
+                    <div class="card-header">
+                      <span class="table-name">{{ item.table_name }}</span>
+                      <el-tag size="small" :type="engGroup.engine === 'postgresql' ? 'success' : 'warning'">
+                        {{ dbGroup.database || (engGroup.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse') }}
+                      </el-tag>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 加工数据 -->
-            <div v-if="getDialogResultsByType('processed').length" class="result-section">
-              <div class="section-header processed">
-                <el-icon><Operation /></el-icon>
-                <span>加工数据</span>
-                <el-tag size="small" type="warning">{{ getDialogResultsByType('processed').length }} 个表</el-tag>
-              </div>
-              <div class="section-body">
-                <div 
-                  v-for="item in getDialogResultsByType('processed')" 
-                  :key="item.table_name"
-                  class="table-card"
-                  @click="selectDialogResult(item, 'clickhouse')"
-                >
-                  <div class="card-header">
-                    <span class="table-name">{{ item.table_name }}</span>
-                    <el-tag size="small" type="warning">ClickHouse</el-tag>
-                  </div>
-                  <div class="card-body">
-                    <div class="table-comment">{{ item.table_comment || '暂无描述' }}</div>
-                    <div class="table-meta">
-                      <span v-if="item.category" class="meta-item">
-                        <el-icon><Folder /></el-icon>
-                        {{ item.category }}
-                      </span>
-                      <span v-if="item.match_score" class="meta-item score">
-                        匹配度: {{ Math.round(item.match_score) }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 行情镜像库 -->
-            <div v-if="getDialogResultsByType('mirror').length" class="result-section">
-              <div class="section-header mirror">
-                <el-icon><CopyDocument /></el-icon>
-                <span>行情镜像库</span>
-                <el-tag size="small" type="info">{{ getDialogResultsByType('mirror').length }} 个表</el-tag>
-              </div>
-              <div class="section-body">
-                <div 
-                  v-for="item in getDialogResultsByType('mirror')" 
-                  :key="item.table_name"
-                  class="table-card"
-                  @click="selectDialogResult(item, 'clickhouse_data')"
-                >
-                  <div class="card-header">
-                    <span class="table-name">{{ item.table_name }}</span>
-                    <el-tag size="small" type="info">ClickHouse</el-tag>
-                  </div>
-                  <div class="card-body">
-                    <div class="table-comment">{{ item.table_comment || '暂无描述' }}</div>
-                    <div class="table-meta">
-                      <span v-if="item.category" class="meta-item">
-                        <el-icon><Folder /></el-icon>
-                        {{ item.category }}
-                      </span>
-                      <span v-if="item.match_score" class="meta-item score">
-                        匹配度: {{ Math.round(item.match_score) }}
-                      </span>
+                    <div class="card-body">
+                      <div class="table-comment">{{ item.table_comment || '暂无描述' }}</div>
+                      <div class="table-meta">
+                        <span v-if="item.category" class="meta-item">
+                          <el-icon><Folder /></el-icon>
+                          {{ item.category }}
+                        </span>
+                        <span v-if="item.match_score" class="meta-item score">
+                          匹配度: {{ Math.round(item.match_score) }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -964,7 +912,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { 
   Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts,
-  Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, CopyDocument, Check,
+  Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, Check,
   Warning, CircleCheck, CircleClose, Close, Folder, Clock, Minus
 } from '@element-plus/icons-vue'
 
@@ -1601,18 +1549,18 @@ const handleDialogSearch = () => {
     try {
       const result = await window.electronAPI.search.global(keyword, 30)
       dialogSearchResults.value = result.data
-      
-      // 缓存表元数据
-      const cacheResults = (results: any[], datasource: string) => {
-        results?.forEach((t: any) => {
-          if (t.table_name) {
-            tableMetaMap.value[t.table_name] = { ...t, datasource }
-          }
-        })
+
+      // 缓存表元数据（兼容新旧格式）
+      const cacheItem = (t: any) => {
+        if (t.table_name) tableMetaMap.value[t.table_name] = { ...t }
       }
-      cacheResults(result.data?.static?.results, 'postgresql')
-      cacheResults(result.data?.processed?.results, 'clickhouse')
-      cacheResults(result.data?.mirror?.results, 'clickhouse_data')
+      if (Array.isArray(result.data?.results)) {
+        result.data.results.forEach(cacheItem)
+      }
+      // 旧格式兼容
+      result.data?.static?.results?.forEach((t: any) => cacheItem({ ...t, datasource: 'postgresql' }))
+      result.data?.processed?.results?.forEach((t: any) => cacheItem({ ...t, datasource: 'clickhouse' }))
+      result.data?.mirror?.results?.forEach((t: any) => cacheItem({ ...t, datasource: 'clickhouse_data' }))
     } catch (error) {
       console.error('搜索失败:', error)
     } finally {
@@ -1627,25 +1575,49 @@ const handleDialogSearchClear = () => {
 }
 
 // 判断弹窗是否有搜索结果
-const hasDialogSearchResults = computed(() => {
+const hasDialogSearchResults = computed(() => dialogAllResults.value.length > 0)
+
+// 搜索结果扁平化（新格式 data.results[] + 旧格式 static/processed/mirror 兼容）
+const dialogAllResults = computed<any[]>(() => {
   const r = dialogSearchResults.value
-  if (!r) return false
-  return (r.static?.total > 0) || (r.processed?.total > 0) || (r.mirror?.total > 0)
+  if (!r) return []
+  const seen = new Set<string>()
+  const push = (items: any[]) => {
+    items?.forEach((item: any) => {
+      if (item.match_type === 'field') return
+      if (!item.table_name || seen.has(item.table_name)) return
+      seen.add(item.table_name)
+      flatList.push(item)
+    })
+  }
+  const flatList: any[] = []
+  // 新格式：data.results[]
+  if (Array.isArray(r.results)) {
+    push(r.results)
+  }
+  // 旧格式兼容
+  push(r.static?.results?.map((x: any) => ({ ...x, database: x.database || 'finance_db', engine: 'postgresql' })))
+  push(r.processed?.results?.map((x: any) => ({ ...x, database: x.database || 'market_mart', engine: 'clickhouse' })))
+  push(r.mirror?.results?.map((x: any) => ({ ...x, database: x.database || 'market_data', engine: 'clickhouse' })))
+  return flatList
 })
 
-// 获取弹窗搜索结果（按类型）
-const getDialogResultsByType = (type: 'static' | 'processed' | 'mirror') => {
-  const results = dialogSearchResults.value
-  if (!results?.[type]?.results) return []
-  
-  const seen = new Set<string>()
-  return results[type].results.filter((item: any) => {
-    if (item.match_type === 'field') return false
-    if (seen.has(item.table_name)) return false
-    seen.add(item.table_name)
-    return true
-  })
-}
+// 按 engine + database 动态分组（与数据中心 GlobalSearchDropdown 一致）
+const dialogGroupedResults = computed(() => {
+  const map = new Map<string, Map<string, any[]>>()
+  for (const item of dialogAllResults.value) {
+    const eng = item.engine || 'clickhouse'
+    const db = item.database || ''
+    if (!map.has(eng)) map.set(eng, new Map())
+    const dbMap = map.get(eng)!
+    if (!dbMap.has(db)) dbMap.set(db, [])
+    dbMap.get(db)!.push(item)
+  }
+  return Array.from(map.entries()).map(([engine, dbMap]) => ({
+    engine,
+    databases: Array.from(dbMap.entries()).map(([database, results]) => ({ database, results }))
+  }))
+})
 
 // 选择弹窗搜索结果
 const selectDialogResult = async (item: any, database: string) => {
@@ -3216,6 +3188,12 @@ const initApiKey = async () => {
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             padding: 16px;
+
+            .db-sub-header {
+              grid-column: 1 / -1;
+              padding: 4px 0 2px;
+              margin-bottom: 4px;
+            }
             background: #fafafa;
             border-radius: 0 0 8px 8px;
             border: 1px solid #ebeef5;

@@ -88,21 +88,22 @@
     >
       <el-table-column type="index" label="#" width="55" align="center" />
       
-      <el-table-column 
-        label="任务名称" 
+      <el-table-column
+        label="任务名称"
         prop="task_name"
         column-key="task_type"
         align="center"
         :filters="taskTypeFilters"
         :filter-multiple="false"
         show-overflow-tooltip
+        min-width="90"
       >
         <template #default="{ row }">
           <span class="task-name-text">{{ row.task_name }}</span>
         </template>
       </el-table-column>
 
-      <el-table-column label="任务ID" width="200" align="center" show-overflow-tooltip>
+      <el-table-column label="任务ID" width="100" align="center" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="id-cell" @click="copyText(row.task_id)" title="点击复制">
             {{ row.task_id || '-' }}
@@ -110,7 +111,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="因子ID" width="180" align="center" show-overflow-tooltip>
+      <el-table-column label="因子ID" width="90" align="center" show-overflow-tooltip>
         <template #default="{ row }">
           <span
             v-if="row.source_factor_id"
@@ -130,7 +131,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="引擎版本" align="center" width="90">
+      <el-table-column label="引擎版本" align="center" width="70">
         <template #default="{ row }">
           <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
           <span v-else style="color: #cbd5e1;">-</span>
@@ -149,7 +150,7 @@
         column-key="status"
         :filters="statusFilters"
         :filter-multiple="false"
-        min-width="140"
+        min-width="90"
       >
         <template #default="{ row }">
           <div class="status-wrapper">
@@ -248,14 +249,14 @@
         align="center"
         prop="created_at"
         sortable="custom"
-        width="165"
+        width="135"
       >
         <template #default="{ row }">
           {{ formatDate(row.created_at) }}
         </template>
       </el-table-column>
       
-      <el-table-column label="耗时" align="center">
+      <el-table-column label="耗时" align="center" min-width="90">
         <template #default="{ row }">
           <span v-if="row.completed_at">{{ calcDuration(row.started_at, row.completed_at) }}</span>
           <span v-else-if="row.status === 'running'" class="running-text">运行中</span>

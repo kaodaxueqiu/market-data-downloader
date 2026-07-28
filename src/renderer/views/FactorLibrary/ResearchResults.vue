@@ -1,14 +1,77 @@
 <template>
   <div class="research-results-page">
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <el-select
+          v-model="filters.researcher"
+          placeholder="研究员"
+          clearable
+          style="width: 130px;"
+          @change="handleFilterChange"
+        >
+          <el-option v-for="r in researchers" :key="r" :label="r" :value="r" />
+        </el-select>
+        <el-select
+          v-model="filters.status"
+          placeholder="状态"
+          clearable
+          style="width: 110px;"
+          @change="handleFilterChange"
+        >
+          <el-option label="等待执行" value="pending" />
+          <el-option label="正在执行" value="running" />
+          <el-option label="已完成" value="completed" />
+          <el-option label="执行失败" value="failed" />
+          <el-option label="已取消" value="cancelled" />
+        </el-select>
+        <el-select
+          v-model="filters.researchMode"
+          placeholder="运行类型"
+          clearable
+          style="width: 120px;"
+          @change="handleFilterChange"
+        >
+          <el-option label="快速初筛" value="quick" />
+          <el-option label="深度研究" value="deep" />
+          <el-option label="入库审核" value="admission" />
+        </el-select>
+        <el-date-picker
+          v-model="filters.dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          format="MM-DD"
+          value-format="YYYY-MM-DD"
+          style="width: 240px;"
+          clearable
+          @change="handleFilterChange"
+        />
+        <el-input
+          v-model="filters.keyword"
+          placeholder="搜索任务名称/因子ID"
+          clearable
+          style="width: 180px;"
+          @keyup.enter="handleFilterChange"
+          @clear="handleFilterChange"
+        />
+      </div>
+      <div class="toolbar-right">
+        <el-button @click="resetFilters" :disabled="!hasActiveFilters">清除筛选</el-button>
+        <el-button :icon="Refresh" @click="loadList" :loading="loading">刷新</el-button>
+      </div>
+    </div>
+
     <!-- 统计卡片 -->
     <div class="stats-row">
-      <div class="stat-card total">
+      <div class="stat-card">
         <div class="stat-value">{{ stats.total_tasks || 0 }}</div>
-        <div class="stat-label">总任务数</div>
+        <div class="stat-label">全部任务</div>
       </div>
       <div class="stat-card completed">
         <div class="stat-value">{{ stats.total_completed || 0 }}</div>
-        <div class="stat-label">已完成</div>
+        <div class="stat-label">执行完成</div>
       </div>
       <div class="stat-card researchers">
         <div class="stat-value">{{ researchers.length || 0 }}</div>
@@ -16,197 +79,170 @@
       </div>
     </div>
 
-    <!-- 筛选区域 -->
-    <div class="filter-card">
-      <el-form :inline="true" class="filter-form">
-        <el-form-item label="研究员">
-          <el-select 
-            v-model="filters.researcher" 
-            placeholder="全部" 
-            clearable
-            style="width: 140px;"
-            @change="handleFilterChange"
-          >
-            <el-option v-for="r in researchers" :key="r" :label="r" :value="r" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select 
-            v-model="filters.status" 
-            placeholder="全部" 
-            clearable
-            style="width: 120px;"
-            @change="handleFilterChange"
-          >
-            <el-option label="等待执行" value="pending" />
-            <el-option label="正在执行" value="running" />
-            <el-option label="已完成" value="completed" />
-            <el-option label="执行失败" value="failed" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="运行类型">
-          <el-select 
-            v-model="filters.researchMode" 
-            placeholder="全部" 
-            clearable
-            style="width: 130px;"
-            @change="handleFilterChange"
-          >
-            <el-option label="快速初筛" value="quick" />
-            <el-option label="深度研究" value="deep" />
-            <el-option label="入库审核" value="admission" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="运行时间">
-          <el-date-picker
-            v-model="filters.dateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            style="width: 240px;"
-            clearable
-            @change="handleFilterChange"
-          />
-        </el-form-item>
-        <el-form-item label="关键词">
-          <el-input 
-            v-model="filters.keyword" 
-            placeholder="搜索任务名称/因子ID" 
-            clearable 
-            style="width: 200px;"
-            @keyup.enter="handleFilterChange"
-            @clear="handleFilterChange"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleFilterChange">查询</el-button>
-          <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </div>
+    <!-- 任务列表 -->
+    <el-table
+      :data="tasks"
+      v-loading="loading"
+      class="modern-table"
+      stripe
+      size="small"
+      :header-cell-style="{
+        background: '#f8fafc',
+        color: '#64748b',
+        fontWeight: 500,
+        fontSize: '12px',
+        padding: '10px 0',
+        textAlign: 'center',
+        borderBottom: '1px solid #e2e8f0'
+      }"
+      :cell-style="{ padding: '8px 10px', color: '#475569', fontSize: '12px' }"
+      @sort-change="handleSortChange"
+    >
+      <el-table-column type="index" label="#" width="55" align="center" />
 
-    <!-- 回测任务列表 -->
-    <div class="table-card">
-      <el-table 
-        :data="tasks" 
-        v-loading="loading"
-        stripe
-        size="small"
-        class="modern-table"
-        :header-cell-style="{ 
-          background: '#f8fafc', 
-          color: '#64748b', 
-          fontWeight: 500,
-          fontSize: '12px',
-          padding: '10px 0',
-          textAlign: 'center',
-          borderBottom: '1px solid #e2e8f0'
-        }"
-        :cell-style="{ padding: '8px 10px', color: '#475569', fontSize: '12px' }"
-        @sort-change="handleSortChange"
+      <el-table-column prop="task_name" label="任务名称" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="task-name-text">{{ row.task_name }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="任务ID" width="100" align="center" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="id-cell" @click="copyText(row.task_id)" title="点击复制">
+            {{ row.task_id || '-' }}
+          </span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="因子ID" width="90" align="center" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span
+            v-if="row.factor_id"
+            class="factor-id-link"
+            @click="goToFactor(row.factor_id)"
+            title="点击跳转到因子库"
+          >{{ row.factor_id }}</span>
+          <span v-else style="color: #cbd5e1;">-</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="运行类型" align="center" width="112">
+        <template #default="{ row }">
+          <span :class="['run-mode', row.research_mode]">
+            {{ getResearchModeName(row.research_mode) }}
+          </span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="引擎版本" align="center" width="70">
+        <template #default="{ row }">
+          <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
+          <span v-else style="color: #cbd5e1;">-</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column prop="researcher" label="研究员" align="center" />
+
+      <el-table-column prop="universe" label="股票池" align="center" />
+
+      <el-table-column label="5日RankIC" align="center">
+        <template #default="{ row }">
+          <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 5))">
+            {{ formatRankIc(getPeriodRankIc(row, 5)) }}
+          </span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="10日RankIC" align="center">
+        <template #default="{ row }">
+          <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 10))">
+            {{ formatRankIc(getPeriodRankIc(row, 10)) }}
+          </span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="状态" align="center" min-width="90">
+        <template #default="{ row }">
+          <div class="status-wrapper">
+            <span :class="['status-text', row.status]">
+              {{ getStatusName(row.status) }}
+            </span>
+            <template v-if="row.status === 'running'">
+              <div class="progress-info">
+                <el-progress
+                  :percentage="row.progress || 0"
+                  :stroke-width="4"
+                  :show-text="false"
+                  style="width: 80px;"
+                />
+                <span class="progress-percent">{{ row.progress || 0 }}%</span>
+              </div>
+            </template>
+            <el-tooltip
+              v-else-if="row.status === 'failed' && row.error_message"
+              effect="dark"
+              placement="top"
+              :content="row.error_message"
+            >
+              <span class="error-brief">
+                {{ row.error_message.length > 40 ? row.error_message.slice(0, 40) + '…' : row.error_message }}
+              </span>
+            </el-tooltip>
+          </div>
+        </template>
+      </el-table-column>
+
+      <el-table-column
+        prop="completed_at"
+        label="运行时间"
+        align="center"
+        sortable="custom"
+        width="135"
       >
-        <el-table-column prop="task_name" label="任务名称" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="task-name-text">{{ row.task_name }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="任务ID" width="200" align="center" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="id-cell" @click="copyText(row.task_id)" title="点击复制">
-              {{ row.task_id || '-' }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="因子ID" width="180" align="center" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span
-              v-if="row.factor_id"
-              class="id-cell"
-              @click="copyText(row.factor_id)"
-              title="点击复制"
-            >{{ row.factor_id }}</span>
-            <span v-else style="color: #cbd5e1;">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="运行类型" align="center" width="112">
-          <template #default="{ row }">
-            <span :class="['run-mode', row.research_mode]">
-              {{ getResearchModeName(row.research_mode) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="引擎版本" align="center" width="90">
-          <template #default="{ row }">
-            <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
-            <span v-else style="color: #cbd5e1;">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="researcher" label="研究员" align="center" />
-        <el-table-column label="回测区间" align="center">
-          <template #default="{ row }">
-            {{ row.start_date }} ~ {{ row.end_date }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="universe" label="股票池" align="center" />
-        <el-table-column label="5日RankIC" align="center">
-          <template #default="{ row }">
-            <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 5))">
-              {{ formatRankIc(getPeriodRankIc(row, 5)) }}
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="10日RankIC" align="center">
-          <template #default="{ row }">
-            <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 10))">
-              {{ formatRankIc(getPeriodRankIc(row, 10)) }}
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" align="center">
-          <template #default="{ row }">
-            <span :class="['status-tag', row.status]">{{ getStatusText(row.status) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="completed_at" label="运行时间" align="center" sortable="custom" width="165">
-          <template #default="{ row }">
-            {{ row.completed_at ? formatDate(row.completed_at) : '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="130" align="center">
-          <template #default="{ row }">
-            <div class="action-cell">
-              <button class="action-btn primary" @click="viewDetail(row)">详情</button>
-              <button
-                v-if="row.status === 'completed'"
-                class="action-btn success"
-                @click="viewResult(row)"
-              >结果</button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+        <template #default="{ row }">
+          {{ row.completed_at ? formatDate(row.completed_at) : '-' }}
+        </template>
+      </el-table-column>
 
-      <!-- 分页 -->
-      <div class="pagination-wrapper" v-if="total > 0">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.page_size"
-          :total="total"
-          :page-sizes="[20, 50, 100]"
-          layout="total, sizes, prev, pager, next"
-          background
-          @size-change="loadList"
-          @current-change="loadList"
-        />
-      </div>
+      <el-table-column label="操作" min-width="130" align="center">
+        <template #default="{ row }">
+          <div class="action-cell">
+            <button class="action-btn primary" @click="viewDetail(row)">详情</button>
+            <button
+              v-if="row.status === 'completed'"
+              class="action-btn success"
+              @click="viewResult(row)"
+            >结果</button>
+          </div>
+        </template>
+      </el-table-column>
+    </el-table>
 
-      <!-- 空状态 -->
-      <el-empty v-if="!loading && tasks.length === 0" description="暂无研究成果数据" />
+    <!-- 空状态 -->
+    <el-empty
+      v-if="!loading && tasks.length === 0"
+      description="暂无研究成果数据"
+      :image-size="120"
+    >
+      <template #image>
+        <el-icon :size="80" color="#c0c4cc"><Document /></el-icon>
+      </template>
+    </el-empty>
+
+    <!-- 分页 -->
+    <div class="pagination-wrapper" v-if="total > 0">
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.page_size"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        background
+        @size-change="loadList"
+        @current-change="loadList"
+      />
     </div>
 
     <!-- 任务详情弹窗 -->
@@ -290,8 +326,8 @@
             </div>
             <div class="section-body">
               <div class="datasource-list">
-                <div 
-                  v-for="(ds, idx) in taskDetail.task_config.data_sources" 
+                <div
+                  v-for="(ds, idx) in taskDetail.task_config.data_sources"
                   :key="idx"
                   class="datasource-item"
                 >
@@ -350,9 +386,10 @@
             <div class="section-title">
               <el-icon><Warning /></el-icon>
               错误信息
+              <el-button link size="small" @click="copyError(taskDetail.error_message)">复制</el-button>
             </div>
             <div class="section-body">
-              <div class="error-message">{{ taskDetail.error_message }}</div>
+              <pre class="error-message">{{ taskDetail.error_message }}</pre>
             </div>
           </div>
         </template>
@@ -360,9 +397,9 @@
 
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
-        <el-button 
-          v-if="taskDetail?.status === 'completed'" 
-          type="primary" 
+        <el-button
+          v-if="taskDetail?.status === 'completed'"
+          type="primary"
           @click="viewResult(currentTask)"
         >
           查看结果
@@ -373,11 +410,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { 
-  Search, Refresh, Document, Setting, DataAnalysis, Connection, Warning
+import {
+  Refresh, Document, Setting, DataAnalysis, Connection, Warning
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -398,6 +435,12 @@ const filters = ref({
   dateRange: [] as string[]
 })
 
+// 是否有激活的筛选
+const hasActiveFilters = computed(() => {
+  return filters.value.researcher || filters.value.status || filters.value.keyword ||
+    filters.value.researchMode || (filters.value.dateRange && filters.value.dateRange.length > 0)
+})
+
 // 分页
 const pagination = ref({
   page: 1,
@@ -415,7 +458,6 @@ const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const currentTask = ref<any>(null)
 const taskDetail = ref<any>(null)
-
 
 // 加载统计信息
 const loadStats = async () => {
@@ -457,7 +499,7 @@ const loadList = async () => {
       sort_by: sort.value.sort_by,
       sort_order: sort.value.sort_order
     })
-    
+
     if (res.success) {
       tasks.value = res.data?.tasks || res.data?.factors || []
       total.value = res.data?.total || 0
@@ -537,6 +579,12 @@ const viewResult = (row: any) => {
   }
 }
 
+// 点击因子ID跳转到因子库
+const goToFactor = (factorId?: string) => {
+  if (!factorId) return
+  router.push({ path: '/factor-library/my-factors', query: { factorId } })
+}
+
 // 获取指定周期的 Rank IC
 const getPeriodRankIc = (row: any, period: number): number | null => {
   const periodStats = row.period_ic_stats || row.factor_result?.period_ic_stats
@@ -545,9 +593,11 @@ const getPeriodRankIc = (row: any, period: number): number | null => {
   return stat?.rank_ic_mean ?? null
 }
 
+const DASH = '—'
+
 // 格式化 Rank IC 显示
 const formatRankIc = (value: number | null): string => {
-  if (value === null || value === undefined) return '-'
+  if (value === null || value === undefined || !Number.isFinite(value)) return DASH
   return value.toFixed(4)
 }
 
@@ -559,26 +609,15 @@ const getRankIcClass = (value: number | null): string => {
   return 'rank-ic-neutral'
 }
 
-// 获取状态名称（完整）
+// 获取状态名称
 const getStatusName = (status: string) => {
   const map: Record<string, string> = {
     'pending': '等待执行',
     'running': '正在执行',
-    'completed': '已完成',
+    'deferred': '排队中',
+    'completed': '执行完成',
     'failed': '执行失败',
     'cancelled': '已取消'
-  }
-  return map[status] || status
-}
-
-// 获取状态文本（简短）
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = {
-    'pending': '等待',
-    'running': '执行中',
-    'completed': '完成',
-    'failed': '失败',
-    'cancelled': '取消'
   }
   return map[status] || status
 }
@@ -602,6 +641,16 @@ const getTaskTypeName = (type: string) => {
     'daily_update': '每日更新'
   }
   return map[type] || type
+}
+
+// 运行类型（研究模式）中文名
+const getResearchModeName = (mode?: string) => {
+  const map: Record<string, string> = {
+    'quick': '快速初筛',
+    'deep': '深度研究',
+    'admission': '入库审核'
+  }
+  return mode ? (map[mode] || mode) : '-'
 }
 
 // 股票池显示
@@ -699,7 +748,14 @@ const formatFullDate = (dateStr: string) => {
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-'
-  return dateStr.replace('T', ' ').substring(0, 16)
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 // 点击复制 ID
@@ -709,14 +765,12 @@ const copyText = (text?: string) => {
     .then(() => ElMessage.success('已复制'))
     .catch(() => ElMessage.warning('复制失败'))
 }
-// 运行类型（研究模式）中文名
-const getResearchModeName = (mode?: string) => {
-  const map: Record<string, string> = {
-    'quick': '快速初筛',
-    'deep': '深度研究',
-    'admission': '入库审核'
-  }
-  return mode ? (map[mode] || mode) : '-'
+
+// 复制错误信息
+const copyError = (msg: string) => {
+  navigator.clipboard?.writeText(msg)
+    .then(() => ElMessage.success('已复制'))
+    .catch(() => ElMessage.warning('复制失败，请手动选择'))
 }
 
 onMounted(() => {
@@ -728,8 +782,47 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .research-results-page {
-  padding: 20px;
-  
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 10px;
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    :deep(.el-button) {
+      border-radius: 10px;
+      transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+                  box-shadow 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+                  border-color 0.2s ease;
+      &:hover:not(.is-disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.25);
+      }
+      &:active:not(.is-disabled) {
+        transform: translateY(0) scale(0.98);
+      }
+    }
+    :deep(.el-date-editor),
+    :deep(.el-select),
+    :deep(.el-input) {
+      border-radius: 10px;
+    }
+  }
+
   // 统计卡片
   .stats-row {
     display: grid;
@@ -737,7 +830,6 @@ onMounted(() => {
     gap: 14px;
     margin-bottom: 22px;
 
-    // Double-Bezel：外层托盘 + 内芯，营造硬件质感
     .stat-card {
       position: relative;
       background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%);
@@ -769,6 +861,7 @@ onMounted(() => {
         width: 3px;
         border-radius: 0 3px 3px 0;
         background: #cbd5e1;
+        transition: opacity 0.5s cubic-bezier(0.32, 0.72, 0, 1);
       }
 
       &:hover {
@@ -792,9 +885,6 @@ onMounted(() => {
         letter-spacing: 0.02em;
       }
 
-      &.total {
-        &::before { background: #94a3b8; }
-      }
       &.completed {
         background: linear-gradient(180deg, #ffffff 0%, #f4fdf7 100%);
         &::before { background: #22c55e; }
@@ -810,119 +900,72 @@ onMounted(() => {
   @media (max-width: 640px) {
     .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
-  
-  // 筛选卡片
-  .filter-card {
-    background: #fff;
-    border-radius: 16px;
-    padding: 16px 20px;
-    margin-bottom: 22px;
+
+  // 现代表格
+  .modern-table {
+    border-radius: 12px;
+    overflow: hidden;
     border: 1px solid #eef2f7;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -18px rgba(15, 23, 42, 0.14);
-    
-    .filter-form {
-      :deep(.el-form-item) {
-        margin-bottom: 0;
-        margin-right: 16px;
-      }
-      
-      :deep(.el-form-item__label) {
-        color: #64748b;
-        font-size: 13px;
-      }
-    }
-  }
-  
-  // 表格卡片
-  .table-card {
-    background: #fff;
-    border-radius: 16px;
-    padding: 20px;
-    border: 1px solid #eef2f7;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -18px rgba(15, 23, 42, 0.14);
-    
-    .modern-table {
-      border-radius: 12px;
-      overflow: hidden;
-      border: 1px solid #eef2f7;
-      
-      :deep(.el-table__inner-wrapper::before) {
-        display: none;
-      }
 
-      // 表头居中（含带排序/筛选图标的表头）
-      :deep(.el-table__header-wrapper) {
-        th {
-          text-align: center;
-          .cell { justify-content: center; }
-          &.is-sortable .cell,
-          &.is-leaf .cell {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          }
-        }
-      }
-      
-      :deep(.el-table__row--striped) {
-        td {
-          background: #f8fafc !important;
-        }
-      }
-      
-      :deep(.el-table__row) {
-        td {
-          border: none !important;
-          border-bottom: 1px solid #f1f5f9 !important;
-        }
-      }
-      
-      :deep(.el-table__body tr:hover > td) {
-        background: #eff6ff !important;
-      }
+    :deep(.el-table__inner-wrapper::before) {
+      display: none;
     }
-    
-    .pagination-wrapper {
-      margin-top: 18px;
-      display: flex;
-      justify-content: flex-end;
 
-      :deep(.el-pagination.is-background) {
-        .el-pager li,
-        .btn-prev,
-        .btn-next {
-          border-radius: 8px;
-          transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-          &:hover { transform: translateY(-1px); }
+    :deep(.el-table__header-wrapper) {
+      th {
+        text-align: center;
+        .cell { justify-content: center; }
+        &.is-sortable .cell,
+        &.is-leaf .cell {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
       }
     }
-    
-    .no-action {
-      color: #c0c4cc;
+
+    :deep(.el-table__row--striped) {
+      td {
+        background: #f8fafc !important;
+      }
     }
-  }
-  
-  // 任务名称链接
-  .task-link {
-    font-weight: 400;
-    color: #3b82f6;
-    font-size: 12px;
-    transition: all 0.2s;
-    
-    &:hover {
-      color: #2563eb;
+
+    :deep(.el-table__row) {
+      td {
+        border: none !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+      }
+    }
+
+    :deep(.el-table__body tr:hover > td) {
+      background: #eff6ff !important;
     }
   }
 
-  // 任务名称（普通文字，无链接）
+  .pagination-wrapper {
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+
+    :deep(.el-pagination.is-background) {
+      .el-pager li,
+      .btn-prev,
+      .btn-next {
+        border-radius: 8px;
+        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+        &:hover { transform: translateY(-1px); }
+      }
+    }
+  }
+
+  // 任务名称
   .task-name-text {
     font-size: 12px;
     color: #334155;
     font-weight: 500;
   }
 
-  // ID 单元格（等宽、可点击复制）
+  // ID 单元格
   .id-cell {
     font-family: 'SFMono-Regular', Consolas, monospace;
     font-size: 11px;
@@ -930,6 +973,16 @@ onMounted(() => {
     cursor: pointer;
     transition: color 0.2s ease;
     &:hover { color: #2563eb; }
+  }
+
+  // 因子ID链接
+  .factor-id-link {
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 11px;
+    color: #3b82f6;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    &:hover { color: #2563eb; text-decoration: underline; }
   }
 
   // 运行类型标签
@@ -947,7 +1000,68 @@ onMounted(() => {
     &.admission { background: #fdf4ff; color: #c026d3; }
   }
 
-  // 操作列：胶囊小按钮
+  // 状态
+  .status-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+
+    .status-text {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px 3px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+
+      &::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        flex-shrink: 0;
+      }
+
+      &.pending { color: #d97706; background: #fef3c7; }
+      &.running { color: #2563eb; background: #dbeafe; &::before { animation: pulse 1.5s infinite; } }
+      &.deferred { color: #d97706; background: #fef3c7; }
+      &.completed { color: #16a34a; background: #dcfce7; }
+      &.failed { color: #dc2626; background: #fee2e2; }
+      &.cancelled { color: #64748b; background: #f1f5f9; }
+    }
+
+    .progress-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      .progress-percent {
+        font-size: 11px;
+        color: #64748b;
+        font-variant-numeric: tabular-nums;
+      }
+    }
+
+    .error-brief {
+      font-size: 11px;
+      color: #dc2626;
+      cursor: help;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .running-text {
+    color: #2563eb;
+    font-size: 11px;
+  }
+
+  // 操作列
   .action-cell {
     display: inline-flex;
     align-items: center;
@@ -976,52 +1090,19 @@ onMounted(() => {
     &.primary { background: #eff6ff; color: #2563eb; &:hover { background: #dbeafe; } }
     &.success { background: #f0fdf4; color: #16a34a; &:hover { background: #dcfce7; } }
   }
-  
-  // 状态标签
-  .status-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 9px 3px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
 
-    &::before {
-      content: '';
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-      flex-shrink: 0;
-    }
-    
-    &.pending { color: #d97706; background: #fef3c7; }
-    &.running { color: #2563eb; background: #dbeafe; &::before { animation: pulse 1.5s infinite; } }
-    &.completed { color: #16a34a; background: #dcfce7; }
-    &.failed { color: #dc2626; background: #fee2e2; }
-    &.cancelled { color: #64748b; background: #f1f5f9; }
-  }
-  
   // Rank IC 数值样式
   .rank-ic-good {
     color: #16a34a;
     font-weight: 600;
   }
-  
   .rank-ic-bad {
     color: #dc2626;
     font-weight: 600;
   }
-  
   .rank-ic-neutral {
     color: #64748b;
   }
-  
-  // 数值样式
-  .positive { color: #16a34a; }
-  .negative { color: #dc2626; }
 }
 
 // 详情弹窗
@@ -1031,24 +1112,24 @@ onMounted(() => {
     max-height: 70vh;
     overflow-y: auto;
   }
-  
+
   .detail-content {
     min-height: 200px;
-    
+
     .detail-section {
       border-bottom: 1px solid #ebeef5;
-      
+
       &:last-child {
         border-bottom: none;
       }
-      
+
       &.error {
         .section-title {
           background: #fef0f0;
           color: #f56c6c;
         }
       }
-      
+
       .section-title {
         display: flex;
         align-items: center;
@@ -1058,16 +1139,16 @@ onMounted(() => {
         font-size: 14px;
         font-weight: 600;
         color: #303133;
-        
+
         .el-icon {
           font-size: 16px;
           color: #409eff;
         }
       }
-      
+
       .section-body {
         padding: 16px 20px;
-        
+
         code {
           background: #f5f7fa;
           padding: 2px 6px;
@@ -1076,14 +1157,14 @@ onMounted(() => {
           font-size: 13px;
           color: #606266;
         }
-        
+
         .factor-block {
           .factor-label {
             font-size: 13px;
             color: #909399;
             margin-bottom: 8px;
           }
-          
+
           .factor-code {
             display: block;
             background: #f5f7fa;
@@ -1091,7 +1172,7 @@ onMounted(() => {
             border-radius: 6px;
             font-size: 13px;
           }
-          
+
           .factor-code-block {
             background: #1e1e1e;
             color: #d4d4d4;
@@ -1104,18 +1185,18 @@ onMounted(() => {
             margin: 0;
           }
         }
-        
+
         .datasource-list {
           display: flex;
           flex-direction: column;
           gap: 12px;
-          
+
           .datasource-item {
             background: #fafafa;
             border: 1px solid #ebeef5;
             border-radius: 6px;
             overflow: hidden;
-            
+
             .ds-header {
               display: flex;
               align-items: center;
@@ -1123,32 +1204,32 @@ onMounted(() => {
               padding: 10px 14px;
               background: #f5f7fa;
               border-bottom: 1px solid #ebeef5;
-              
+
               .ds-name {
                 font-weight: 500;
                 color: #303133;
               }
             }
-            
+
             .ds-body {
               padding: 12px 14px;
-              
+
               .ds-row {
                 display: flex;
                 align-items: center;
                 flex-wrap: wrap;
                 gap: 6px;
                 margin-bottom: 8px;
-                
+
                 &:last-child {
                   margin-bottom: 0;
                 }
-                
+
                 .ds-label {
                   font-size: 13px;
                   color: #909399;
                 }
-                
+
                 .ds-fields {
                   display: flex;
                   flex-wrap: wrap;
@@ -1158,7 +1239,7 @@ onMounted(() => {
             }
           }
         }
-        
+
         .error-message {
           background: #fef0f0;
           color: #f56c6c;
@@ -1166,12 +1247,13 @@ onMounted(() => {
           border-radius: 6px;
           font-size: 13px;
           line-height: 1.6;
+          white-space: pre-wrap;
+          word-break: break-all;
+          margin: 0;
+          font-family: 'SF Mono', 'Consolas', monospace;
         }
       }
     }
-    
-    .positive { color: #16a34a; }
-    .negative { color: #dc2626; }
   }
 }
 

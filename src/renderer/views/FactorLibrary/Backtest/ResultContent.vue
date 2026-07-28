@@ -576,9 +576,23 @@
               <div v-else-if="orthogonality && orthogonality.status === 'skipped'" class="collinearity-detail">
                 <div class="collinearity-header">
                   <span class="collinearity-title">正交性诊断</span>
-                  <el-tag size="small" type="info" effect="plain">已跳过</el-tag>
+                  <el-tag
+                    size="small"
+                    :type="orthogonality.reason === 'no_correlated_historical_factor' ? 'success' : 'info'"
+                    effect="plain"
+                  >
+                    {{ orthogonality.reason === 'no_correlated_historical_factor' ? '完全正交' : '已跳过' }}
+                  </el-tag>
                 </div>
-                <p style="color: var(--el-text-color-secondary); font-size: 12px; margin: 4px 0 0;">未开启库级诊断（BACKTEST_LIBRARY_DIAGNOSTICS 未设为 1）</p>
+                <p style="color: var(--el-text-color-secondary); font-size: 12px; margin: 4px 0 0;">{{ orthogonalitySkipText }}</p>
+                <div
+                  v-if="orthogonality.reason === 'no_correlated_historical_factor'"
+                  class="collinearity-meta"
+                  style="margin-top: 4px;"
+                >
+                  <span>增量价值 proxy：{{ orthogonality.incremental_value_proxy ?? '-' }}</span>
+                  <span style="margin-left: 12px;">被解释 R²：{{ orthogonality.explained_r_squared ?? '-' }}</span>
+                </div>
               </div>
               <div v-else-if="orthogonality && orthogonality.status === 'error'" class="collinearity-detail">
                 <div class="collinearity-header">
@@ -1412,6 +1426,21 @@ const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
 // 入库审核 summary.factor_collinearity（结构见对接手册 §1.3.1）
 const collinearity = computed<any>(() => summary.value?.factor_collinearity ?? null)
 const orthogonality = computed<any>(() => summary.value?.factor_orthogonality ?? null)
+
+// skipped 分支文案：优先后端 message，按 reason 兜底
+const orthogonalitySkipText = computed<string>(() => {
+  const o = orthogonality.value
+  if (!o) return ''
+  if (o.message) return o.message
+  switch (o.reason) {
+    case 'no_correlated_historical_factor':
+      return '库内无高相关历史因子，候选因子视为完全正交（增量价值高）'
+    case 'library_diagnostics_disabled':
+      return '未开启库级诊断（BACKTEST_LIBRARY_DIAGNOSTICS 未设为 1）'
+    default:
+      return '正交性诊断已跳过'
+  }
+})
 
 // matches[] 兜底为数组，供表格 v-for
 const collinearityMatches = computed<any[]>(() => {

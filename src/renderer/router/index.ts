@@ -39,12 +39,6 @@ const routes: RouteRecordRaw[] = [
         meta: { menuId: 'private_warehouse' }
       },
       {
-        path: 'submit',
-        name: 'FactorSubmit',
-        component: () => import('../views/FactorLibrary/Submit.vue'),
-        meta: { menuId: 'factor_submit' }
-      },
-      {
         path: 'backtest/submit',
         name: 'FactorBacktestSubmit',
         component: () => import('../views/FactorLibrary/Backtest/Main.vue'),
@@ -84,31 +78,6 @@ const routes: RouteRecordRaw[] = [
         name: 'ResearchResults',
         component: () => import('../views/FactorLibrary/ResearchResults.vue'),
         meta: { menuId: 'research_results' }
-      },
-      // 数据工单
-      {
-        path: 'workorder/submit',
-        name: 'WorkOrderSubmit',
-        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
-        meta: { menuId: 'workorder_submit' }
-      },
-      {
-        path: 'workorder/my',
-        name: 'WorkOrderMy',
-        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
-        meta: { menuId: 'workorder_my' }
-      },
-      {
-        path: 'workorder/admin',
-        name: 'WorkOrderAdmin',
-        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
-        meta: { menuId: 'workorder_manage' }
-      },
-      {
-        path: 'workorder/detail/:id',
-        name: 'WorkOrderDetail',
-        component: () => import('../views/FactorLibrary/WorkOrder/Main.vue'),
-        meta: { menuId: 'workorder_my' }
       },
       // 回测引擎配置（容器页，子路由承载三级 tab）
       {
@@ -223,18 +192,6 @@ const routes: RouteRecordRaw[] = [
         meta: { menuId: 'repo_admin' }
       }
     ]
-  },
-  {
-    path: '/tasks',
-    name: 'Tasks',
-    component: () => import('../views/Tasks.vue'),
-    meta: { menuId: 'task_management' }
-  },
-  {
-    path: '/history',
-    name: 'History',
-    component: () => import('../views/History.vue'),
-    meta: { menuId: 'history' }
   },
   {
     path: '/dictionary',
@@ -455,8 +412,7 @@ router.beforeEach((to, _from, next) => {
     const subRoutes = [
       { path: '/factor-library/plaza', menuId: 'factor_plaza' },
       { path: '/factor-library/my-factors', menuId: 'my_factors' },
-      { path: '/factor-library/private-warehouse', menuId: 'private_warehouse' },
-      { path: '/factor-library/submit', menuId: 'factor_submit' }
+      { path: '/factor-library/private-warehouse', menuId: 'private_warehouse' }
     ]
     
     // 找到第一个有权限的子路由
@@ -505,29 +461,6 @@ router.beforeEach((to, _from, next) => {
       return
     } else if (userMenuPermissions.includes('backtest_engine_config')) {
       console.warn('⚠️ 有回测引擎配置权限，但没有三级菜单权限')
-      next('/')
-      return
-    }
-  }
-  
-  // 特殊处理：访问 /factor-library/workorder 时，自动跳转到第一个有权限的三级菜单
-  if (to.path === '/factor-library/workorder') {
-    const subRoutes = [
-      { path: '/factor-library/workorder/submit', menuId: 'workorder_submit' },
-      { path: '/factor-library/workorder/my', menuId: 'workorder_my' },
-      { path: '/factor-library/workorder/admin', menuId: 'workorder_manage' }
-    ]
-    
-    // 找到第一个有权限的子路由
-    const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
-    
-    if (allowedRoute) {
-      console.log('🔀 自动跳转到:', allowedRoute.path)
-      next(allowedRoute.path)
-      return
-    } else if (userMenuPermissions.includes('data_workorder')) {
-      // 有二级菜单权限但没有三级菜单权限
-      console.warn('⚠️ 有数据工单权限，但没有三级菜单权限')
       next('/')
       return
     }
