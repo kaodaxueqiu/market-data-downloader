@@ -28,6 +28,7 @@
         v-loading="loading"
         class="soft-table"
         size="default"
+        height="100%"
         :header-cell-style="headerCellStyle"
         :cell-style="cellStyle"
       >
@@ -339,6 +340,7 @@ const headerCellStyle = {
   fontWeight: 600,
   fontSize: '12px',
   padding: '14px 0',
+  textAlign: 'center',
   borderBottom: '1px solid #eef2f7'
 }
 const cellStyle = { padding: '14px 0', color: '#475569', fontSize: '13px' }
@@ -735,11 +737,21 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+.data-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .panel {
   background: #fff;
   border-radius: 16px;
   padding: 6px 22px 18px;
   box-shadow: 0 4px 24px rgba(15, 23, 42, 0.05);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-head {

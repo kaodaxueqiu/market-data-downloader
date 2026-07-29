@@ -39,9 +39,21 @@
         </div>
       </div>
 
-      <el-tabs v-model="activeTab" style="margin-top:16px">
+      <div class="content-card tabs-card">
+      <el-tabs v-model="activeTab">
         <!-- ===== Tab 1：表管理 ===== -->
         <el-tab-pane label="表管理" name="tables">
+        </el-tab-pane>
+
+        <!-- ===== Tab 2：填充数据 ===== -->
+        <el-tab-pane label="填充数据" name="fill">
+        </el-tab-pane>
+      </el-tabs>
+      </div>
+
+      <!-- Tab 1 内容 -->
+      <div v-if="activeTab === 'tables'" class="content-card">
+        <el-scrollbar>
           <el-table :data="tables" v-loading="tablesLoading" border>
             <el-table-column prop="name" label="表名" />
             <el-table-column prop="engine" label="引擎" width="200" />
@@ -56,14 +68,16 @@
             </el-table-column>
             <template #empty>暂无表，点击右上角「新建表」创建</template>
           </el-table>
-        </el-tab-pane>
+        </el-scrollbar>
+      </div>
 
-        <!-- ===== Tab 2：填充数据 ===== -->
-        <el-tab-pane label="填充数据" name="fill">
-          <div style="margin-bottom:12px">
+      <!-- Tab 2 内容 -->
+      <div v-if="activeTab === 'fill'" class="content-card">
+          <div style="margin-bottom:12px; flex-shrink: 0;">
             <el-button type="primary" :icon="Plus" @click="openFillCreateDialog">新建填充配置</el-button>
             <el-button :icon="Refresh" @click="loadFillConfigs">刷新</el-button>
           </div>
+        <el-scrollbar>
           <el-table :data="fillConfigs" v-loading="fillConfigsLoading" border>
             <el-table-column prop="config_name" label="配置名" min-width="140" />
             <el-table-column prop="target_table" label="目标表" width="140" />
@@ -89,8 +103,8 @@
             </el-table-column>
             <template #empty>暂无填充配置，点击「新建填充配置」创建</template>
           </el-table>
-        </el-tab-pane>
-      </el-tabs>
+        </el-scrollbar>
+      </div>
 
       <!-- 新建表弹窗 -->
       <el-dialog v-model="createVisible" title="新建表" width="720px" :close-on-click-modal="false">
@@ -846,15 +860,43 @@ onMounted(checkStatus)
 </script>
 
 <style scoped>
-.private-warehouse { padding: 24px; }
+.private-warehouse { height: calc(100vh - 60px - 24px - 40px); display: flex; flex-direction: column; background: #f5f7fa; overflow: hidden; }
 .loading-wrap, .init-container { display: flex; justify-content: center; align-items: center; min-height: 60vh; }
 .init-card { text-align: center; max-width: 480px; }
 .init-icon { color: #67C23A; margin-bottom: 16px; }
 .init-desc { color: #606266; line-height: 1.8; margin: 12px 0 20px; }
 .init-info { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; }
-.ready-container { padding-top: 40px; }
-.header-bar { display: flex; justify-content: space-between; align-items: center; }
+.ready-container { padding-top: 10px; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.header-bar { display: flex; justify-content: space-between; align-items: center; margin: 0 10px; }
 .db-label { color: #606266; }
+.content-card {
+  background: #ffffff;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  padding: 0 20px;
+  margin: 10px 10px 0 10px;
+  flex-shrink: 0;
+
+  :deep(.el-tabs) { padding: 0; margin: 0; }
+  :deep(.el-tabs__header) { margin: 0; border: none; padding: 0; }
+  :deep(.el-tabs__nav) { margin: 0; padding: 0; border: none; }
+  :deep(.el-tabs__nav-wrap) { padding: 0; margin: 0; }
+  :deep(.el-tabs__nav-wrap::after) { display: none; }
+  :deep(.el-tabs__item) { padding: 0 16px; height: 44px; line-height: 44px; font-size: 14px; }
+  :deep(.el-tabs__content) { display: none !important; padding: 0 !important; margin: 0 !important; }
+}
+
+.tabs-card {
+  padding: 0 20px 4px;
+}
+
+.content-card:not(.tabs-card) {
+  padding: 16px 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 .cols { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .col-row { display: flex; gap: 8px; align-items: center; }
 .section-title {

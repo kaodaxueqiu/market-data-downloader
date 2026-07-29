@@ -8,11 +8,15 @@
             <img src="@/assets/logo.svg" alt="Logo" class="logo-image" />
           </div>
           
+          <el-scrollbar class="menu-scrollbar">
           <el-menu
             :default-active="activeMenu"
             router
             class="app-menu"
             :collapse="sidebarCollapsed"
+            :unique-opened="true"
+            v-model:opened="openedMenus"
+            popper-class="sidebar-popper"
             @select="handleMenuSelect"
           >
             <!-- 🆕 根据权限动态渲染菜单 -->
@@ -51,25 +55,41 @@
               暂无菜单权限
             </div>
           </el-menu>
-          
-          <div class="app-version">
-            <span v-if="!sidebarCollapsed">v{{ appVersion }}</span>
-          </div>
-          
-          <div class="sidebar-toggle" @click="toggleSidebar">
-            <el-icon><DArrowLeft v-if="!sidebarCollapsed" /><DArrowRight v-else /></el-icon>
+          </el-scrollbar>
+
+          <div class="sidebar-footer">
+            <span v-if="!sidebarCollapsed" class="version-text">v{{ appVersion }}</span>
+            <div class="collapse-btn" @click="toggleSidebar">
+              <el-icon :size="14"><Fold v-if="!sidebarCollapsed" /><Expand v-else /></el-icon>
+            </div>
           </div>
         </el-aside>
         
         <!-- 主内容区 -->
-        <el-container>
+        <el-container class="app-content">
           <!-- 顶栏 -->
           <el-header class="app-header">
             <div class="header-left">
-              <h2>{{ pageTitle }}</h2>
+              <h2>
+                <template v-for="(crumb, i) in breadcrumb" :key="i">
+                  <span v-if="i > 0" class="crumb-sep">/</span>
+                  <span :class="{ 'crumb-current': i === breadcrumb.length - 1 }">{{ crumb }}</span>
+                </template>
+              </h2>
             </div>
             <div class="header-right">
-              <!-- 🆕 消息中心 -->
+              <!-- 更新已就绪按钮（静默下载完成后显示） -->
+              <el-button
+                v-if="updateReady"
+                type="warning"
+                size="small"
+                @click="installDownloadedUpdate"
+              >
+                <el-icon><RefreshRight /></el-icon>
+                更新已就绪，点击重启
+              </el-button>
+
+              <!-- 消息中心 -->
               <el-popover
                 placement="bottom-end"
                 :width="380"
@@ -219,6 +239,20 @@
                 </div>
               </el-popover>
 
+              <!-- 窗口控制按钮 -->
+              <div class="window-controls">
+                <button class="win-btn" @click="handleMinimize">
+                  <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="4.5" width="8" height="1" fill="currentColor"/></svg>
+                </button>
+                <button class="win-btn" @click="handleMaximize">
+                  <svg v-if="!isMaximized" width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+                  <svg v-else width="10" height="10" viewBox="0 0 10 10"><rect x="2.5" y="1" width="6.5" height="6.5" fill="none" stroke="currentColor" stroke-width="1"/><rect x="1" y="2.5" width="6.5" height="6.5" fill="none" stroke="currentColor" stroke-width="1"/><rect x="1" y="2.5" width="6.5" height="1.5" fill="#f5f7fa"/></svg>
+                </button>
+                <button class="win-btn win-close" @click="handleClose">
+                  <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1,1 L9,9 M9,1 L1,9" stroke="currentColor" stroke-width="1.2"/></svg>
+                </button>
+              </div>
+
             </div>
           </el-header>
           
@@ -232,44 +266,6 @@
           </el-main>
         </el-container>
       </el-container>
-      
-      <!-- 🆕 全局更新下载进度对话框 -->
-      <el-dialog
-        v-model="showUpdateProgress"
-        :title="updateDownloadProgress >= 100 ? '下载完成' : '正在下载更新'"
-        width="400px"
-        :close-on-click-modal="updateDownloadProgress >= 100"
-        :close-on-press-escape="updateDownloadProgress >= 100"
-        :show-close="updateDownloadProgress >= 100"
-        center
-      >
-        <div class="update-progress-content">
-          <div class="progress-icon">
-            <el-icon v-if="updateDownloadProgress < 100" :size="48" color="#409EFF" class="rotating">
-              <Loading />
-            </el-icon>
-            <el-icon v-else :size="48" color="#67C23A">
-              <SuccessFilled />
-            </el-icon>
-          </div>
-          <div class="progress-info">
-            <el-progress 
-              :percentage="updateDownloadProgress" 
-              :stroke-width="20"
-              :status="updateDownloadProgress >= 100 ? 'success' : undefined"
-            />
-            <div class="progress-text">
-              {{ updateDownloadStatus }}
-            </div>
-          </div>
-        </div>
-        <template #footer v-if="updateDownloadProgress >= 100">
-          <div class="update-footer">
-            <el-button @click="showUpdateProgress = false">稍后安装</el-button>
-            <el-button type="primary" @click="installDownloadedUpdate">立即安装</el-button>
-          </div>
-        </template>
-      </el-dialog>
     </div>
   </el-config-provider>
 </template>
@@ -279,13 +275,12 @@ import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { setMenuPermissions } from './router/index'
 import { ElMessage } from 'element-plus'
-import { 
-  DArrowLeft,
-  DArrowRight,
+import {
+  Fold,
+  Expand,
   Refresh,
+  RefreshRight,
   List,
-  Loading,
-  SuccessFilled,
   Bell,
   Tickets,
   InfoFilled,
@@ -302,44 +297,18 @@ const activeMenu = computed(() => route.path)
 const hasApiKey = ref(false)
 const appVersion = ref('1.6.1')
 const sidebarCollapsed = ref(false)
+const openedMenus = ref<string[]>([])
 
 // 🆕 系统状态
 const wsStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 const activeSubscriptionCount = ref(0)
 
-// 🆕 全局更新下载进度
-const showUpdateProgress = ref(false)
-const updateDownloadProgress = ref(0)
-const updateDownloadStatus = ref('准备下载...')
+// 更新已就绪（静默下载完成后置为true，显示重启按钮）
+const updateReady = ref(false)
 const updateFilePath = ref('')
 
-// 🆕 定时器引用（用于清理）
+// 定时器引用（用于清理）
 let statusRefreshTimer: NodeJS.Timeout | null = null
-
-// 🧪 开发测试：模拟下载进度（在控制台输入 window.testUpdateProgress() 调用）
-;(window as any).testUpdateProgress = () => {
-  showUpdateProgress.value = true
-  updateDownloadProgress.value = 0
-  updateDownloadStatus.value = '准备下载...'
-  
-  let progress = 0
-  const interval = setInterval(() => {
-    progress += 5
-    updateDownloadProgress.value = progress
-    const loadedMB = (progress * 1.2).toFixed(2)  // 模拟 120MB 文件
-    updateDownloadStatus.value = `已下载 ${loadedMB} MB / 120.00 MB`
-    
-    if (progress >= 100) {
-      clearInterval(interval)
-      updateDownloadStatus.value = '下载完成！'
-      setTimeout(() => {
-        showUpdateProgress.value = false
-      }, 1500)
-    }
-  }, 200)
-  
-  console.log('🧪 测试下载进度开始...')
-}
 
 // 🆕 菜单权限相关
 const menuPermissions = ref<string[]>([])
@@ -481,64 +450,60 @@ const visibleMenus = computed(() => {
   return filtered
 })
 
-const pageTitle = computed(() => {
-  const titles: Record<string, string> = {
-    '/': '首页',
-    '/data-center': '数据中心',
-    '/factor-library': '因子库',
-    '/factor-library/plaza': '因子广场',
-    '/factor-library/my-factors': '我的因子',
-    '/factor-library/private-warehouse': '私有数据仓库',
-    '/factor-library/submit': '提交因子',
-    '/factor-library/backtest': '单因子回测',
-    '/factor-library/backtest/submit': '单因子回测',
-    '/factor-library/backtest/tasks': '任务详情',
-    '/factor-library/backtest/result': '任务详情',
-    '/factor-library/expression-dict': '表达式字典',
-    '/factor-library/research-results': '研究成果',
-    '/factor-library/engine-config': '回测引擎配置',
-    '/factor-library/engine-config/cache': '回测引擎配置',
-    '/factor-library/engine-config/dict-sync': '回测引擎配置',
-    '/factor-library/engine-config/admission-config': '回测引擎配置',
-    '/fund-management': '基金管理',
-    '/fund-management/list': '基金列表',
-    '/fund-management/performance': '业绩分析',
-    '/fund-management/position': '持仓分析',
-    '/fund-management/operations': '基金运维',
-    '/download': '行情数据下载',
-    '/code-repository': '代码仓库',
-    '/code-repository/repos': '我的仓库',
-    '/code-repository/execute': '执行模型',
-    '/code-repository/history': '执行记录',
-    '/code-repository/admin': '仓库管理',
-    '/factor-library/workorder': '数据工单',
-    '/factor-library/workorder/submit': '数据工单',
-    '/factor-library/workorder/my': '数据工单',
-    '/factor-library/workorder/admin': '数据工单',
-    '/factor-library/cache-manager': '数据缓存管理',
-    '/tasks': '任务管理',
-    '/history': '历史记录',
-    '/dictionary': '行情数据字典',
-    '/database-dictionary': '静态元数据字典',
-    '/static-data-download': '静态元数据下载',
-    '/sdk-download': 'SDK下载',
-    '/control-center/api-key': 'API Key管理',
-    '/control-center/db-management': '数据库管理',
-    '/monitoring/redis': 'Redis监控',
-    '/monitoring/markets': '市场监控',
-    '/monitoring/services': '服务监控',
-    '/monitoring/clickhouse-cron': 'ClickHouse定时任务',
-    '/im': '智能助手',
-    '/settings': '系统设置'
+// 面包屑：根据路由路径推导完整层级
+const childTitles: Record<string, string[]> = {
+  '/': ['首页'],
+  '/data-center': ['数据中心'],
+  '/factor-library': ['因子库'],
+  '/factor-library/plaza': ['因子库', '因子广场'],
+  '/factor-library/my-factors': ['因子库', '我的因子'],
+  '/factor-library/private-warehouse': ['因子库', '私有数据仓库'],
+  '/factor-library/submit': ['因子库', '提交因子'],
+  '/factor-library/backtest': ['因子库', '单因子回测'],
+  '/factor-library/backtest/submit': ['因子库', '单因子回测'],
+  '/factor-library/backtest/tasks': ['因子库', '任务详情'],
+  '/factor-library/backtest/result': ['因子库', '任务详情'],
+  '/factor-library/expression-dict': ['因子库', '表达式字典'],
+  '/factor-library/research-results': ['因子库', '研究成果'],
+  '/factor-library/engine-config': ['因子库', '回测引擎配置'],
+  '/factor-library/engine-config/cache': ['因子库', '回测引擎配置'],
+  '/factor-library/engine-config/dict-sync': ['因子库', '回测引擎配置'],
+  '/factor-library/engine-config/admission-config': ['因子库', '回测引擎配置'],
+  '/factor-library/cache-manager': ['因子库', '数据缓存管理'],
+  '/fund-management': ['基金管理'],
+  '/fund-management/list': ['基金管理', '基金列表'],
+  '/fund-management/performance': ['基金管理', '业绩分析'],
+  '/fund-management/position': ['基金管理', '持仓分析'],
+  '/fund-management/operations': ['基金管理', '基金运维'],
+  '/download': ['行情数据下载'],
+  '/code-repository': ['代码仓库'],
+  '/code-repository/repos': ['代码仓库', '我的仓库'],
+  '/code-repository/execute': ['代码仓库', '执行模型'],
+  '/code-repository/history': ['代码仓库', '执行记录'],
+  '/code-repository/admin': ['代码仓库', '仓库管理'],
+  '/tasks': ['任务管理'],
+  '/history': ['历史记录'],
+  '/dictionary': ['行情数据字典'],
+  '/database-dictionary': ['静态元数据字典'],
+  '/static-data-download': ['静态元数据下载'],
+  '/sdk-download': ['SDK下载'],
+  '/control-center/api-key': ['控制中心', 'API Key管理'],
+  '/control-center/db-management': ['控制中心', '数据库管理'],
+  '/monitoring/redis': ['监控中心', 'Redis监控'],
+  '/monitoring/markets': ['监控中心', '市场监控'],
+  '/monitoring/services': ['监控中心', '服务监控'],
+  '/monitoring/clickhouse-cron': ['监控中心', 'ClickHouse定时任务'],
+  '/im': ['智能助手'],
+  '/settings': ['系统设置']
+}
+
+const breadcrumb = computed<string[]>(() => {
+  const path = route.path
+  // 动态路由
+  if (path.startsWith('/factor-library/backtest/result/')) {
+    return ['因子库', '任务详情']
   }
-  // 处理动态路由
-  if (route.path.startsWith('/factor-library/backtest/result/')) {
-    return '任务详情'
-  }
-  if (route.path.startsWith('/factor-library/workorder/detail/')) {
-    return '数据工单'
-  }
-  return titles[route.path] || '资舟量化研究平台'
+  return childTitles[path] || ['资舟量化研究平台']
 })
 
 const handleMenuSelect = (index: string) => {
@@ -576,7 +541,7 @@ const overallStatusType = computed(() => {
   if (!hasApiKey.value) return 'danger'
   if (activeSubscriptionCount.value > 0) return 'success'
   if (wsStatus.value === 'connected') return 'success'
-  return 'primary'
+  return 'default'
 })
 
 // 🆕 刷新状态
@@ -661,6 +626,27 @@ const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
+// 窗口控制
+const isMaximized = ref(false)
+
+const handleMinimize = () => {
+  window.electronAPI.window.minimize()
+}
+
+const handleMaximize = async () => {
+  await window.electronAPI.window.maximize()
+  isMaximized.value = await window.electronAPI.window.isMaximized()
+}
+
+const handleClose = () => {
+  window.electronAPI.window.close()
+}
+
+// 监听窗口最大化状态变化
+window.electronAPI.window.isMaximized().then((val: boolean) => {
+  isMaximized.value = val
+})
+
 const checkApiKey = async () => {
   try {
     console.log('🔑 开始检查API Key...')
@@ -695,15 +681,13 @@ const loadMenuPermissions = async () => {
   }
 }
 
-// 🆕 安装下载好的更新
+// 安装下载好的更新（点击"更新已就绪"按钮触发）
 const installDownloadedUpdate = async () => {
   if (!updateFilePath.value) {
     ElMessage.error('未找到更新文件')
     return
   }
   try {
-    // 先关闭下载进度弹窗
-    showUpdateProgress.value = false
     await window.electronAPI.updater.quitAndInstall(updateFilePath.value)
   } catch (error: any) {
     ElMessage.error('安装失败: ' + error.message)
@@ -1149,31 +1133,15 @@ onMounted(async () => {
     refreshStatus()
   }, 3000)
   
-  // 🆕 监听全局更新下载进度
-  window.electronAPI.on('updater:start-download', () => {
-    showUpdateProgress.value = true
-    updateDownloadProgress.value = 0
-    updateDownloadStatus.value = '准备下载...'
-  })
-  
-  window.electronAPI.on('updater:download-progress', (progress: any) => {
-    showUpdateProgress.value = true
-    updateDownloadProgress.value = Math.floor(progress.percent || 0)
-    const totalMB = ((progress.total || 0) / 1024 / 1024).toFixed(2)
-    const loadedMB = (((progress.total || 0) * (progress.percent || 0) / 100) / 1024 / 1024).toFixed(2)
-    updateDownloadStatus.value = `已下载 ${loadedMB} MB / ${totalMB} MB`
-  })
-  
+  // 监听更新下载完成（静默下载完成后显示"更新已就绪"按钮）
   window.electronAPI.on('updater:update-downloaded', (filePath: string) => {
-    updateDownloadProgress.value = 100
-    updateDownloadStatus.value = '下载完成！点击下方按钮安装更新'
     updateFilePath.value = filePath
-    console.log('✅ 更新下载完成:', filePath)
+    updateReady.value = true
+    console.log('更新已就绪:', filePath)
   })
-  
+
   window.electronAPI.on('updater:error', (error: any) => {
-    showUpdateProgress.value = false
-    ElMessage.error('下载更新失败: ' + (error?.message || error))
+    console.error('更新下载失败:', error?.message || error)
   })
   
   // 使用setTimeout避免阻塞
@@ -1220,86 +1188,106 @@ onUnmounted(() => {
 <style lang="scss">
 .app-container {
   height: 100vh;
-  
+  background: #f5f5f5;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+
   .app-sidebar {
-    background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
-    color: white;
+    background: #ffffff;
+    color: #303133;
     display: flex;
     flex-direction: column;
     transition: width 0.3s;
     position: relative;
     overflow-x: hidden !important;
-    
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    margin-right: 12px;
+
     .app-logo {
-      height: 80px;
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      
+      padding: 12px;
+      border-bottom: none;
+
       .logo-image {
         max-width: 100%;
-        max-height: 60px;
+        max-height: 40px;
         object-fit: contain;
       }
     }
-    
-    .app-menu {
+
+    .menu-scrollbar {
       flex: 1;
+      min-height: 0;
+    }
+
+    .app-menu {
       background: transparent;
       border: none;
       overflow-x: hidden;
-      
+      padding: 8px 0;
+
       .el-sub-menu {
         .el-sub-menu__title {
-          color: rgba(255, 255, 255, 0.8);
-          
+          color: #606266;
+          border-radius: 0;
+          margin: 0 8px;
+          transition: all 0.2s;
+
           &:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
+            background: #f5f7fa;
+            color: #303133;
           }
         }
       }
-      
+
       .el-menu-item {
-        color: rgba(255, 255, 255, 0.8);
-        
+        color: #606266;
+        border-radius: 0;
+        margin: 0 8px;
+        transition: all 0.2s;
+
         &:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
+          background: #f5f7fa;
+          color: #303133;
         }
-        
+
         &.is-active {
-          background: rgba(255, 255, 255, 0.2);
-          color: white;
+          background: #f0f0f0;
+          color: #303133;
+          font-weight: 500;
         }
       }
     }
-    
-    // 子菜单样式（不弹出，直接在侧边栏内展开）
+
     .el-sub-menu__icon-arrow {
-      color: rgba(255, 255, 255, 0.8);
+      color: #909399;
     }
-    
-    // 深层样式覆盖，确保子菜单也是深色
+
     :deep(.el-sub-menu) {
       .el-menu {
-        background-color: rgba(0, 0, 0, 0.2) !important;
-        
+        background-color: transparent !important;
+
         .el-menu-item {
           background-color: transparent !important;
-          color: rgba(255, 255, 255, 0.8) !important;
+          color: #909399 !important;
           padding-left: 50px !important;
-          
+          margin: 0 8px;
+          transition: all 0.2s;
+
           &:hover {
-            background-color: rgba(255, 255, 255, 0.1) !important;
-            color: white !important;
+            background-color: #f5f7fa !important;
+            color: #303133 !important;
           }
-          
+
           &.is-active {
-            background-color: rgba(255, 255, 255, 0.2) !important;
-            color: white !important;
+            background-color: #f0f0f0 !important;
+            color: #303133 !important;
+            font-weight: 500;
           }
         }
       }
@@ -1308,44 +1296,41 @@ onUnmounted(() => {
   
   
   .app-sidebar {
-    .app-version {
-      padding: 20px;
-      text-align: center;
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.5);
-    }
-
-    .sidebar-toggle {
-      position: absolute;
-      right: -18px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 36px;
-      height: 48px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: none;
-      border-radius: 24px;
+    .sidebar-footer {
+      padding: 16px 12px;
+      border-top: 1px solid #f0f0f0;
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
-      box-shadow: 2px 2px 12px rgba(102, 126, 234, 0.4);
-      color: white;
-      transition: all 0.3s;
-      z-index: 100;
+      position: relative;
 
-      &:hover {
-        box-shadow: 3px 3px 16px rgba(102, 126, 234, 0.6);
-        transform: translateY(-50%) scale(1.1);
+      .version-text {
+        font-size: 11px;
+        color: #c0c4cc;
       }
 
-      &:active {
-        transform: translateY(-50%) scale(0.95);
+      .collapse-btn {
+        position: absolute;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #c0c4cc;
+        border-radius: 4px;
+        transition: all 0.2s;
+
+        &:hover {
+          background: #f5f7fa;
+          color: #606266;
+        }
       }
     }
 
     &.sidebar-collapsed {
-      overflow-x: hidden !important;
+      overflow: hidden !important;
       
       .app-logo {
         justify-content: center;
@@ -1362,22 +1347,65 @@ onUnmounted(() => {
         :deep(.el-tag) {
           display: none;
         }
+
+        :deep(.el-menu-item),
+        :deep(.el-sub-menu__title) {
+          display: flex !important;
+          justify-content: center !important;
+          align-items: center !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          text-align: center !important;
+          width: 100% !important;
+        }
       }
     }
   }
   
+  .app-content {
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    background: #ffffff;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
   .app-header {
-    background: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: #f5f7fa;
+    box-shadow: none;
+    border-bottom: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
+    padding: 0 0 0 20px;
+    flex-shrink: 0;
+    -webkit-app-region: drag;
+
+    .header-left,
+    .header-right {
+      -webkit-app-region: no-drag;
+    }
     
     .header-left h2 {
       margin: 0;
-      font-size: 20px;
+      font-size: 18px;
       color: #303133;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+
+      .crumb-sep {
+        color: #c0c4cc;
+        font-weight: 400;
+        font-size: 14px;
+      }
+
+      .crumb-current {
+        font-weight: 600;
+      }
     }
     
     .header-right {
@@ -1385,12 +1413,47 @@ onUnmounted(() => {
       align-items: center;
       gap: 10px;
     }
+
+    .window-controls {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-left: 8px;
+      -webkit-app-region: no-drag;
+
+      .win-btn {
+        width: 32px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #606266;
+        transition: background 0.15s;
+
+        &:hover {
+          background: #e9ecef;
+        }
+
+        &.win-close:hover {
+          background: #e81123;
+          color: #fff;
+        }
+      }
+    }
   }
   
   .app-main {
     background: #f5f7fa;
     padding: 20px;
-    overflow: auto;
+    overflow: hidden !important;
+    flex: 1;
+    min-height: 0;
+    height: 0;
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -1443,60 +1506,74 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-// 🆕 更新下载进度对话框样式
-.update-progress-content {
-  text-align: center;
-  padding: 20px 0;
-  
-  .progress-icon {
-    margin-bottom: 20px;
-    
-    .rotating {
-      animation: rotate 1.5s linear infinite;
-    }
-  }
-  
-  .progress-info {
-    .progress-text {
-      margin-top: 15px;
-      font-size: 14px;
-      color: #606266;
-    }
-  }
-}
-
-.update-footer {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
-
-@keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
 </style>
 
 <style lang="scss">
+/* 折叠模式下弹出菜单卡片样式 */
+.el-popper.sidebar-popper {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+  border: none !important;
+  padding: 0 !important;
+  overflow: hidden;
+
+  .el-menu {
+    border: none !important;
+    background: #ffffff !important;
+    padding: 4px;
+  }
+
+  .el-menu-item {
+    border-radius: 4px;
+    margin: 1px 0;
+    height: 32px;
+    line-height: 32px;
+    font-size: 13px;
+    color: #606266 !important;
+
+    &:hover {
+      background: #f5f7fa !important;
+      color: #303133 !important;
+    }
+
+    &.is-active {
+      background: #f0f0f0 !important;
+      color: #303133 !important;
+      font-weight: 500;
+    }
+  }
+}
+
 /* 全局样式：强制覆盖Element Plus子菜单 */
 .app-sidebar .el-sub-menu .el-menu {
-  background-color: rgba(0, 0, 0, 0.3) !important;
+  background-color: transparent !important;
+}
+
+/* 折叠模式下图标居中 */
+.app-sidebar.sidebar-collapsed .el-menu-item,
+.app-sidebar.sidebar-collapsed .el-sub-menu__title {
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
 .app-sidebar .el-sub-menu .el-menu .el-menu-item {
   background-color: transparent !important;
-  color: rgba(255, 255, 255, 0.9) !important;
+  color: #909399 !important;
   padding-left: 50px !important;
 }
 
 .app-sidebar .el-sub-menu .el-menu .el-menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: white !important;
+  background-color: #f5f7fa !important;
+  color: #303133 !important;
 }
 
 .app-sidebar .el-sub-menu .el-menu .el-menu-item.is-active {
-  background-color: rgba(255, 255, 255, 0.25) !important;
-  color: white !important;
+  background-color: #f0f0f0 !important;
+  color: #303133 !important;
+  font-weight: 500;
 }
 
 /* 消息中心样式 */

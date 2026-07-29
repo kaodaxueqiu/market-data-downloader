@@ -1,6 +1,23 @@
 <template>
   <div class="research-results-page">
+    <!-- 统计卡片 -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.total_tasks || 0 }}</div>
+        <div class="stat-label">全部任务</div>
+      </div>
+      <div class="stat-card completed">
+        <div class="stat-value">{{ stats.total_completed || 0 }}</div>
+        <div class="stat-label">执行完成</div>
+      </div>
+      <div class="stat-card researchers">
+        <div class="stat-value">{{ researchers.length || 0 }}</div>
+        <div class="stat-label">研究员数</div>
+      </div>
+    </div>
+
     <!-- 工具栏 -->
+    <div class="content-card">
     <div class="toolbar">
       <div class="toolbar-left">
         <el-select
@@ -36,18 +53,6 @@
           <el-option label="深度研究" value="deep" />
           <el-option label="入库审核" value="admission" />
         </el-select>
-        <el-date-picker
-          v-model="filters.dateRange"
-          type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          format="MM-DD"
-          value-format="YYYY-MM-DD"
-          style="width: 240px;"
-          clearable
-          @change="handleFilterChange"
-        />
         <el-input
           v-model="filters.keyword"
           placeholder="搜索任务名称/因子ID"
@@ -62,24 +67,10 @@
         <el-button :icon="Refresh" @click="loadList" :loading="loading">刷新</el-button>
       </div>
     </div>
-
-    <!-- 统计卡片 -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value">{{ stats.total_tasks || 0 }}</div>
-        <div class="stat-label">全部任务</div>
-      </div>
-      <div class="stat-card completed">
-        <div class="stat-value">{{ stats.total_completed || 0 }}</div>
-        <div class="stat-label">执行完成</div>
-      </div>
-      <div class="stat-card researchers">
-        <div class="stat-value">{{ researchers.length || 0 }}</div>
-        <div class="stat-label">研究员数</div>
-      </div>
     </div>
 
     <!-- 任务列表 -->
+    <div class="content-card table-card">
     <el-table
       :data="tasks"
       v-loading="loading"
@@ -243,6 +234,7 @@
         @size-change="loadList"
         @current-change="loadList"
       />
+    </div>
     </div>
 
     <!-- 任务详情弹窗 -->
@@ -782,11 +774,25 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .research-results-page {
+  height: calc(100vh - 60px - 24px - 40px);
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fa;
+  overflow: hidden;
+
+  .content-card {
+    background: #ffffff;
+    border: 1px solid #ebeef5;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    padding: 8px 20px;
+    margin: 10px 10px 0 10px;
+  }
+
   .toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 18px;
     flex-wrap: wrap;
     gap: 10px;
 
@@ -828,18 +834,18 @@ onMounted(() => {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
-    margin-bottom: 22px;
+    margin: 0 10px 0 10px;
 
     .stat-card {
       position: relative;
       background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%);
       border: 1px solid #eef2f7;
-      border-radius: 16px;
-      padding: 18px 20px;
+      border-radius: 12px;
+      padding: 10px 16px;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      gap: 10px;
+      gap: 4px;
       overflow: hidden;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -16px rgba(15, 23, 42, 0.12);
       transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
@@ -901,11 +907,22 @@ onMounted(() => {
     .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
+  .table-card {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
   // 现代表格
   .modern-table {
-    border-radius: 12px;
+    border-radius: 0;
     overflow: hidden;
-    border: 1px solid #eef2f7;
+    border: none;
+    background: #ffffff;
+    flex: 1;
 
     :deep(.el-table__inner-wrapper::before) {
       display: none;
@@ -943,17 +960,56 @@ onMounted(() => {
   }
 
   .pagination-wrapper {
-    margin-top: 18px;
+    margin-top: 0;
+    padding: 8px 16px;
     display: flex;
     justify-content: flex-end;
+    border-top: 1px solid #e4e7ed;
+    flex-shrink: 0;
 
-    :deep(.el-pagination.is-background) {
+    :deep(.el-pagination) {
+      --el-pagination-font-size: 12px;
+      --el-pagination-button-width: 24px;
+      --el-pagination-button-height: 24px;
+      --el-pagination-button-color: #606266;
+      font-size: 12px;
+
       .el-pager li,
       .btn-prev,
       .btn-next {
-        border-radius: 8px;
-        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-        &:hover { transform: translateY(-1px); }
+        border-radius: 4px;
+        font-size: 12px;
+        min-width: 24px;
+        height: 24px;
+        line-height: 24px;
+      }
+
+      .el-pagination__total {
+        font-size: 12px;
+        line-height: 24px;
+      }
+
+      .el-pagination__sizes {
+        font-size: 12px;
+        .el-select {
+          .el-input__inner {
+            font-size: 12px;
+          }
+          .el-input__icon {
+            font-size: 12px;
+          }
+        }
+        .el-select__placeholder {
+          font-size: 12px;
+        }
+      }
+
+      .el-select__popper {
+        .el-select-dropdown__item {
+          font-size: 12px;
+          height: 28px;
+          line-height: 28px;
+        }
       }
     }
   }

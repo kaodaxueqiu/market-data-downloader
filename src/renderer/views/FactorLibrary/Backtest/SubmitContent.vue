@@ -1,6 +1,7 @@
 <template>
   <div class="submit-content">
-    <el-form 
+    <el-scrollbar>
+    <el-form
       ref="formRef" 
       :model="formData" 
       :rules="formRules" 
@@ -804,6 +805,7 @@ def calculate_factor(data, context):
         </el-button>
       </div>
     </el-form>
+    </el-scrollbar>
     
     <!-- 表搜索弹窗 -->
     <el-dialog
@@ -2179,7 +2181,12 @@ const initApiKey = async () => {
 
 <style scoped lang="scss">
 .submit-content {
+  height: 100%;
+  overflow: hidden;
+  padding: 10px 0 10px 10px;
+
   .submit-form {
+    margin-right: 16px;
     .form-section {
       background: #fff;
       border-radius: 16px;

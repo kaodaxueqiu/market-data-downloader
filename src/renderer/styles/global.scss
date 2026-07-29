@@ -17,24 +17,116 @@ html, body {
   height: 100%;
 }
 
-// 滚动条样式
+// 滚动条样式（全局：细+半透明）
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-  
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+
   &:hover {
-    background: #a8a8a8;
+    background: rgba(0, 0, 0, 0.2);
   }
+}
+
+// 侧边栏滚动条：默认隐藏，hover显示
+.app-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 2px;
+  }
+
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+  }
+}
+
+// 卡片内部滚动条：默认隐藏，hover显示
+.left-panel,
+.middle-panel,
+.right-panel {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 2px;
+  }
+
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+  }
+}
+
+// el-scrollbar 滚动条：hover 淡入，离开淡出
+.el-scrollbar__bar {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+
+  &.is-horizontal {
+    height: 3px;
+  }
+  &.is-vertical {
+    width: 3px;
+  }
+}
+
+.el-scrollbar:has(.el-scrollbar__bar.is-vertical:hover),
+.el-scrollbar:has(.el-scrollbar__bar.is-horizontal:hover) {
+  .el-scrollbar__bar {
+    opacity: 1;
+  }
+}
+
+// 鼠标在滚动区域内时显示
+.el-scrollbar:hover .el-scrollbar__bar {
+  opacity: 1;
+}
+
+.el-scrollbar__thumb {
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 3px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.6);
+  }
+}
+
+// 表头样式：白色背景，不用灰色
+.el-table__header-wrapper .el-table__header {
+  background: #ffffff !important;
+}
+
+.el-table th.el-table__cell {
+  background: #ffffff !important;
+  border-bottom: 1px solid #ebeef5;
 }
 
 // 动画

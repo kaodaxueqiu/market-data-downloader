@@ -2,6 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // 暴露安全的API到渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 窗口控制
+  window: {
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    maximize: () => ipcRenderer.invoke('window:maximize'),
+    close: () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized')
+  },
+
   // 应用信息
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
@@ -265,7 +273,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 因子回测API
   backtest: {
     submit: (data: any) => ipcRenderer.invoke('backtest:submit', data),
-    getTasks: (params?: { page?: number; page_size?: number; status?: string }) => 
+    getTasks: (params?: { page?: number; page_size?: number; status?: string; task_type?: string; research_mode?: string; start_date?: string; end_date?: string; sort_field?: string; sort_order?: string }) => 
       ipcRenderer.invoke('backtest:getTasks', params || {}),
     getTaskDetail: (taskId: string) => ipcRenderer.invoke('backtest:getTaskDetail', taskId),
     getResult: (taskId: string) => ipcRenderer.invoke('backtest:getResult', taskId),
@@ -667,6 +675,12 @@ declare global {
   }
   interface Window {
     electronAPI: {
+      window: {
+        minimize: () => Promise<void>
+        maximize: () => Promise<void>
+        close: () => Promise<void>
+        isMaximized: () => Promise<boolean>
+      }
       app: {
         getVersion: () => Promise<string>
         getPath: (name: 'desktop' | 'downloads' | 'documents') => Promise<string>
@@ -866,7 +880,7 @@ declare global {
       }
       backtest: {
         submit: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-        getTasks: (params?: { page?: number; page_size?: number; status?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getTasks: (params?: { page?: number; page_size?: number; status?: string; task_type?: string; research_mode?: string; start_date?: string; end_date?: string; sort_field?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         getTaskDetail: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         getResult: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         cancelTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>

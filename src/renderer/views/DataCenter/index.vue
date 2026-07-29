@@ -397,9 +397,11 @@ onMounted(async () => {
   align-items: center;
   background: white;
   padding: 0 20px;
-  border-bottom: 1px solid #e4e7ed;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
+  margin: 10px 10px 0 10px;
 
   .data-tabs {
     flex: 1;

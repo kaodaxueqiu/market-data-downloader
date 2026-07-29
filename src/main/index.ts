@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
-import { join, basename } from 'path'
+import { join } from 'path'
 import { existsSync, readFileSync, rmSync } from 'fs'
 import Store from 'electron-store'
 import axios from 'axios'
@@ -146,13 +146,15 @@ function createWindow() {
     height: 900,
     minWidth: 1200,
     minHeight: 700,
+    backgroundColor: '#ffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true
     },
     icon: join(__dirname, '../../../public/icon.ico'),
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    titleBarStyle: 'hidden',
+    frame: process.platform === 'darwin',
     show: false
   })
 
@@ -242,99 +244,35 @@ function createWindow() {
     
     // 生产模式下启动时自动检查更新，并启动定期检查
     if (process.env.NODE_ENV !== 'development') {
-      // 首次检查：5秒后
+      // 首次检查：5秒后（静默下载，不弹窗）
       setTimeout(async () => {
         try {
-          console.log('🔍 启动时自动检查更新...')
+          console.log('启动时自动检查更新...')
           const updateInfo = await updater.checkForUpdates()
-          
+
           if (updateInfo && mainWindow && !mainWindow.isDestroyed()) {
-            // 显示更新提示
-            const result = await dialog.showMessageBox(mainWindow, {
-              type: 'info',
-              title: '发现新版本',
-              message: `发现新版本 v${updateInfo.version}`,
-              detail: updateInfo.release_notes,
-              buttons: ['立即更新', '稍后提醒'],
-              defaultId: 0,
-              cancelId: 1
-            })
-            
-            if (result.response === 0) {
-              // 用户选择立即更新，直接下载
-              try {
-                // 显示保存对话框（从 URL 提取文件名）
-                const platform = process.platform
-                const downloadUrl = platform === 'win32'
-                  ? updateInfo.downloads.windows.url
-                  : (process.arch === 'arm64' ? updateInfo.downloads.mac_arm64.url : updateInfo.downloads.mac_intel.url)
-                const filename = basename(downloadUrl)
-                
-                const defaultPath = join(app.getPath('downloads'), filename)
-                
-                const saveResult = await dialog.showSaveDialog(mainWindow, {
-                  title: '选择保存位置',
-                  defaultPath: defaultPath,
-                  buttonLabel: '开始下载'
-                })
-                
-                if (saveResult.canceled || !saveResult.filePath) {
-                  console.log('用户取消下载')
-                  return
-                }
-                
-                const savePath = saveResult.filePath
-                console.log('✅ 用户选择保存到:', savePath)
-                
-                // 开始下载
-                const filePath = await updater.downloadUpdateToPath(
-                  updateInfo, 
-                  savePath,
-                  (percent, _status) => {
-                    mainWindow?.webContents.send('updater:download-progress', {
-                      percent,
-                      transferred: 0,
-                      total: updateInfo.downloads.windows?.size || 0
-                    })
-                  }
-                )
-                
-                console.log('✅ 下载完成:', filePath)
-                
-                // 自动打开安装
-                await updater.installUpdate(filePath)
-                
-              } catch (error: any) {
-                console.error('❌ 下载失败:', error)
-                if (!error.message.includes('用户取消')) {
-                  dialog.showErrorBox('更新失败', error.message || '下载更新失败')
-                }
-              }
-            }
+            console.log('发现新版本，静默下载:', updateInfo.version)
+            await silentDownloadUpdate(updateInfo)
           }
         } catch (error) {
           console.error('自动检查更新失败:', error)
-          // 静默失败，不打扰用户
         }
       }, 5000)
-      
-      // 🆕 启动定期检查：每10分钟检查一次
+
+      // 定期检查：每10分钟检查一次（静默下载）
       updateCheckTimer = setInterval(async () => {
         try {
-          console.log('⏰ 定期检查更新（每10分钟）...')
+          console.log('定期检查更新...')
           const updateInfo = await updater.checkForUpdates()
-          
+
           if (updateInfo && mainWindow && !mainWindow.isDestroyed()) {
-            // 发现新版本，静默记录（不弹窗打扰用户）
-            console.log('✅ 发现新版本:', updateInfo.version)
-            // 发送事件到渲染进程，让Settings页面显示提示
-            mainWindow.webContents.send('updater:update-available', updateInfo)
+            console.log('发现新版本，静默下载:', updateInfo.version)
+            await silentDownloadUpdate(updateInfo)
           }
         } catch (error) {
           console.error('定期检查更新失败:', error)
-          // 静默失败
         }
-      }, 10 * 60 * 1000)  // 每10分钟 = 600,000毫秒
+      }, 10 * 60 * 1000)
     }
   })
 
@@ -449,6 +387,24 @@ app.on('before-quit', async (event) => {
 })
 
 // ===== IPC通信处理 =====
+
+// 窗口控制
+ipcMain.handle('window:minimize', () => {
+  mainWindow?.minimize()
+})
+ipcMain.handle('window:maximize', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize()
+  } else {
+    mainWindow?.maximize()
+  }
+})
+ipcMain.handle('window:close', () => {
+  mainWindow?.close()
+})
+ipcMain.handle('window:isMaximized', () => {
+  return mainWindow?.isMaximized() ?? false
+})
 
 // 获取配置
 ipcMain.handle('config:get', async (_event, key?: string) => {
@@ -4658,6 +4614,28 @@ ipcMain.handle('staticDownload:downloadFile', async (_event, fileId: string, sav
 
 let currentUpdateInfo: any = null
 
+// 静默下载更新（不弹任何对话框，下载完通知渲染进程显示"更新已就绪"按钮）
+async function silentDownloadUpdate(updateInfo: any) {
+  try {
+    currentUpdateInfo = updateInfo
+    mainWindow?.webContents.send('updater:update-available', updateInfo)
+
+    const filePath = await updater.downloadUpdateSilently(
+      updateInfo,
+      (percent, status) => {
+        console.log(`下载进度: ${percent}% - ${status}`)
+      }
+    )
+
+    console.log('更新下载完成:', filePath)
+    // 通知渲染进程：更新已就绪，显示重启按钮
+    mainWindow?.webContents.send('updater:update-downloaded', filePath)
+  } catch (error: any) {
+    console.error('静默下载更新失败:', error)
+    mainWindow?.webContents.send('updater:error', error.message)
+  }
+}
+
 // 检查更新
 ipcMain.handle('updater:checkForUpdates', async () => {
   try {
@@ -4692,49 +4670,19 @@ ipcMain.handle('updater:checkForUpdates', async () => {
   }
 })
 
-// 下载更新
+// 下载更新（静默下载到临时目录）
 ipcMain.handle('updater:downloadUpdate', async () => {
-  console.log('=== IPC: updater:downloadUpdate 被调用 ===')
-  
   if (!currentUpdateInfo) {
     throw new Error('没有可用的更新信息')
   }
-  
+
   try {
-    // 先在主进程中显示保存对话框（从 URL 提取文件名）
-    const platform = process.platform
-    const downloadUrl = platform === 'win32'
-      ? currentUpdateInfo.downloads.windows.url
-      : (process.arch === 'arm64' ? currentUpdateInfo.downloads.mac_arm64.url : currentUpdateInfo.downloads.mac_intel.url)
-    const filename = basename(downloadUrl)
-    
-    const defaultPath = join(app.getPath('downloads'), filename)
-    
-    console.log('📂 显示保存对话框...')
-    const saveResult = await dialog.showSaveDialog(mainWindow!, {
-      title: '选择保存位置',
-      defaultPath: defaultPath,
-      buttonLabel: '开始下载'
-    })
-    
-    console.log('对话框结果:', saveResult)
-    
-    if (saveResult.canceled || !saveResult.filePath) {
-      throw new Error('用户取消下载')
-    }
-    
-    const savePath = saveResult.filePath
-    console.log('✅ 用户选择保存到:', savePath)
-    
-    // 通知渲染进程开始下载
     mainWindow?.webContents.send('updater:start-download')
-    
-    // 开始下载到指定路径
-    const filePath = await updater.downloadUpdateToPath(
-      currentUpdateInfo, 
-      savePath,
+
+    const filePath = await updater.downloadUpdateSilently(
+      currentUpdateInfo,
       (percent, status) => {
-        console.log(`📊 下载进度: ${percent}% - ${status}`)
+        console.log(`下载进度: ${percent}% - ${status}`)
         mainWindow?.webContents.send('updater:download-progress', {
           percent,
           transferred: 0,
@@ -4742,13 +4690,13 @@ ipcMain.handle('updater:downloadUpdate', async () => {
         })
       }
     )
-    
-    console.log('✅ 更新下载完成:', filePath)
+
+    console.log('更新下载完成:', filePath)
     mainWindow?.webContents.send('updater:update-downloaded', filePath)
-    
+
     return { success: true, filePath }
   } catch (error: any) {
-    console.error('❌ 下载更新失败:', error)
+    console.error('下载更新失败:', error)
     mainWindow?.webContents.send('updater:error', error.message)
     throw new Error(error.message || '下载更新失败')
   }
@@ -5507,11 +5455,12 @@ ipcMain.handle('backtest:submit', async (_event, data: any) => {
 })
 
 // 回测: 获取任务列表
-ipcMain.handle('backtest:getTasks', async (_event, params: { 
+ipcMain.handle('backtest:getTasks', async (_event, params: {
   page?: number
   page_size?: number
   status?: string
   task_type?: string
+  research_mode?: string
   start_date?: string
   end_date?: string
   sort_field?: string
@@ -5532,6 +5481,7 @@ ipcMain.handle('backtest:getTasks', async (_event, params: {
           page_size: params.page_size || 20,
           status: params.status || undefined,
           task_type: params.task_type || undefined,
+          research_mode: params.research_mode || undefined,
           start_date: params.start_date || undefined,
           end_date: params.end_date || undefined,
           sort_field: params.sort_field || undefined,

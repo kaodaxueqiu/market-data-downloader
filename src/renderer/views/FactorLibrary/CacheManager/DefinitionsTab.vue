@@ -22,6 +22,7 @@
         v-loading="loading"
         class="soft-table"
         size="default"
+        height="100%"
         :header-cell-style="headerCellStyle"
         :cell-style="cellStyle"
       >
@@ -35,7 +36,6 @@
         <el-table-column label="名称" prop="name" min-width="130">
           <template #default="{ row }">
             <div class="name-cell">
-              <span class="kind-bar" :style="{ background: getShapeColor(row.shape) }" />
               <span class="name-main">{{ row.name }}</span>
             </div>
           </template>
@@ -609,6 +609,7 @@ const headerCellStyle = {
   fontWeight: 600,
   fontSize: '12px',
   padding: '14px 0',
+  textAlign: 'center',
   borderBottom: '1px solid #eef2f7'
 }
 const cellStyle = { padding: '14px 0', color: '#475569', fontSize: '13px' }
@@ -1323,11 +1324,21 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+.definitions-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .panel {
   background: #fff;
   border-radius: 16px;
   padding: 6px 22px 18px;
   box-shadow: 0 4px 24px rgba(15, 23, 42, 0.05);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-head {

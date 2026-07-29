@@ -1,8 +1,9 @@
 <template>
   <div class="cache-manager-page">
-    <!-- 导航栏 + 说明条 同排 -->
-    <div class="top-bar">
-      <div class="nav-tabs">
+    <!-- 小 tab 导航 -->
+    <div class="content-card nav-card">
+    <div class="nav-bar">
+    <div class="nav-tabs">
       <button
         class="nav-tab"
         :class="{ active: activeTab === 'definitions' }"
@@ -28,7 +29,6 @@
         <span>数据管理</span>
       </button>
     </div>
-
       <div class="intro-banner">
         <el-icon class="intro-icon"><InfoFilled /></el-icon>
         <span>
@@ -36,9 +36,10 @@
         </span>
       </div>
     </div>
+    </div>
 
     <!-- 内容区域 -->
-    <div class="page-content">
+    <div class="content-card content-body">
       <DefinitionsTab
         v-if="activeTab === 'definitions'"
         :can-write="canWrite"
@@ -71,34 +72,43 @@ const goToRuns = () => {
 
 <style scoped lang="scss">
 .cache-manager-page {
-  padding: 16px 24px 24px;
-  background: linear-gradient(180deg, #eef2ff 0%, #f6f8fc 160px, #f6f8fc 100%);
-  min-height: calc(100vh - 60px);
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.top-bar {
+.content-card {
+  background: #ffffff;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.nav-card {
+  margin: 10px 10px 0 10px;
+  padding: 5px 10px;
+}
+
+.nav-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .intro-banner {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
-  border: 1px solid #dbe4ff;
-  color: #4f6ef0;
-  border-radius: 9px;
-  padding: 7px 14px;
-  font-size: 12px;
+  color: #f56c6c;
+  font-size: 13px;
+  font-weight: 500;
   flex-shrink: 1;
 
   strong {
-    color: #3b4fd6;
+    color: #f56c6c;
   }
 
   .intro-icon {
@@ -107,12 +117,17 @@ const goToRuns = () => {
   }
 }
 
+.content-body {
+  flex: 1;
+  min-height: 0;
+  margin: 10px 10px 0 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .nav-tabs {
-  display: inline-flex;
-  background: #fff;
-  border-radius: 12px;
-  padding: 5px;
-  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
+  display: flex;
   gap: 4px;
 }
 

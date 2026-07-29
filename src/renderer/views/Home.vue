@@ -1,5 +1,7 @@
 <template>
   <div class="home-page">
+    <el-scrollbar>
+    <div class="home-inner">
     <!-- 欢迎卡片 -->
     <el-card class="welcome-card">
       <div class="welcome-content">
@@ -104,6 +106,8 @@
         </el-steps>
       </div>
     </el-card>
+    </div>
+    </el-scrollbar>
   </div>
 </template>
 
@@ -177,10 +181,26 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .home-page {
+  height: calc(100vh - 60px - 24px - 40px);
+  overflow: hidden;
+
+  .home-inner {
+    padding: 10px 16px 10px 10px;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+
   .welcome-card {
-    margin-bottom: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    margin-bottom: 16px;
+    background: #ffffff;
+    color: #303133;
+    border-radius: 12px;
+    border: 1px solid #ebeef5;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    
+    :deep(.el-card__body) {
+      border-radius: 12px;
+    }
     
     .welcome-content {
       display: flex;
@@ -193,12 +213,14 @@ onMounted(async () => {
         
         h1 {
           margin: 0 0 10px 0;
-          font-size: 28px;
+          font-size: 24px;
+          color: #303133;
         }
         
         p {
-          margin: 0 0 20px 0;
-          opacity: 0.9;
+          margin: 0;
+          color: #909399;
+          font-size: 14px;
         }
         
         .quick-actions {
@@ -211,7 +233,7 @@ onMounted(async () => {
         padding: 0 40px;
         
         :deep(.el-icon) {
-          color: rgba(255, 255, 255, 0.8) !important;
+          color: #c0c4cc !important;
         }
       }
     }
@@ -227,6 +249,9 @@ onMounted(async () => {
       cursor: pointer;
       transition: all 0.2s;
       position: relative;
+      border-radius: 12px;
+      border: 1px solid #ebeef5;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
       
       &:hover {
         transform: translateY(-4px);
@@ -291,6 +316,13 @@ onMounted(async () => {
     }
   }
   
+  // 底部 el-card 统一圆角
+  :deep(.el-card) {
+    border-radius: 12px;
+    border: 1px solid #ebeef5;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+
   .status-list, .stats-list {
     .status-item, .stat-item {
       display: flex;

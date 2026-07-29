@@ -43,7 +43,7 @@
               </el-button>
             </div>
           </div>
-          <div class="category-tree" v-loading="loadingCategories">
+          <el-scrollbar class="category-tree" v-loading="loadingCategories">
             <el-tree
               ref="treeRef"
               :data="categories"
@@ -62,7 +62,7 @@
                 </div>
               </template>
             </el-tree>
-          </div>
+          </el-scrollbar>
         </div>
 
         <!-- 中间：因子列表 -->
@@ -73,7 +73,7 @@
               <span class="factor-count">共 {{ total }} 个</span>
             </div>
           </div>
-          <div class="factor-list" v-loading="loading">
+          <el-scrollbar class="factor-list" v-loading="loading">
             <div
               v-for="factor in factors"
               :key="factor.factor_id"
@@ -114,7 +114,7 @@
               description="因子广场暂无提交"
               :image-size="100"
             />
-          </div>
+          </el-scrollbar>
 
           <div v-if="total > pageSize" class="pagination-footer">
             <el-pagination
@@ -133,7 +133,7 @@
           <div class="panel-header">
             <span>因子详情</span>
           </div>
-          <div class="panel-content">
+          <el-scrollbar class="panel-content">
             <div v-if="!selectedFactor" class="empty-state">
               <el-empty description="请从左侧选择一个因子查看详情" :image-size="120" />
             </div>
@@ -370,7 +370,7 @@
                 </el-descriptions>
               </el-card>
             </div>
-          </div>
+          </el-scrollbar>
         </div>
       </div>
 
@@ -766,10 +766,12 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .plaza-page {
-  height: calc(100vh - 100px);
+  height: calc(100vh - 60px - 24px - 40px);
   background: #f5f7fa;
   overflow: hidden;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .main-content {
@@ -848,7 +850,7 @@ onMounted(() => {
   .pagination-footer {
     padding: 12px 15px;
     border-top: 1px solid #e4e7ed;
-    background: #fafafa;
+    background: #ffffff;
     display: flex;
     justify-content: center;
     flex-shrink: 0;
@@ -865,20 +867,21 @@ onMounted(() => {
   flex-direction: column;
 
   .panel-header {
-    padding: 10px 12px;
-    background: #fafafa;
+    padding: 10px 15px;
+    background: #ffffff;
     border-bottom: 1px solid #e4e7ed;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 500;
-    font-size: 13px;
+    height: 42px;
+    box-sizing: border-box;
   }
 
   .category-tree {
     padding: 10px;
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
 
     .tree-node {
       display: flex;
@@ -913,12 +916,14 @@ onMounted(() => {
 
   .panel-header {
     padding: 10px 15px;
-    background: #f5f7fa;
+    background: #ffffff;
     border-bottom: 1px solid #e4e7ed;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 500;
+    height: 42px;
+    box-sizing: border-box;
 
     .header-left {
       display: flex;
@@ -936,7 +941,7 @@ onMounted(() => {
   .factor-list {
     padding: 15px;
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
 
     .factor-card {
       padding: 12px 15px;
@@ -1009,7 +1014,7 @@ onMounted(() => {
   .pagination-footer {
     padding: 12px 15px;
     border-top: 1px solid #e4e7ed;
-    background: #fafafa;
+    background: #ffffff;
     display: flex;
     justify-content: center;
     flex-shrink: 0;
@@ -1026,15 +1031,19 @@ onMounted(() => {
   overflow: hidden;
 
   .panel-header {
-    padding: 12px 15px;
-    background: #f5f7fa;
+    padding: 10px 15px;
+    background: #ffffff;
     border-bottom: 1px solid #e4e7ed;
     font-weight: 500;
+    height: 42px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
   }
 
   .panel-content {
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
     padding: 20px;
   }
 
@@ -1052,7 +1061,7 @@ onMounted(() => {
       align-items: center;
       margin-bottom: 20px;
       padding-bottom: 15px;
-      border-bottom: 2px solid #e4e7ed;
+      border-bottom: 1px solid #e4e7ed;
 
       h3 {
         margin: 0;
@@ -1065,7 +1074,7 @@ onMounted(() => {
 
       :deep(.el-card__header) {
         padding: 10px 15px;
-        background: #f5f7fa;
+        background: #ffffff;
         font-size: 14px;
       }
 

@@ -1,15 +1,55 @@
 <template>
   <div class="tasks-content">
+    <!-- 统计卡片 -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.total }}</div>
+        <div class="stat-label">全部任务</div>
+      </div>
+      <div class="stat-card running">
+        <div class="stat-value">{{ stats.running }}</div>
+        <div class="stat-label">正在执行</div>
+      </div>
+      <div class="stat-card deferred">
+        <div class="stat-value">{{ stats.deferred || stats.pending }}</div>
+        <div class="stat-label">排队中</div>
+      </div>
+      <div class="stat-card completed">
+        <div class="stat-value">{{ stats.completed }}</div>
+        <div class="stat-label">执行完成</div>
+      </div>
+      <div class="stat-card failed">
+        <div class="stat-value">{{ stats.failed }}</div>
+        <div class="stat-label">执行失败</div>
+      </div>
+      <div class="stat-card cancelled">
+        <div class="stat-value">{{ stats.cancelled }}</div>
+        <div class="stat-label">已取消</div>
+      </div>
+    </div>
+
     <!-- 工具栏 -->
+    <div class="content-card">
     <div class="toolbar">
       <div class="toolbar-left">
+        <el-select
+          v-model="filterResearchMode"
+          placeholder="运行类型"
+          clearable
+          style="width: 120px;"
+          @change="handleFilterChange"
+        >
+          <el-option label="快速初筛" value="quick" />
+          <el-option label="深度研究" value="deep" />
+          <el-option label="入库审核" value="admission" />
+        </el-select>
         <el-date-picker
           v-model="filterDateRange"
           type="daterange"
           range-separator="至"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
-          format="MM-DD"
+          format="YYYY-MM-DD"
           value-format="YYYY-MM-DD"
           style="width: 240px;"
           @change="handleFilterChange"
@@ -25,76 +65,46 @@
         </el-button>
       </div>
     </div>
-
-    <!-- 统计卡片 -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value">{{ stats.total }}</div>
-        <div class="stat-label">全部任务</div>
-      </div>
-      <div class="stat-card running">
-        <div class="stat-value">{{ stats.running }}</div>
-        <div class="stat-label">正在执行</div>
-      </div>
-      <!-- 排队中：优先显示 deferred，若为 0 则显示 pending（数据库现状无 deferred，实际显示 pending 数） -->
-      <div class="stat-card deferred">
-        <div class="stat-value">{{ stats.deferred || stats.pending }}</div>
-        <div class="stat-label">排队中</div>
-      </div>
-      <div class="stat-card completed">
-        <div class="stat-value">{{ stats.completed }}</div>
-        <div class="stat-label">执行完成</div>
-      </div>
-      <div class="stat-card failed">
-        <div class="stat-value">{{ stats.failed }}</div>
-        <div class="stat-label">执行失败</div>
-      </div>
-      <!-- 新增：已取消卡 -->
-      <div class="stat-card cancelled">
-        <div class="stat-value">{{ stats.cancelled }}</div>
-        <div class="stat-label">已取消</div>
-      </div>
     </div>
+
     <!-- 总数对账告警 -->
     <el-alert
       v-if="statsBreakdownMismatch"
       type="warning"
       :closable="false"
       show-icon
-      style="margin: 8px 0"
+      style="margin: 10px 10px 0 10px"
     >
       统计不闭合：各状态总和（{{ statsSum }}）≠ 全部（{{ stats.total }}），可能存在未归类状态
     </el-alert>
 
-    <!-- 任务列表 - 现代风格 -->
-    <el-table 
-      :data="tasks" 
+    <!-- 任务列表 -->
+    <div class="content-card table-card">
+    <el-table
+      :data="tasks"
       v-loading="loading"
       class="modern-table"
       stripe
       size="small"
-      :header-cell-style="{ 
-        background: '#f8fafc', 
-        color: '#64748b', 
+      :header-cell-style="{
+        background: '#f8fafc',
+        color: '#64748b',
         fontWeight: 500,
         fontSize: '12px',
         padding: '10px 0',
         textAlign: 'center',
         borderBottom: '1px solid #e2e8f0'
       }"
-      :cell-style="{ padding: '8px 10px', color: '#475569', fontSize: '12px' }"
+      :cell-style="{ padding: '8px 10px', color: '#475569', fontSize: '12px', textAlign: 'center' }"
       @sort-change="handleTableSortChange"
       @filter-change="handleTableFilterChange"
     >
-      <el-table-column type="index" label="#" width="55" align="center" />
+      <el-table-column type="index" label="#" width="50" align="center" />
       
       <el-table-column
         label="任务名称"
         prop="task_name"
-        column-key="task_type"
         align="center"
-        :filters="taskTypeFilters"
-        :filter-multiple="false"
         show-overflow-tooltip
         min-width="90"
       >
@@ -220,7 +230,6 @@
         label="5日RankIC" 
         align="center"
         prop="rank_ic_5"
-        sortable="custom"
       >
         <template #default="{ row }">
           <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 5))">
@@ -234,7 +243,6 @@
         label="10日RankIC" 
         align="center"
         prop="rank_ic_10"
-        sortable="custom"
       >
         <template #default="{ row }">
           <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 10))">
@@ -248,7 +256,6 @@
         label="运行时间" 
         align="center"
         prop="created_at"
-        sortable="custom"
         width="135"
       >
         <template #default="{ row }">
@@ -312,7 +319,8 @@
         background
       />
     </div>
-    
+    </div>
+
     <!-- 任务详情弹窗 -->
     <el-dialog
       v-model="detailDialogVisible"
@@ -499,6 +507,7 @@ const pageSize = ref(20)
 const filterStatus = ref('')
 const filterTaskType = ref('')
 const filterDateRange = ref<[string, string] | null>(null)
+const filterResearchMode = ref('')
 const sortField = ref('created_at')
 const sortOrder = ref<'asc' | 'desc'>('desc')
 
@@ -512,15 +521,9 @@ const statusFilters = [
   { text: '已取消', value: 'cancelled' }
 ]
 
-const taskTypeFilters = [
-  { text: '单因子', value: 'single_factor' },
-  { text: '多因子', value: 'multi_factor' },
-  { text: '因子对比', value: 'factor_compare' }
-]
-
 // 是否有激活的筛选
 const hasActiveFilters = computed(() => {
-  return filterStatus.value || filterTaskType.value || filterDateRange.value
+  return filterStatus.value || filterTaskType.value || filterDateRange.value || filterResearchMode.value
 })
 
 // 详情弹窗
@@ -717,6 +720,7 @@ const clearAllFilters = () => {
   filterStatus.value = ''
   filterTaskType.value = ''
   filterDateRange.value = null
+  filterResearchMode.value = ''
   sortField.value = 'created_at'
   sortOrder.value = 'desc'
   currentPage.value = 1
@@ -751,6 +755,7 @@ const handleTableFilterChange = (filters: Record<string, string[]>) => {
 const loadTasks = async (silent = false) => {
   // 轮询静默刷新时不显示 loading 遮罩，避免整屏闪烁
   if (!silent) loading.value = true
+  console.log('🔍 loadTasks 调用时 filterDateRange:', filterDateRange.value, 'filterResearchMode:', filterResearchMode.value)
   try {
     // 构建请求参数
     const params: any = {
@@ -758,6 +763,7 @@ const loadTasks = async (silent = false) => {
       page_size: pageSize.value,
       status: filterStatus.value || undefined,
       task_type: filterTaskType.value || undefined,
+      research_mode: filterResearchMode.value || undefined,
       sort_field: sortField.value || undefined,
       sort_order: sortOrder.value || undefined
     }
@@ -1064,11 +1070,34 @@ onUnmounted(() => stopPolling())
 
 <style scoped lang="scss">
 .tasks-content {
+  height: calc(100vh - 60px - 24px - 40px);
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fa;
+  overflow: hidden;
+
+  .content-card {
+    background: #ffffff;
+    border: 1px solid #ebeef5;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    padding: 8px 20px;
+    margin: 10px 10px 0 10px;
+  }
+
+  .table-card {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
   .toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 18px;
     flex-wrap: wrap;
     gap: 10px;
 
@@ -1108,19 +1137,18 @@ onUnmounted(() => stopPolling())
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 14px;
-    margin-bottom: 22px;
+    margin: 0 10px 0 10px;
 
-    // Double-Bezel：外层托盘 + 内芯，营造硬件质感
     .stat-card {
       position: relative;
       background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%);
       border: 1px solid #eef2f7;
-      border-radius: 16px;
-      padding: 18px 20px;
+      border-radius: 12px;
+      padding: 10px 16px;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      gap: 10px;
+      gap: 4px;
       overflow: hidden;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -16px rgba(15, 23, 42, 0.12);
       transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
@@ -1206,10 +1234,11 @@ onUnmounted(() => stopPolling())
   // 现代风格表格
   .modern-table {
     font-size: 12px;
-    border-radius: 14px;
+    border-radius: 0;
     overflow: hidden;
-    border: 1px solid #eef2f7;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -18px rgba(15, 23, 42, 0.14);
+    border: none;
+    background: #ffffff;
+    flex: 1;
     
     // 去除默认边框
     :deep(.el-table__inner-wrapper::before) {
@@ -1266,6 +1295,11 @@ onUnmounted(() => stopPolling())
       .el-table__body {
         border-spacing: 0;
       }
+      .el-table__row {
+        td .cell {
+          text-align: center;
+        }
+      }
     }
     
     // 斑马纹颜色 - 更柔和
@@ -1305,6 +1339,8 @@ onUnmounted(() => stopPolling())
       font-size: 12px;
       color: #334155;
       font-weight: 500;
+      display: inline-block;
+      text-align: center;
     }
 
     // ID 单元格（等宽、可点击复制）
@@ -1657,18 +1693,48 @@ onUnmounted(() => stopPolling())
   }
   
   .pagination-wrapper {
-    margin-top: 18px;
-    padding-top: 4px;
+    margin-top: 0;
+    padding: 8px 16px;
     display: flex;
     justify-content: flex-end;
+    border-top: 1px solid #e4e7ed;
+    flex-shrink: 0;
 
-    :deep(.el-pagination.is-background) {
+    :deep(.el-pagination) {
+      --el-pagination-font-size: 12px;
+      --el-pagination-button-width: 24px;
+      --el-pagination-button-height: 24px;
+      --el-pagination-button-color: #606266;
+      font-size: 12px;
+
       .el-pager li,
       .btn-prev,
       .btn-next {
-        border-radius: 8px;
-        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-        &:hover { transform: translateY(-1px); }
+        border-radius: 4px;
+        font-size: 12px;
+        min-width: 24px;
+        height: 24px;
+        line-height: 24px;
+      }
+
+      .el-pagination__total {
+        font-size: 12px;
+        line-height: 24px;
+      }
+
+      .el-pagination__sizes {
+        font-size: 12px;
+        .el-select {
+          .el-input__inner {
+            font-size: 12px;
+          }
+          .el-input__icon {
+            font-size: 12px;
+          }
+        }
+        .el-select__placeholder {
+          font-size: 12px;
+        }
       }
     }
   }

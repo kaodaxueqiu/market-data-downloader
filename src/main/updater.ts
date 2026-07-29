@@ -1,8 +1,9 @@
 import axios from 'axios'
-import { app, dialog } from 'electron'
+import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
+import { spawn } from 'child_process'
 
 const UPDATE_SERVER = 'http://61.151.241.233:8080'
 
@@ -84,115 +85,83 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
   }
 }
 
-// 下载更新（带进度回调）
-export async function downloadUpdate(
+// 静默下载更新到临时目录（不显示任何对话框）
+export async function downloadUpdateSilently(
   updateInfo: UpdateInfo,
-  parentWindow: Electron.BrowserWindow | null,
   onProgress?: (percent: number, status: string) => void
 ): Promise<string> {
   const platform = process.platform
   let downloadInfo: { url: string; size: number; md5: string }
-  
-  // 根据平台选择下载地址
+
   if (platform === 'win32') {
     downloadInfo = updateInfo.downloads.windows
   } else if (platform === 'darwin') {
     const arch = process.arch
-    downloadInfo = arch === 'arm64' 
-      ? updateInfo.downloads.mac_arm64 
+    downloadInfo = arch === 'arm64'
+      ? updateInfo.downloads.mac_arm64
       : updateInfo.downloads.mac_intel
   } else {
     throw new Error('不支持的平台')
   }
-  
+
   const downloadUrl = downloadInfo.url
   const expectedMD5 = downloadInfo.md5
   const fileSize = downloadInfo.size
-  
-  // 让用户选择保存位置（从URL提取文件名）
+
+  // 下载到临时目录
   const filename = path.basename(downloadUrl)
-  const defaultPath = path.join(app.getPath('downloads'), filename)
-  
-  console.log('准备显示保存对话框...')
-  console.log('默认路径:', defaultPath)
-  console.log('父窗口存在:', !!parentWindow)
-  
-  const saveDialogOptions = {
-    title: '选择保存位置',
-    defaultPath: defaultPath,
-    buttonLabel: '开始下载'
+  const tempDir = path.join(app.getPath('temp'), 'g-snowball-updates')
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true })
   }
-  
-  console.log('显示保存对话框...')
-  const result = parentWindow 
-    ? await dialog.showSaveDialog(parentWindow, saveDialogOptions)
-    : await dialog.showSaveDialog(saveDialogOptions)
-  
-  console.log('对话框结果:', result)
-  
-  if (result.canceled || !result.filePath) {
-    console.log('用户取消下载')
-    throw new Error('用户取消下载')
-  }
-  
-  const downloadPath = result.filePath
-  console.log('用户选择的保存路径:', downloadPath)
-  
-  console.log('开始下载:', downloadUrl)
-  
+  const savePath = path.join(tempDir, filename)
+
+  console.log('静默下载:', downloadUrl)
+  console.log('保存到:', savePath)
+
   if (onProgress) {
     onProgress(0, '正在连接...')
   }
-  
+
   const response = await axios({
     method: 'get',
     url: downloadUrl,
     responseType: 'stream',
-    timeout: 300000, // 5分钟超时
+    timeout: 600000,
     onDownloadProgress: (progressEvent) => {
       const loaded = progressEvent.loaded || 0
       const total = progressEvent.total || fileSize
       const percentCompleted = Math.round((loaded * 100) / total)
-      
-      const downloadedMB = (loaded / 1024 / 1024).toFixed(2)
-      const totalMB = (total / 1024 / 1024).toFixed(2)
-      
-      console.log(`下载进度: ${percentCompleted}% (${downloadedMB}MB / ${totalMB}MB)`)
-      
+
       if (onProgress) {
-        onProgress(percentCompleted, `已下载 ${downloadedMB}MB / ${totalMB}MB`)
+        onProgress(percentCompleted, `已下载 ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`)
       }
     }
   })
-  
-  const writer = fs.createWriteStream(downloadPath)
+
+  const writer = fs.createWriteStream(savePath)
   response.data.pipe(writer)
-  
+
   return new Promise((resolve, reject) => {
     writer.on('finish', () => {
       console.log('下载完成')
-      
-      // 验证MD5（如果提供）
+
       if (expectedMD5) {
-        console.log('验证文件完整性...')
-        const fileMD5 = calculateMD5(downloadPath)
-        console.log(`期望MD5: ${expectedMD5}`)
-        console.log(`实际MD5: ${fileMD5}`)
-        
+        const fileMD5 = calculateMD5(savePath)
         if (fileMD5 !== expectedMD5) {
           reject(new Error('文件校验失败，MD5不匹配'))
           return
         }
-        console.log('✅ MD5校验通过')
+        console.log('MD5校验通过')
       }
-      
+
       if (onProgress) {
         onProgress(100, '下载完成')
       }
-      
-      resolve(downloadPath)
+
+      resolve(savePath)
     })
-    
+
     writer.on('error', (error) => {
       console.error('文件写入失败:', error)
       reject(error)
@@ -208,37 +177,60 @@ function calculateMD5(filePath: string): string {
   return hash.digest('hex')
 }
 
-// 安装更新
+// 杀掉 IM 子进程（通过进程名匹配）
+function killIMProcess() {
+  const platform = process.platform
+  const imName = platform === 'win32' ? 'G-Snowball-IM.exe' : 'G-Snowball-IM'
+
+  try {
+    if (platform === 'win32') {
+      spawn('taskkill', ['/F', '/IM', imName], {
+        detached: true,
+        shell: false,
+        stdio: 'ignore'
+      }).unref()
+    } else if (platform === 'darwin') {
+      spawn('pkill', ['-f', imName], {
+        detached: true,
+        shell: false,
+        stdio: 'ignore'
+      }).unref()
+    }
+    console.log('IM进程已终止')
+  } catch (error) {
+    console.error('终止IM进程失败:', error)
+  }
+}
+
+// 安装更新：自动运行安装包并退出当前应用
 export async function installUpdate(filePath: string): Promise<void> {
   const platform = process.platform
-  
-  console.log('准备安装更新:', filePath)
-  
+
+  console.log('自动运行安装包:', filePath)
+
   if (platform === 'win32') {
-    // Windows绿色版: 显示提示信息
-    const result = await dialog.showMessageBox({
-      type: 'info',
-      title: '新版本已下载',
-      message: `新版本文件已下载完成`,
-      detail: `使用说明：\n1. 关闭当前应用\n2. 解压下载的zip文件\n3. 运行解压后的exe文件\n4. 删除旧版本（可选）\n\n文件路径：${filePath}`,
-      buttons: ['我知道了', '立即退出应用'],
-      defaultId: 0,
-      cancelId: 0
-    })
-    
-    if (result.response === 1) {
-      app.quit()
-    }
+    // Windows: nsis .exe 安装程序，直接运行
+    spawn('cmd', ['/c', 'start', '', filePath], {
+      detached: true,
+      shell: false,
+      stdio: 'ignore'
+    }).unref()
   } else if (platform === 'darwin') {
-    // macOS: 显示提示信息
-    await dialog.showMessageBox({
-      type: 'info',
-      title: '新版本已下载',
-      message: '新版本已下载完成',
-      detail: `使用说明：\n1. 双击打开dmg文件\n2. 将新版本app拖到应用程序文件夹替换旧版本\n3. 运行新版本\n\n文件路径：${filePath}`,
-      buttons: ['知道了']
-    })
+    // macOS: .pkg 安装包，用 open 命令打开安装向导
+    spawn('open', [filePath], {
+      detached: true,
+      shell: false,
+      stdio: 'ignore'
+    }).unref()
   }
+
+  // 杀掉 IM 进程
+  killIMProcess()
+
+  // 退出当前应用，让安装程序接管
+  setTimeout(() => {
+    app.quit()
+  }, 500)
 }
 
 // 下载更新到指定路径（不显示对话框）

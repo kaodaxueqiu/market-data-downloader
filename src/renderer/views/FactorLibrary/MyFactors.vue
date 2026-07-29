@@ -138,7 +138,7 @@
                 </el-button>
               </div>
             </div>
-            <div class="category-tree" v-loading="loadingCategories">
+            <el-scrollbar class="category-tree" v-loading="loadingCategories">
               <el-tree
                 ref="treeRef"
                 :data="categories"
@@ -159,7 +159,7 @@
                 </div>
               </template>
               </el-tree>
-            </div>
+            </el-scrollbar>
           </template>
           
           <!-- 标签面板 -->
@@ -176,7 +176,7 @@
                 </el-button>
               </div>
             </div>
-            <div class="tag-list" v-loading="loadingTags">
+            <el-scrollbar class="tag-list" v-loading="loadingTags">
               <el-collapse v-model="expandedTagGroups">
                 <el-collapse-item 
                   v-for="group in groupedTags" 
@@ -203,7 +203,7 @@
                 </el-collapse-item>
               </el-collapse>
               <el-empty v-if="tags.length === 0" description="暂无标签" :image-size="60" />
-            </div>
+            </el-scrollbar>
           </template>
           
           <!-- 分类右键菜单 -->
@@ -267,7 +267,7 @@
               <el-button size="small" text @click="clearSelection">清空</el-button>
             </div>
           </div>
-          <div class="factor-list" v-loading="loading">
+          <el-scrollbar class="factor-list" v-loading="loading">
             <div
               v-for="factor in factors"
               :key="factor.factor_id"
@@ -329,7 +329,7 @@
                 创建第一个因子
               </el-button>
             </el-empty>
-          </div>
+          </el-scrollbar>
           
           <!-- 分页固定在底部 -->
           <div v-if="total > pageSize" class="pagination-footer">
@@ -349,7 +349,7 @@
           <div class="panel-header">
             <span>因子详情</span>
           </div>
-          <div class="panel-content">
+          <el-scrollbar class="panel-content">
             <div v-if="!selectedFactor" class="empty-state">
               <el-empty description="请从左侧选择一个因子查看详情" :image-size="120" />
             </div>
@@ -708,7 +708,7 @@
                 <!-- 整体删除已移至版本历史，按版本删除 -->
               </div>
             </div>
-          </div>
+          </el-scrollbar>
         </div>
       </div>
     </div>
@@ -4634,10 +4634,12 @@ onMounted(async () => {
 }
 
 .my-factors-page {
-  height: calc(100vh - 100px);
+  height: calc(100vh - 60px - 24px - 40px);
   background: #f5f7fa;
   overflow: hidden;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .main-content {
@@ -4770,9 +4772,11 @@ onMounted(async () => {
 .content-layout {
   display: grid;
   grid-template-columns: 240px 1fr 500px;
+  grid-template-rows: 100%;
   gap: 16px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 // 左侧面板
@@ -4788,6 +4792,8 @@ onMounted(async () => {
   .left-panel-tabs {
     display: flex;
     border-bottom: 1px solid #e4e7ed;
+    height: 42px;
+    box-sizing: border-box;
     
     .panel-tab {
       flex: 1;
@@ -4795,9 +4801,9 @@ onMounted(async () => {
       align-items: center;
       justify-content: center;
       gap: 4px;
-      padding: 10px 0;
+      padding: 0;
       border: none;
-      background: #f5f7fa;
+      background: #ffffff;
       color: #606266;
       font-size: 13px;
       cursor: pointer;
@@ -4820,20 +4826,21 @@ onMounted(async () => {
   }
   
   .panel-header {
-    padding: 10px 12px;
-    background: #fafafa;
+    padding: 10px 15px;
+    background: #ffffff;
     border-bottom: 1px solid #e4e7ed;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 500;
-    font-size: 13px;
+    height: 42px;
+    box-sizing: border-box;
   }
   
   .category-tree {
     padding: 10px;
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
     
     .tree-node {
       display: flex;
@@ -4854,7 +4861,7 @@ onMounted(async () => {
   .tag-list {
     padding: 0;
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
     
     :deep(.el-collapse) {
       border: none;
@@ -4973,13 +4980,15 @@ onMounted(async () => {
   
   .panel-header {
     padding: 10px 15px;
-    background: #f5f7fa;
+    background: #ffffff;
     border-bottom: 1px solid #e4e7ed;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 500;
-    
+    height: 42px;
+    box-sizing: border-box;
+
     .header-left {
       display: flex;
       align-items: center;
@@ -5002,7 +5011,7 @@ onMounted(async () => {
   .factor-list {
     padding: 15px;
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
     
     .factor-card {
       padding: 12px 15px;
@@ -5084,7 +5093,7 @@ onMounted(async () => {
   .pagination-footer {
     padding: 12px 15px;
     border-top: 1px solid #e4e7ed;
-    background: #fafafa;
+    background: #ffffff;
     display: flex;
     justify-content: center;
     flex-shrink: 0;
@@ -5102,15 +5111,19 @@ onMounted(async () => {
   overflow: hidden;
   
   .panel-header {
-    padding: 12px 15px;
-    background: #f5f7fa;
+    padding: 10px 15px;
+    background: #ffffff;
     border-bottom: 1px solid #e4e7ed;
     font-weight: 500;
+    height: 42px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
   }
   
   .panel-content {
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
     padding: 20px;
   }
   
@@ -5141,7 +5154,7 @@ onMounted(async () => {
       
       :deep(.el-card__header) {
         padding: 10px 15px;
-        background: #f5f7fa;
+        background: #ffffff;
         font-size: 14px;
       }
       

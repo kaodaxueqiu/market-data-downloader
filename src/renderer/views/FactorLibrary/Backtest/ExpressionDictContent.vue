@@ -1,5 +1,7 @@
 <template>
   <div class="expression-dict-content">
+    <el-scrollbar>
+    <div class="scroll-inner">
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
@@ -69,6 +71,7 @@
       
       <el-empty v-if="!loading && filteredCategories.length === 0" description="没有找到匹配的函数" />
     </div>
+    </div>
 
     <!-- 函数详情对话框 -->
     <el-dialog
@@ -131,6 +134,7 @@
         </div>
       </div>
     </el-dialog>
+    </el-scrollbar>
   </div>
 </template>
 
@@ -209,10 +213,19 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .expression-dict-content {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  height: 100%;
+  overflow: hidden;
+  padding: 10px 0 10px 10px;
+
+  .scroll-inner {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    margin-right: 16px;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
 }
 
 .page-header {

@@ -109,12 +109,17 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .backtest-page {
-  padding: 24px;
-  background: linear-gradient(180deg, #f0f5ff 0%, #f5f7fa 100%);
-  min-height: calc(100vh - 60px);
+  background: #f5f7fa;
+  height: calc(100vh - 60px - 24px - 40px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   animation: fadeIn 0.3s ease;
 }
 

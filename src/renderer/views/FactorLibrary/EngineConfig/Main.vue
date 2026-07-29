@@ -1,6 +1,7 @@
 <template>
   <div class="engine-config-page">
-    <!-- 三级 tab 导航（子路由驱动，按权限显示） -->
+    <!-- 三级 tab 导航 -->
+    <div class="content-card nav-card">
     <div class="nav-tabs">
       <button
         v-if="hasPermission('cache_management')"
@@ -30,12 +31,13 @@
         <span>入库审核配置</span>
       </button>
     </div>
+    </div>
 
     <!-- tab 内容 -->
-    <div class="page-content">
       <CacheManagerMain v-if="activeTab === 'cache'" />
 
-      <div v-else-if="activeTab === 'dict-sync'" class="dict-sync-panel">
+      <el-scrollbar v-else class="content-card content-body">
+      <div v-if="activeTab === 'dict-sync'" class="dict-sync-panel">
         <div class="dict-sync-desc">
           从回测引擎拉取最新算子清单并更新因子字典。同步后可在因子表达式中使用最新算子。
         </div>
@@ -70,7 +72,7 @@
           <el-alert type="error" :closable="false" :title="admissionError" />
         </div>
       </div>
-    </div>
+        </el-scrollbar>
   </div>
 </template>
 
@@ -249,12 +251,28 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .engine-config-page {
-  padding: 24px;
+  height: calc(100vh - 60px - 24px - 40px);
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fa;
+  overflow: hidden;
+
+  .content-card {
+    background: #ffffff;
+    border: 1px solid #ebeef5;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  .nav-card {
+    margin: 0 10px 0 10px;
+    padding: 0 20px;
+    flex-shrink: 0;
+  }
 
   .nav-tabs {
     display: flex;
     gap: 8px;
-    margin-bottom: 20px;
     border-bottom: 1px solid #e4e7ed;
 
     .nav-tab {
@@ -280,8 +298,29 @@ onBeforeUnmount(() => {
     }
   }
 
+  .content-body {
+    flex: 1;
+    min-height: 0;
+    margin: 10px 10px 0 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
+    .el-scrollbar {
+      flex: 1;
+    }
+  }
+
+  .page-content {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
   .dict-sync-panel {
-    max-width: 600px;
+    margin: 10px 10px 0 10px;
 
     .dict-sync-desc {
       margin-bottom: 16px;
@@ -296,6 +335,7 @@ onBeforeUnmount(() => {
   }
 
   .admission-config-panel {
+    margin: 10px 10px 0 10px;
     .admission-desc {
       margin-bottom: 12px;
       color: #606266;
