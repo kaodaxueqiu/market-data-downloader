@@ -244,6 +244,9 @@ function createWindow() {
     
     // 生产模式下启动时自动检查更新，并启动定期检查
     if (process.env.NODE_ENV !== 'development') {
+      // 启动时清理当前版本残留的安装包
+      updater.cleanOldUpdateFiles()
+
       // 首次检查：5秒后（静默下载，不弹窗）
       setTimeout(async () => {
         try {
@@ -251,8 +254,19 @@ function createWindow() {
           const updateInfo = await updater.checkForUpdates()
 
           if (updateInfo && mainWindow && !mainWindow.isDestroyed()) {
-            console.log('发现新版本，静默下载:', updateInfo.version)
-            await silentDownloadUpdate(updateInfo)
+            // 先检查本地是否已存在下载好的安装包
+            const existingFile = updater.checkExistingUpdate(updateInfo)
+            if (existingFile) {
+              console.log('本地已有完整安装包，直接显示更新按钮:', existingFile)
+              currentUpdateInfo = updateInfo
+              updater.setCurrentUpdateInfo(updateInfo)
+              updateDownloaded = true
+              downloadedFilePath = existingFile
+              mainWindow.webContents.send('updater:update-downloaded', existingFile)
+            } else {
+              console.log('发现新版本，静默下载:', updateInfo.version)
+              await silentDownloadUpdate(updateInfo)
+            }
           }
         } catch (error) {
           console.error('自动检查更新失败:', error)
@@ -262,17 +276,39 @@ function createWindow() {
       // 定期检查：每10分钟检查一次（静默下载）
       updateCheckTimer = setInterval(async () => {
         try {
+          // 已下载完成，不再重复检查
+          if (updateDownloaded) {
+            console.log('更新已下载完成，等待用户安装，跳过定期检查')
+            return
+          }
+          // 正在下载中，不重复触发
+          if (isDownloading) {
+            console.log('更新正在下载中，跳过定期检查')
+            return
+          }
+
           console.log('定期检查更新...')
           const updateInfo = await updater.checkForUpdates()
 
           if (updateInfo && mainWindow && !mainWindow.isDestroyed()) {
-            console.log('发现新版本，静默下载:', updateInfo.version)
-            await silentDownloadUpdate(updateInfo)
+            // 先检查本地是否已存在下载好的安装包
+            const existingFile = updater.checkExistingUpdate(updateInfo)
+            if (existingFile) {
+              console.log('本地已有完整安装包，直接显示更新按钮:', existingFile)
+              currentUpdateInfo = updateInfo
+              updater.setCurrentUpdateInfo(updateInfo)
+              updateDownloaded = true
+              downloadedFilePath = existingFile
+              mainWindow.webContents.send('updater:update-downloaded', existingFile)
+            } else {
+              console.log('发现新版本，静默下载:', updateInfo.version)
+              await silentDownloadUpdate(updateInfo)
+            }
           }
         } catch (error) {
           console.error('定期检查更新失败:', error)
         }
-      }, 10 * 60 * 1000)
+      }, 20 * 60 * 1000)
     }
   })
 
@@ -4613,26 +4649,53 @@ ipcMain.handle('staticDownload:downloadFile', async (_event, fileId: string, sav
 // ========== 自动更新功能（自建服务器） ==========
 
 let currentUpdateInfo: any = null
+let isDownloading = false      // 是否正在下载中
+let updateDownloaded = false   // 是否已下载完成（等待用户点击安装）
+let downloadedFilePath = ''    // 已下载的安装包路径
 
 // 静默下载更新（不弹任何对话框，下载完通知渲染进程显示"更新已就绪"按钮）
 async function silentDownloadUpdate(updateInfo: any) {
+  // 下载中或已下载完成，不重复触发
+  if (isDownloading) {
+    console.log('更新正在下载中，跳过本次触发')
+    return
+  }
+  if (updateDownloaded) {
+    console.log('更新已下载完成，等待用户安装，跳过本次触发')
+    mainWindow?.webContents.send('updater:update-downloaded', downloadedFilePath)
+    return
+  }
+
   try {
+    isDownloading = true
     currentUpdateInfo = updateInfo
+    updater.setCurrentUpdateInfo(updateInfo)
     mainWindow?.webContents.send('updater:update-available', updateInfo)
+    mainWindow?.webContents.send('updater:start-download')
 
     const filePath = await updater.downloadUpdateSilently(
       updateInfo,
       (percent, status) => {
         console.log(`下载进度: ${percent}% - ${status}`)
+        mainWindow?.webContents.send('updater:download-progress', {
+          percent,
+          status,
+          transferred: 0,
+          total: updateInfo.downloads.windows?.size || updateInfo.downloads.mac_intel?.size || 0
+        })
       }
     )
 
     console.log('更新下载完成:', filePath)
+    downloadedFilePath = filePath
+    updateDownloaded = true
     // 通知渲染进程：更新已就绪，显示重启按钮
     mainWindow?.webContents.send('updater:update-downloaded', filePath)
   } catch (error: any) {
     console.error('静默下载更新失败:', error)
     mainWindow?.webContents.send('updater:error', error.message)
+  } finally {
+    isDownloading = false
   }
 }
 
@@ -4705,10 +4768,26 @@ ipcMain.handle('updater:downloadUpdate', async () => {
 // 安装更新
 ipcMain.handle('updater:quitAndInstall', async (_event, filePath: string) => {
   try {
+    // 停止定时检查，防止安装过程中文件被覆盖
+    if (updateCheckTimer) {
+      clearInterval(updateCheckTimer)
+      updateCheckTimer = null
+    }
+    isDownloading = false
+    updateDownloaded = false
+
     await updater.installUpdate(filePath)
     return true
   } catch (error: any) {
     console.error('安装更新失败:', error)
+    // 文件不完整，重新下载
+    if (currentUpdateInfo && error.message && error.message.includes('不完整')) {
+      console.log('安装包不完整，重新下载...')
+      updateDownloaded = false
+      isDownloading = false
+      await silentDownloadUpdate(currentUpdateInfo)
+      throw new Error('安装包不完整，已重新下载，请再次点击安装')
+    }
     throw new Error(error.message || '安装更新失败')
   }
 })

@@ -206,6 +206,28 @@ function killIMProcess() {
 export async function installUpdate(filePath: string): Promise<void> {
   const platform = process.platform
 
+  // 安装前校验文件完整性
+  if (!fs.existsSync(filePath)) {
+    throw new Error('安装包文件不存在，请重新下载')
+  }
+
+  const stats = fs.statSync(filePath)
+  console.log('安装包大小:', stats.size)
+
+  if (currentUpdateInfo) {
+    const downloadInfo = platform === 'win32'
+      ? currentUpdateInfo.downloads.windows
+      : process.arch === 'arm64'
+        ? currentUpdateInfo.downloads.mac_arm64
+        : currentUpdateInfo.downloads.mac_intel
+
+    if (downloadInfo && downloadInfo.size > 0) {
+      if (stats.size < downloadInfo.size) {
+        throw new Error(`安装包不完整（${stats.size}/${downloadInfo.size}），请重新下载`)
+      }
+    }
+  }
+
   console.log('自动运行安装包:', filePath)
 
   if (platform === 'win32') {
@@ -231,6 +253,76 @@ export async function installUpdate(filePath: string): Promise<void> {
   setTimeout(() => {
     app.quit()
   }, 500)
+}
+
+// 启动时清理临时目录中与当前版本号相同的安装包（更新完成后残留的旧文件）
+export function cleanOldUpdateFiles() {
+  try {
+    const tempDir = path.join(app.getPath('temp'), 'g-snowball-updates')
+    if (!fs.existsSync(tempDir)) return
+
+    const currentVersion = getCurrentVersion()
+    const files = fs.readdirSync(tempDir)
+    for (const file of files) {
+      // 只删除文件名中包含当前版本号的安装包
+      if (file.includes(currentVersion)) {
+        const filePath = path.join(tempDir, file)
+        try {
+          fs.unlinkSync(filePath)
+          console.log('清理当前版本残留安装包:', filePath)
+        } catch (e) {
+          // 文件可能被占用，忽略
+        }
+      }
+    }
+  } catch (e) {
+    console.log('清理临时目录失败:', e)
+  }
+}
+
+// 检查临时目录中是否已存在下载好的安装包（大小和MD5校验通过）
+export function checkExistingUpdate(updateInfo: any): string | null {
+  const platform = process.platform
+  let downloadInfo: { url: string; size: number; md5: string }
+
+  if (platform === 'win32') {
+    downloadInfo = updateInfo.downloads.windows
+  } else if (platform === 'darwin') {
+    downloadInfo = process.arch === 'arm64'
+      ? updateInfo.downloads.mac_arm64
+      : updateInfo.downloads.mac_intel
+  } else {
+    return null
+  }
+
+  const filename = path.basename(downloadInfo.url)
+  const tempDir = path.join(app.getPath('temp'), 'g-snowball-updates')
+  const filePath = path.join(tempDir, filename)
+
+  if (!fs.existsSync(filePath)) {
+    return null
+  }
+
+  const stats = fs.statSync(filePath)
+  if (stats.size !== downloadInfo.size) {
+    console.log(`本地安装包大小不匹配: ${stats.size} / ${downloadInfo.size}`)
+    return null
+  }
+
+  const fileMD5 = calculateMD5(filePath)
+  if (fileMD5 !== downloadInfo.md5) {
+    console.log('本地安装包MD5校验失败')
+    return null
+  }
+
+  console.log('本地已存在完整的安装包:', filePath)
+  return filePath
+}
+
+// 保存当前更新信息供安装时校验
+let currentUpdateInfo: any = null
+export function setCurrentUpdateInfo(info: any) {
+  currentUpdateInfo = info
 }
 
 // 下载更新到指定路径（不显示对话框）

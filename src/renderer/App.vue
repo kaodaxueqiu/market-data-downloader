@@ -78,6 +78,18 @@
               </h2>
             </div>
             <div class="header-right">
+              <!-- 更新下载进度（下载中显示） -->
+              <div v-if="updateDownloading" class="update-progress-wrapper">
+                <span class="update-progress-text">{{ updateDownloadPercent }}%</span>
+                <el-progress
+                  :percentage="updateDownloadPercent"
+                  :show-text="false"
+                  :stroke-width="6"
+                  style="width: 100px"
+                  status="warning"
+                />
+              </div>
+
               <!-- 更新已就绪按钮（静默下载完成后显示） -->
               <el-button
                 v-if="updateReady"
@@ -306,6 +318,9 @@ const activeSubscriptionCount = ref(0)
 // 更新已就绪（静默下载完成后置为true，显示重启按钮）
 const updateReady = ref(false)
 const updateFilePath = ref('')
+// 更新下载进度
+const updateDownloading = ref(false)
+const updateDownloadPercent = ref(0)
 
 // 定时器引用（用于清理）
 let statusRefreshTimer: NodeJS.Timeout | null = null
@@ -1138,11 +1153,27 @@ onMounted(async () => {
   window.electronAPI.on('updater:update-downloaded', (filePath: string) => {
     updateFilePath.value = filePath
     updateReady.value = true
+    updateDownloading.value = false
+    updateDownloadPercent.value = 0
     console.log('更新已就绪:', filePath)
+  })
+
+  // 监听下载进度
+  window.electronAPI.on('updater:download-progress', (data: any) => {
+    updateDownloading.value = true
+    updateDownloadPercent.value = data.percent || 0
+  })
+
+  // 监听下载开始
+  window.electronAPI.on('updater:start-download', () => {
+    updateDownloading.value = true
+    updateDownloadPercent.value = 0
   })
 
   window.electronAPI.on('updater:error', (error: any) => {
     console.error('更新下载失败:', error?.message || error)
+    updateDownloading.value = false
+    updateDownloadPercent.value = 0
   })
   
   // 使用setTimeout避免阻塞
@@ -1413,6 +1444,18 @@ onUnmounted(() => {
       display: flex;
       align-items: center;
       gap: 10px;
+
+      .update-progress-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        .update-progress-text {
+          font-size: 12px;
+          color: #e6a23c;
+          white-space: nowrap;
+        }
+      }
     }
 
     .window-controls {
