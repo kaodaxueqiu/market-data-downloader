@@ -1,15 +1,29 @@
 <template>
   <div class="api-key-management">
-    <!-- Tab 标签页 -->
-    <el-card>
-      <el-tabs v-model="activeTab" type="border-card" @tab-change="handleTabChange">
-        <!-- Tab 1: API Key 列表 -->
-        <el-tab-pane label="API Key列表" name="list">
-          <div class="tab-header">
-            <el-button type="primary" :icon="Plus" @click="showCreateDialog">
-              创建 API Key
-            </el-button>
-          </div>
+    <div class="api-key-inner">
+    <!-- Tab 标签页卡片 -->
+    <el-card class="nav-card" shadow="never" body-style="padding: 0;">
+      <div class="nav-bar">
+        <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+          <!-- Tab 1: API Key 列表 -->
+          <el-tab-pane label="API Key列表" name="list">
+          </el-tab-pane>
+
+          <el-tab-pane label="权限配置" name="permissions">
+          </el-tab-pane>
+
+          <el-tab-pane label="数据库配置" name="database">
+          </el-tab-pane>
+        </el-tabs>
+        <el-button v-if="activeTab === 'list'" type="primary" :icon="Plus" @click="showCreateDialog" class="nav-action">
+          创建 API Key
+        </el-button>
+      </div>
+    </el-card>
+
+    <!-- Tab 1: API Key 列表 -->
+    <el-card v-show="activeTab === 'list'" class="content-card" shadow="never">
+      <div class="tab-content">
       
       <!-- 加载中 -->
       <div v-if="loading" style="text-align: center; padding: 40px;">
@@ -28,10 +42,13 @@
       <el-table 
         v-else
         :data="apiKeys" 
+        height="100%"
         style="width: 100%"
         stripe
+        :header-cell-style="{ textAlign: 'center' }"
+        :cell-style="{ textAlign: 'center' }"
       >
-        <el-table-column label="名称" prop="name" min-width="120" />
+        <el-table-column label="名称" prop="name" width="100" />
         
         <el-table-column label="API Key" prop="apiKey" min-width="200">
           <template #default="{ row }">
@@ -133,85 +150,91 @@
           </template>
         </el-table-column>
       </el-table>
-        </el-tab-pane>
-        
-        <!-- Tab 2: 权限配置 -->
-        <el-tab-pane label="权限配置" name="permissions">
-          <!-- Loading 权限注册表 -->
-          <div v-if="!permissionRegistry && permissionLoading" style="text-align: center; padding: 60px;">
-            <el-icon class="is-loading" :size="50"><Loading /></el-icon>
-            <p style="margin-top: 15px; color: #909399; font-size: 16px;">正在加载系统权限...</p>
-          </div>
-          
-          <!-- 权限注册表加载完成 -->
-          <div v-else-if="permissionRegistry">
-            <!-- 用户选择器 -->
-            <div style="margin-bottom: 20px;">
-              <el-select 
-                v-model="selectedPermissionKey" 
-                placeholder="请选择要配置权限的用户"
-                filterable
-                clearable
-                style="width: 300px;"
-                @change="loadUserPermissions"
-              >
-                <el-option
-                  v-for="key in apiKeys"
-                  :key="key.id"
-                  :label="key.name"
-                  :value="key.id"
-                >
-                  <span>{{ key.name }}</span>
-                  <span style="margin-left: 10px; color: #909399; font-size: 12px;">
-                    {{ key.apiKey }}
-                  </span>
-                </el-option>
-              </el-select>
-              <span style="margin-left: 10px; color: #909399; font-size: 13px;">
-                {{ selectedPermissionKey ? '正在配置选中用户的权限' : '未选择用户，所有权限为未选中状态' }}
+      </div>
+    </el-card>
+    
+    <!-- Tab 2: 权限配置 - 控制区 -->
+    <el-card v-show="activeTab === 'permissions'" class="ctrl-card" shadow="never">
+      <div v-if="!permissionRegistry && permissionLoading" style="text-align: center; padding: 20px;">
+        <el-icon class="is-loading" :size="30"><Loading /></el-icon>
+        <p style="margin-top: 10px; color: #909399;">正在加载系统权限...</p>
+      </div>
+      <div v-else-if="permissionRegistry">
+        <!-- 用户选择器 -->
+        <div style="margin-bottom: 16px;">
+          <el-select 
+            v-model="selectedPermissionKey" 
+            placeholder="请选择要配置权限的用户"
+            filterable
+            clearable
+            style="width: 300px;"
+            @change="loadUserPermissions"
+          >
+            <el-option
+              v-for="key in apiKeys"
+              :key="key.id"
+              :label="key.name"
+              :value="key.id"
+            >
+              <span>{{ key.name }}</span>
+              <span style="margin-left: 10px; color: #909399; font-size: 12px;">
+                {{ key.apiKey }}
               </span>
-            </div>
-            
-            <!-- 分类标签 -->
-            <div class="permission-categories" style="margin-bottom: 20px;">
-              <!-- 菜单权限（固定） -->
-              <el-button
-                :type="activePermissionCategory === 'menu' ? 'primary' : ''"
-                @click="activePermissionCategory = 'menu'"
-              >
-                菜单权限 ({{ selectedMenuPermissions.length }})
-              </el-button>
-              
-              <!-- API权限分类（动态渲染） -->
-              <el-button
-                v-for="cat in apiCategories"
-                :key="cat.code"
-                :type="activePermissionCategory === cat.code ? 'primary' : ''"
-                @click="activePermissionCategory = cat.code"
-              >
-                {{ cat.name }} ({{ getSelectedInCategory(cat.code) }}/{{ getCategoryPermissions(cat.code).length }})
-              </el-button>
-              
-              <!-- 基础配置（固定） -->
-              <el-button
-                :type="activePermissionCategory === 'basic' ? 'primary' : ''"
-                @click="activePermissionCategory = 'basic'"
-              >
-                基础配置
-              </el-button>
-            </div>
-            
-            <!-- 权限内容展示区 -->
-            <el-card v-loading="permissionLoading">
-              <!-- 菜单权限（3级树形结构）-->
-              <div v-if="activePermissionCategory === 'menu'" style="padding: 20px;">
-                <div style="margin-bottom: 15px;">
-                  <el-button size="small" @click="selectAllMenuPermissions">全选</el-button>
-                  <el-button size="small" @click="unselectAllMenuPermissions">全不选</el-button>
-                  <el-button size="small" @click="expandAllMenus">全部展开</el-button>
-                  <el-button size="small" @click="collapseAllMenus">全部折叠</el-button>
+            </el-option>
+          </el-select>
+          <span style="margin-left: 10px; color: #909399; font-size: 13px;">
+            {{ selectedPermissionKey ? '正在配置选中用户的权限' : '未选择用户，所有权限为未选中状态' }}
+          </span>
+        </div>
+        
+        <!-- 分类标签 -->
+        <div class="permission-categories">
+          <el-button
+            :type="activePermissionCategory === 'menu' ? 'primary' : ''"
+            @click="activePermissionCategory = 'menu'"
+          >
+            菜单权限 ({{ selectedMenuPermissions.length }})
+          </el-button>
+          <el-button
+            v-for="cat in apiCategories"
+            :key="cat.code"
+            :type="activePermissionCategory === cat.code ? 'primary' : ''"
+            @click="activePermissionCategory = cat.code"
+          >
+            {{ cat.name }} ({{ getSelectedInCategory(cat.code) }}/{{ getCategoryPermissions(cat.code).length }})
+          </el-button>
+          <el-button
+            :type="activePermissionCategory === 'basic' ? 'primary' : ''"
+            @click="activePermissionCategory = 'basic'"
+          >
+            基础配置
+          </el-button>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- Tab 2: 权限配置 - 内容区 -->
+    <el-card v-show="activeTab === 'permissions'" class="content-card-auto" shadow="never">
+      <div v-if="permissionRegistry" class="perm-container">
+              <!-- 操作按钮区 -->
+              <div class="perm-action-bar">
+                <el-button v-if="activePermissionCategory === 'menu'" size="small" @click="selectAllMenuPermissions">全选</el-button>
+                <el-button v-if="activePermissionCategory === 'menu'" size="small" @click="unselectAllMenuPermissions">全不选</el-button>
+                <el-button v-if="activePermissionCategory === 'menu'" size="small" @click="expandAllMenus">全部展开</el-button>
+                <el-button v-if="activePermissionCategory === 'menu'" size="small" @click="collapseAllMenus">全部折叠</el-button>
+                <el-button v-if="apiCategories.some(c => c.code === activePermissionCategory)" size="small" @click="selectAllCategoryPermissions(activePermissionCategory)">全选</el-button>
+                <el-button v-if="apiCategories.some(c => c.code === activePermissionCategory)" size="small" @click="unselectAllCategoryPermissions(activePermissionCategory)">全不选</el-button>
+                <div class="perm-action-right">
+                  <el-button @click="resetCurrentPermissions">重置</el-button>
+                  <el-button type="primary" @click="saveCurrentPermissions">保存</el-button>
                 </div>
-                
+              </div>
+
+              <!-- 内容滚动区 -->
+              <el-scrollbar class="perm-scroll">
+
+              <!-- 菜单权限（3级树形结构）-->
+              <div v-if="activePermissionCategory === 'menu'" style="padding: 0 20px 20px;">
                 <el-tree
                   ref="menuTreeRef"
                   :data="allMenusConfig"
@@ -238,24 +261,14 @@
                     已选择 <strong style="color: #409eff;">{{ selectedMenuPermissions.length }}</strong> 个菜单
                   </div>
                 </div>
-                
-                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; text-align: right;">
-                  <el-button @click="resetMenuPermissions">重置</el-button>
-                  <el-button type="primary" @click="saveMenuPermissions">保存菜单权限</el-button>
-                </div>
               </div>
               
               <!-- API权限分类（动态渲染） -->
               <div 
                 v-else-if="apiCategories.some(c => c.code === activePermissionCategory)" 
-                style="padding: 20px;"
+                style="padding: 0 20px 20px;"
               >
-                <div style="margin-bottom: 15px;">
-                  <el-button size="small" @click="selectAllCategoryPermissions(activePermissionCategory)">全选</el-button>
-                  <el-button size="small" @click="unselectAllCategoryPermissions(activePermissionCategory)">全不选</el-button>
-                </div>
-                
-                <el-table :data="getCategoryPermissions(activePermissionCategory)" style="width: 100%">
+                <el-table :data="getCategoryPermissions(activePermissionCategory)" style="width: 100%" :header-cell-style="{ textAlign: 'center' }" :cell-style="{ textAlign: 'center' }">
                   <el-table-column width="60">
                     <template #default="{ row }">
                       <el-checkbox 
@@ -290,15 +303,10 @@
                     </template>
                   </el-table-column>
                 </el-table>
-                
-                <div style="margin-top: 20px; padding: 20px; border-top: 1px solid #eee; text-align: right;">
-                  <el-button @click="resetApiPermissions">重置</el-button>
-                  <el-button type="primary" @click="saveApiPermissions">保存{{ getCategoryDisplayName(activePermissionCategory) }}</el-button>
-                </div>
               </div>
 
               <!-- 基础配置 -->
-              <div v-else-if="activePermissionCategory === 'basic'" style="padding: 30px;">
+              <div v-else-if="activePermissionCategory === 'basic'" style="padding: 20px;">
                 <el-form :model="basicConfig" label-width="120px" style="max-width: 600px;">
                   <el-form-item label="用户名称">
                     <el-input v-model="basicConfig.name" placeholder="请输入用户名称" />
@@ -345,54 +353,50 @@
                     </div>
                   </el-form-item>
                 </el-form>
-                
-                <div style="margin-top: 30px; text-align: right;">
-                  <el-button size="large" @click="resetBasicConfig">重置</el-button>
-                  <el-button size="large" type="primary" @click="saveBasicConfig">保存基础配置</el-button>
-                </div>
               </div>
-            </el-card>
-          </div>
-        </el-tab-pane>
-        
-        <!-- Tab 3: 数据库配置 -->
-        <el-tab-pane label="数据库配置" name="database">
-          <!-- 用户选择器 -->
-          <div style="margin-bottom: 20px;">
-            <el-select 
-              v-model="selectedDatabaseKey" 
-              placeholder="请选择要配置数据库的用户"
-              filterable
-              clearable
-              style="width: 300px;"
-              @change="loadDatabaseConfig"
-            >
-              <el-option
-                v-for="key in apiKeys"
-                :key="key.id"
-                :label="key.name"
-                :value="key.id"
-              >
-                <span>{{ key.name }}</span>
-                <span style="margin-left: 10px; color: #909399; font-size: 12px;">
-                  {{ key.apiKey }}
-                </span>
-              </el-option>
-            </el-select>
-          </div>
-          
+              </el-scrollbar>
+      </div>
+    </el-card>
+    
+    <!-- Tab 3: 数据库配置 - 控制区 -->
+    <el-card v-show="activeTab === 'database'" class="ctrl-card" shadow="never">
+      <!-- 用户选择器 -->
+      <div style="margin-bottom: 16px;">
+        <el-select 
+          v-model="selectedDatabaseKey" 
+          placeholder="请选择要配置数据库的用户"
+          filterable
+          clearable
+          style="width: 300px;"
+          @change="loadDatabaseConfig"
+        >
+          <el-option
+            v-for="key in apiKeys"
+            :key="key.id"
+            :label="key.name"
+            :value="key.id"
+          >
+            <span>{{ key.name }}</span>
+            <span style="margin-left: 10px; color: #909399; font-size: 12px;">
+              {{ key.apiKey }}
+            </span>
+          </el-option>
+        </el-select>
+      </div>
+    </el-card>
+
+    <!-- Tab 3: 数据库配置 - 内容区 -->
+    <el-card v-show="activeTab === 'database'" class="content-card-auto db-content-card" shadow="never">
           <!-- 数据库配置表单 -->
-          <div v-if="selectedDatabaseKey && databaseConfig" v-loading="databaseLoading">
+          <div v-if="selectedDatabaseKey && databaseConfig" v-loading="databaseLoading" class="db-form-wrap">
             <!-- PostgreSQL配置 -->
-            <el-card style="margin-bottom: 20px;">
-              <template #header>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <span style="font-weight: 600; font-size: 16px;">PostgreSQL 配置</span>
-                  <el-tag type="success" size="small">关系型数据库</el-tag>
-                </div>
-              </template>
+            <div class="db-section" style="margin-bottom: 20px;">
+              <div class="db-section-header" style="margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0;">
+                <span style="font-weight: 600; font-size: 16px;">PostgreSQL 配置</span>
+                <el-tag type="success" size="small">关系型数据库</el-tag>
+              </div>
               
-              <el-form :model="databaseConfig" label-width="120px">
+              <el-form :model="databaseConfig" label-width="120px" style="margin-top: 20px;">
                 <el-form-item label="用户名">
                   <el-input 
                     v-model="databaseConfig.postgresql_username" 
@@ -410,18 +414,16 @@
                   />
                 </el-form-item>
               </el-form>
-            </el-card>
+            </div>
             
             <!-- ClickHouse配置 -->
-            <el-card style="margin-bottom: 20px;">
-              <template #header>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <span style="font-weight: 600; font-size: 16px;">ClickHouse 配置</span>
-                  <el-tag type="warning" size="small">列式数据库</el-tag>
-                </div>
-              </template>
+            <div class="db-section" style="margin-bottom: 20px;">
+              <div class="db-section-header" style="margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0;">
+                <span style="font-weight: 600; font-size: 16px;">ClickHouse 配置</span>
+                <el-tag type="warning" size="small">列式数据库</el-tag>
+              </div>
               
-              <el-form :model="databaseConfig" label-width="120px">
+              <el-form :model="databaseConfig" label-width="120px" style="margin-top: 20px;">
                 <el-form-item label="用户名">
                   <el-input 
                     v-model="databaseConfig.clickhouse_username" 
@@ -439,7 +441,7 @@
                   />
                 </el-form-item>
               </el-form>
-            </el-card>
+            </div>
             
             <!-- 保存按钮 -->
             <div style="text-align: right;">
@@ -456,9 +458,8 @@
             description="请选择要配置数据库的用户"
             :image-size="200"
           />
-        </el-tab-pane>
-      </el-tabs>
     </el-card>
+    </div>
     
     <!-- 查看详情对话框 -->
     <el-dialog 
@@ -757,7 +758,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { 
   Plus,
@@ -887,6 +888,17 @@ const handleMenuCheck = () => {
     selectedMenuPermissions.value = menuTreeRef.value.getCheckedKeys()
   }
 }
+
+// 切换回菜单权限时，重新设置树的选中状态
+watch(activePermissionCategory, (val) => {
+  if (val === 'menu' && selectedMenuPermissions.value.length > 0) {
+    setTimeout(() => {
+      if (menuTreeRef.value) {
+        menuTreeRef.value.setCheckedKeys(selectedMenuPermissions.value)
+      }
+    }, 200)
+  }
+})
 
 // 展开所有菜单节点
 const expandAllMenus = () => {
@@ -1467,6 +1479,19 @@ const unselectAllCategoryPermissions = (category: string) => {
   selectedApiPermissions.value = selectedApiPermissions.value.filter(p => !categoryResources.includes(p))
 }
 
+// 统一重置/保存
+const resetCurrentPermissions = () => {
+  if (activePermissionCategory.value === 'menu') resetMenuPermissions()
+  else if (activePermissionCategory.value === 'basic') resetBasicConfig()
+  else if (apiCategories.value.some(c => c.code === activePermissionCategory.value)) resetApiPermissions()
+}
+
+const saveCurrentPermissions = () => {
+  if (activePermissionCategory.value === 'menu') saveMenuPermissions()
+  else if (activePermissionCategory.value === 'basic') saveBasicConfig()
+  else if (apiCategories.value.some(c => c.code === activePermissionCategory.value)) saveApiPermissions()
+}
+
 // 重置菜单权限（恢复到原始状态）
 const resetMenuPermissions = () => {
   selectedMenuPermissions.value = [...(permissionConfig.value?.menu_permissions || [])]
@@ -1841,8 +1866,167 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .api-key-management {
-  :deep(.el-card__body) {
-    padding: 0;
+  height: calc(100vh - 60px - 24px - 40px);
+  overflow: hidden;
+
+  .api-key-inner {
+    padding: 10px 16px 10px 10px;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .nav-card {
+    margin-bottom: 12px;
+    border-radius: 8px;
+
+    .nav-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-right: 16px;
+      min-height: 56px;
+    }
+
+    .nav-action {
+      flex-shrink: 0;
+    }
+
+    :deep(.el-tabs) {
+      flex: 1;
+    }
+
+    :deep(.el-tabs__header) {
+      margin: 0;
+    }
+
+    :deep(.el-tabs__nav) {
+      padding-left: 16px;
+    }
+
+    :deep(.el-tabs__content) {
+      display: none;
+    }
+
+    :deep(.el-tabs__header) {
+      border-bottom: none;
+    }
+
+    :deep(.el-tabs__nav-wrap::after) {
+      display: none;
+    }
+  }
+
+  .content-card {
+    border-radius: 8px;
+    flex: 1;
+    overflow: hidden;
+
+    :deep(.el-card__body) {
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-scroll-inner {
+      padding: 4px 16px 4px 4px;
+    }
+
+    .db-section {
+      border: 1px solid #ebeef5;
+      border-radius: 8px;
+      padding: 16px 20px;
+
+      .db-section-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 24px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      :deep(.el-form-item) {
+        margin-top: 8px;
+      }
+    }
+  }
+
+  .ctrl-card {
+    margin-bottom: 12px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    border: 1px solid #ebeef5;
+    position: relative;
+    z-index: 2;
+  }
+
+  .content-card-auto {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid #ebeef5;
+    position: relative;
+    z-index: 1;
+
+    :deep(.el-card__body) {
+      height: 100%;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .perm-container {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .perm-action-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      flex-shrink: 0;
+
+      .perm-action-right {
+        margin-left: auto;
+      }
+    }
+
+    .perm-scroll {
+      flex: 1;
+      min-height: 0;
+    }
+  }
+
+  .db-content-card {
+    :deep(.el-card__body) {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .db-form-wrap {
+      padding: 0;
+    }
+
+    :deep(.el-form-item) {
+      margin-top: 20px !important;
+    }
+
+    :deep(.el-form-item:first-child) {
+      margin-top: 0 !important;
+    }
   }
   
   :deep(.el-tabs--border-card) {

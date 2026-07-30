@@ -447,7 +447,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .opensearch-detail-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
@@ -464,14 +464,14 @@ onUnmounted(() => {
         h2 {
           margin: 0 0 4px 0;
           font-size: 20px;
-          color: #4facfe;
+          color: #303133;
           font-weight: 600;
         }
 
         .subtitle {
           margin: 0;
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
       }
     }
@@ -482,7 +482,7 @@ onUnmounted(() => {
         align-items: center;
         gap: 8px;
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
 
         .status-dot {
           width: 8px;
@@ -519,21 +519,21 @@ onUnmounted(() => {
     margin-bottom: 20px;
 
     .health-card {
-      background: rgba(50, 62, 85, 0.6);
+      background: #fff;
       padding: 16px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid #e4e7ed;
 
       .card-label {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 8px;
       }
 
       .card-value {
         font-size: 20px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
         margin-bottom: 4px;
 
         &.healthy {
@@ -547,13 +547,13 @@ onUnmounted(() => {
         .value-sub {
           font-size: 13px;
           font-weight: normal;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
       }
 
       .card-sub {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.45);
+        color: #909399;
 
         .warning-text {
           color: #E6A23C;
@@ -574,15 +574,15 @@ onUnmounted(() => {
   }
 
   .panel {
-    background: rgba(50, 62, 85, 0.6);
+    background: #fff;
     padding: 20px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -598,13 +598,13 @@ onUnmounted(() => {
 
         .label {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
 
         .value {
           font-size: 14px;
           font-weight: 600;
-          color: #ffffff;
+          color: #303133;
         }
       }
     }
@@ -624,12 +624,12 @@ onUnmounted(() => {
           .node-name {
             font-size: 13px;
             font-weight: 600;
-            color: rgba(255, 255, 255, 0.85);
+            color: #303133;
           }
 
           .node-type {
             font-size: 11px;
-            color: rgba(255, 255, 255, 0.45);
+            color: #909399;
           }
         }
 
@@ -645,11 +645,11 @@ onUnmounted(() => {
             font-size: 12px;
 
             .metric-label {
-              color: rgba(255, 255, 255, 0.55);
+              color: #909399;
             }
 
             .metric-value {
-              color: rgba(255, 255, 255, 0.85);
+              color: #606266;
             }
 
             .progress-wrapper {
@@ -662,7 +662,7 @@ onUnmounted(() => {
               .progress-bar {
                 width: 100px;
                 height: 6px;
-                background: rgba(255, 255, 255, 0.1);
+                background: #f5f7fa;
                 border-radius: 3px;
                 overflow: hidden;
 
@@ -686,7 +686,7 @@ onUnmounted(() => {
 
               .progress-text {
                 font-size: 12px;
-                color: rgba(255, 255, 255, 0.85);
+                color: #606266;
                 min-width: 40px;
                 text-align: right;
               }
@@ -722,19 +722,19 @@ onUnmounted(() => {
 
         .node-name {
           font-size: 12px;
-          color: rgba(255, 255, 255, 0.65);
+          color: #606266;
         }
 
         .jvm-percent,
         .disk-percent {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.85);
+          color: #303133;
         }
       }
 
       .node-name {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.65);
+        color: #606266;
       }
 
       .cpu-value {
@@ -757,7 +757,7 @@ onUnmounted(() => {
       .progress-bar {
         width: 100%;
         height: 6px;
-        background: rgba(255, 255, 255, 0.1);
+        background: #f5f7fa;
         border-radius: 3px;
         overflow: hidden;
         margin-bottom: 6px;
@@ -783,7 +783,7 @@ onUnmounted(() => {
       .jvm-detail,
       .disk-detail {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.45);
+        color: #909399;
       }
     }
 
@@ -795,36 +795,14 @@ onUnmounted(() => {
   }
 
   .indices-table {
-    background: rgba(50, 62, 85, 0.4);
-    border-radius: 10px;
+    background: #fff;
+    border-radius: 8px;
     padding: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-
-    :deep(.el-table) {
-      background-color: transparent !important;
-
-      &::before {
-        display: none !important;
-      }
-    }
-
-    :deep(.el-table tr),
-    :deep(.el-table td.el-table__cell),
-    :deep(.el-table__body-wrapper) {
-      background-color: transparent !important;
-      border-bottom: none !important;
-      color: rgba(255, 255, 255, 0.85);
-    }
-
-    :deep(.el-table th.el-table__cell) {
-      background-color: rgba(50, 62, 85, 0.6) !important;
-      color: rgba(255, 255, 255, 0.8) !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
+    border: 1px solid #e4e7ed;
 
     .index-name {
       font-family: 'Courier New', monospace;
-      color: #4facfe;
+      color: #409EFF;
     }
   }
 
@@ -836,15 +814,15 @@ onUnmounted(() => {
   }
 
   .hot-queries-panel {
-    background: rgba(50, 62, 85, 0.6);
+    background: #fff;
     padding: 20px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -852,7 +830,7 @@ onUnmounted(() => {
       text-align: center;
       padding: 40px;
       font-size: 14px;
-      color: rgba(255, 255, 255, 0.45);
+      color: #909399;
     }
   }
 

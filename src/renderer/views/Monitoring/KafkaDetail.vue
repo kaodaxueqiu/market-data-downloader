@@ -505,7 +505,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .kafka-detail-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
@@ -523,14 +523,14 @@ onUnmounted(() => {
         h2 {
           margin: 0;
           font-size: 20px;
-          color: #4facfe;
+          color: #303133;
           font-weight: 600;
         }
 
         .subtitle {
           margin: 3px 0 0 0;
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
       }
     }
@@ -541,7 +541,7 @@ onUnmounted(() => {
         align-items: center;
         gap: 8px;
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
 
         .status-dot {
           width: 8px;
@@ -573,22 +573,22 @@ onUnmounted(() => {
     margin-bottom: 20px;
 
     .stat-card {
-      background: rgba(50, 62, 85, 0.6);
+      background: #fff;
       padding: 16px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid #e4e7ed;
 
       .stat-label {
         display: block;
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 8px;
       }
 
       .stat-value {
         font-size: 24px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
 
         &.healthy {
           color: #67C23A;
@@ -612,15 +612,15 @@ onUnmounted(() => {
   }
 
   .panel {
-    background: rgba(50, 62, 85, 0.6);
+    background: #fff;
     padding: 20px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -636,7 +636,7 @@ onUnmounted(() => {
 
         .topic-name {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.7);
+          color: #606266;
         }
 
         .topic-rate {
@@ -666,55 +666,17 @@ onUnmounted(() => {
     .el-input {
       flex: 1;
     }
-
-    :deep(.el-input__wrapper),
-    :deep(.el-select .el-input__wrapper) {
-      background: rgba(50, 62, 85, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: none;
-    }
-
-    :deep(.el-input__inner) {
-      color: #ffffff;
-    }
   }
 
   .topics-table {
-    background: rgba(50, 62, 85, 0.4);
-    border-radius: 10px;
+    background: #fff;
+    border-radius: 8px;
     padding: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-
-    :deep(.el-table) {
-      background-color: transparent !important;
-
-      &::before {
-        display: none !important;
-      }
-    }
-
-    :deep(.el-table tr),
-    :deep(.el-table td.el-table__cell),
-    :deep(.el-table__body-wrapper) {
-      background-color: transparent !important;
-      border-bottom: none !important;
-      color: rgba(255, 255, 255, 0.85);
-    }
-
-    :deep(.el-table th.el-table__cell) {
-      background-color: rgba(50, 62, 85, 0.6) !important;
-      color: rgba(255, 255, 255, 0.8) !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
-
-    :deep(.el-tag) {
-      background: transparent !important;
-      border: 1px solid !important;
-    }
+    border: 1px solid #e4e7ed;
 
     .topic-name-cell {
       font-family: 'Courier New', monospace;
-      color: #4facfe;
+      color: #409EFF;
     }
 
     .rate-active {
@@ -723,7 +685,7 @@ onUnmounted(() => {
     }
 
     .rate-inactive {
-      color: #606266;
+      color: #909399;
     }
 
     .lag-good {
@@ -759,10 +721,10 @@ onUnmounted(() => {
   .consumer-view,
   .producer-view {
     .consumer-group-card {
-      background: rgba(50, 62, 85, 0.6);
+      background: #fff;
       padding: 20px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid #e4e7ed;
 
       .group-header {
         display: flex;
@@ -773,7 +735,7 @@ onUnmounted(() => {
         h4 {
           margin: 0;
           font-size: 16px;
-          color: #ffffff;
+          color: #303133;
         }
       }
 
@@ -786,14 +748,14 @@ onUnmounted(() => {
         .stat-item {
           .label {
             font-size: 13px;
-            color: rgba(255, 255, 255, 0.55);
+            color: #909399;
           }
 
           .value {
             margin-left: 8px;
             font-size: 14px;
             font-weight: 600;
-            color: #ffffff;
+            color: #303133;
 
             &.warning {
               color: #E6A23C;
@@ -805,7 +767,7 @@ onUnmounted(() => {
       .group-topics {
         .topics-label {
           font-size: 12px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
           margin-bottom: 8px;
         }
 
@@ -829,13 +791,13 @@ onUnmounted(() => {
 
         .label {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
 
         .value {
           font-size: 14px;
           font-weight: 600;
-          color: #ffffff;
+          color: #303133;
 
           &.healthy {
             color: #67C23A;
@@ -860,7 +822,7 @@ onUnmounted(() => {
 
         .topic-name {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.7);
+          color: #606266;
           width: 120px;
           flex-shrink: 0;
         }
@@ -868,7 +830,7 @@ onUnmounted(() => {
         .progress-bar {
           flex: 1;
           height: 8px;
-          background: rgba(255, 255, 255, 0.1);
+          background: #f5f7fa;
           border-radius: 4px;
           overflow: hidden;
 
@@ -882,7 +844,7 @@ onUnmounted(() => {
         .rate-value {
           font-size: 13px;
           font-weight: 600;
-          color: #ffffff;
+          color: #303133;
           width: 80px;
           text-align: right;
         }

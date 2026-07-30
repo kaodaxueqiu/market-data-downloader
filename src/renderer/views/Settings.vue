@@ -1,7 +1,9 @@
 <template>
   <div class="settings-page">
+    <el-scrollbar>
+    <div class="settings-inner">
     <!-- API Key配置 -->
-    <el-card class="settings-card">
+    <el-card class="settings-card" shadow="never">
       <template #header>
         <span>API Key 配置</span>
       </template>
@@ -70,7 +72,7 @@
     </el-card>
     
     <!-- 下载设置 -->
-    <el-card class="settings-card">
+    <el-card class="settings-card" shadow="never">
       <template #header>
         <span>下载设置</span>
       </template>
@@ -118,7 +120,7 @@
     </el-card>
     
     <!-- 界面设置 -->
-    <el-card class="settings-card">
+    <el-card class="settings-card" shadow="never">
       <template #header>
         <span>界面设置</span>
       </template>
@@ -142,7 +144,7 @@
     </el-card>
     
     <!-- 关于和更新 -->
-    <el-card class="settings-card">
+    <el-card class="settings-card" shadow="never">
       <template #header>
         <span>关于和更新</span>
       </template>
@@ -196,6 +198,8 @@
         </el-form-item>
       </el-form>
     </el-card>
+    </div>
+    </el-scrollbar>
   </div>
 </template>
 
@@ -580,8 +584,18 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .settings-page {
+  height: calc(100vh - 60px - 24px - 40px);
+  overflow: hidden;
+
+  .settings-inner {
+    padding: 10px 16px 10px 10px;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+
   .settings-card {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
+    border-radius: 8px;
     
     .card-header {
       display: flex;

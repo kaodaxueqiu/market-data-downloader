@@ -381,7 +381,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .market-detail-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
@@ -414,7 +414,7 @@ onUnmounted(() => {
         h2 {
           margin: 0;
           font-size: 20px;
-          color: #4facfe;
+          color: #303133;
           font-weight: 600;
         }
 
@@ -422,7 +422,7 @@ onUnmounted(() => {
           font-size: 12px;
           font-weight: 500;
           letter-spacing: 0.02em;
-          color: rgba(79, 172, 254, 0.9);
+          color: #409EFF;
         }
       }
     }
@@ -434,7 +434,7 @@ onUnmounted(() => {
 
       .update-time {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
       }
     }
   }
@@ -446,22 +446,22 @@ onUnmounted(() => {
     margin-bottom: 20px;
 
     .stat-item {
-      background: rgba(50, 62, 85, 0.6);
+      background: #fff;
       padding: 14px 16px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid #e4e7ed;
 
       .stat-label {
         display: block;
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 6px;
       }
 
       .stat-value {
         font-size: 20px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
 
         &.healthy {
           color: #67C23A;
@@ -470,7 +470,7 @@ onUnmounted(() => {
         .unit {
           font-size: 12px;
           font-weight: normal;
-          color: rgba(255, 255, 255, 0.45);
+          color: #909399;
         }
       }
     }
@@ -478,16 +478,6 @@ onUnmounted(() => {
 
   .search-bar {
     margin-bottom: 20px;
-
-    :deep(.el-input__wrapper) {
-      background: rgba(50, 62, 85, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: none;
-    }
-
-    :deep(.el-input__inner) {
-      color: #ffffff;
-    }
   }
 
   .subscription-grid {
@@ -497,24 +487,23 @@ onUnmounted(() => {
   }
 
   .subscription-card {
-    background: rgba(50, 62, 85, 0.6);
+    background: #fff;
     border-radius: 8px;
     padding: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
     display: flex;
     gap: 16px;
     transition: all 0.3s ease;
 
     &:hover {
-      background: rgba(55, 68, 95, 0.7);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
       transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
     }
 
     .card-left {
       width: 140px;
       padding-right: 16px;
-      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      border-right: 1px solid #e4e7ed;
 
       .subscription-header {
         margin-bottom: 16px;
@@ -522,14 +511,14 @@ onUnmounted(() => {
         .sub-label {
           display: block;
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.45);
+          color: #909399;
           margin-bottom: 4px;
         }
 
         .sub-name {
           margin: 0 0 6px 0;
           font-size: 14px;
-          color: #ffffff;
+          color: #303133;
           font-weight: 600;
           line-height: 1.3;
         }
@@ -540,7 +529,7 @@ onUnmounted(() => {
           font-size: 11px;
           font-weight: 500;
           letter-spacing: 0.02em;
-          color: rgba(79, 172, 254, 0.9);
+          color: #409EFF;
         }
       }
 
@@ -555,12 +544,12 @@ onUnmounted(() => {
           font-size: 12px;
 
           .info-label {
-            color: rgba(255, 255, 255, 0.55);
+            color: #909399;
           }
 
           .info-value {
             font-weight: 600;
-            color: #ffffff;
+            color: #303133;
 
             &.mode {
               color: #409EFF;
@@ -594,7 +583,7 @@ onUnmounted(() => {
           .process-name {
             font-size: 13px;
             font-weight: 600;
-            color: rgba(255, 255, 255, 0.85);
+            color: #303133;
           }
 
           .process-status {
@@ -628,7 +617,7 @@ onUnmounted(() => {
 
             .metric-text {
               font-size: 11px;
-              color: rgba(255, 255, 255, 0.7);
+              color: #606266;
 
               &.port-text {
                 margin-left: auto;

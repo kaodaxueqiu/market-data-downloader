@@ -292,11 +292,15 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .redis-detail-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -319,7 +323,7 @@ onUnmounted(() => {
         h2 {
           margin: 0;
           font-size: 20px;
-          color: #4facfe;
+          color: #303133;
           font-weight: 600;
         }
       }
@@ -332,34 +336,55 @@ onUnmounted(() => {
 
       .update-time {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
       }
     }
   }
 
     .instances-grid {
+      flex: 1;
+      overflow-y: auto;
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 16px;
+      align-content: start;
+      padding-right: 8px;
+
+      // 全局统一滚动条：默认隐藏，hover 显示（跟随侧边栏样式）
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+
+      &:hover {
+        scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+      }
+
+      &::-webkit-scrollbar {
+        width: 4px;
+      }
+      &::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 2px;
+      }
+      &:hover::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.1);
+      }
     }
 
   .instance-card {
-    background: rgba(50, 62, 85, 0.6);
+    background: #fff;
     border-radius: 8px;
     padding: 14px 16px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
     transition: all 0.3s ease;
     cursor: pointer;
-    backdrop-filter: blur(10px);
 
     &:hover {
       transform: translateY(-2px);
-      background: rgba(55, 68, 95, 0.7);
-      border-color: rgba(79, 172, 254, 0.4);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+      border-color: #409EFF;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 
       .detail-link {
-        color: #4facfe;
+        color: #409EFF;
       }
     }
 
@@ -393,7 +418,7 @@ onUnmounted(() => {
         .instance-name {
           font-size: 15px;
           font-weight: 600;
-          color: #4facfe;
+          color: #303133;
         }
       }
 
@@ -431,7 +456,7 @@ onUnmounted(() => {
         .instance-port {
           font-family: 'Courier New', monospace;
           font-size: 12px;
-          color: rgba(255, 255, 255, 0.5);
+          color: #909399;
         }
       }
     }
@@ -439,11 +464,11 @@ onUnmounted(() => {
     .card-body {
       .instance-purpose {
         padding: 6px 10px;
-        background: rgba(79, 172, 254, 0.08);
+        background: #ecf5ff;
         border-radius: 4px;
         margin-bottom: 10px;
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.8);
+        color: #606266;
         line-height: 1.4;
       }
 
@@ -459,7 +484,7 @@ onUnmounted(() => {
 
           .metric-label {
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.55);
+            color: #909399;
           }
 
           .metric-value {
@@ -470,7 +495,7 @@ onUnmounted(() => {
             .metric-unit {
               font-size: 11px;
               font-weight: normal;
-              color: rgba(255, 255, 255, 0.45);
+              color: #909399;
               margin-left: 3px;
             }
           }
@@ -481,11 +506,11 @@ onUnmounted(() => {
     .card-footer {
       padding-top: 10px;
       margin-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: 1px solid #e4e7ed;
 
       .detail-link {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.5);
+        color: #909399;
         transition: color 0.3s ease;
       }
     }

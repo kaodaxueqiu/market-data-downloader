@@ -449,7 +449,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .indexer-detail-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
@@ -466,14 +466,14 @@ onUnmounted(() => {
         h2 {
           margin: 0 0 4px 0;
           font-size: 20px;
-          color: #4facfe;
+          color: #303133;
           font-weight: 600;
         }
 
         .subtitle {
           margin: 0;
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
       }
     }
@@ -484,7 +484,7 @@ onUnmounted(() => {
         align-items: center;
         gap: 8px;
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
 
         .status-dot {
           width: 8px;
@@ -516,22 +516,22 @@ onUnmounted(() => {
     margin-bottom: 20px;
 
     .stat-card {
-      background: rgba(50, 62, 85, 0.6);
+      background: #fff;
       padding: 16px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid #e4e7ed;
 
       .stat-label {
         display: block;
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 8px;
       }
 
       .stat-value {
         font-size: 20px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
 
         &.healthy {
           color: #67C23A;
@@ -552,7 +552,7 @@ onUnmounted(() => {
 
       .stat-sub {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.45);
+        color: #909399;
         margin-top: 4px;
       }
     }
@@ -566,15 +566,15 @@ onUnmounted(() => {
   }
 
   .panel {
-    background: rgba(50, 62, 85, 0.6);
+    background: #fff;
     padding: 20px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -590,17 +590,17 @@ onUnmounted(() => {
 
         .label {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
 
         .value {
           font-size: 14px;
           font-weight: 600;
-          color: #ffffff;
+          color: #303133;
 
           &.code {
             font-family: 'Courier New', monospace;
-            color: #4facfe;
+            color: #409EFF;
           }
         }
       }
@@ -614,16 +614,16 @@ onUnmounted(() => {
   .health-panel,
   .throughput-panel,
   .advantages-panel {
-    background: rgba(50, 62, 85, 0.6);
+    background: #fff;
     padding: 20px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
     margin-bottom: 20px;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
   }
@@ -636,18 +636,18 @@ onUnmounted(() => {
     .buffer-item {
       .buffer-label {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 8px;
       }
 
       .buffer-value {
         font-size: 14px;
-        color: rgba(255, 255, 255, 0.85);
+        color: #606266;
         margin-bottom: 6px;
 
         &.code {
           font-family: 'Courier New', monospace;
-          background: rgba(0, 0, 0, 0.2);
+          background: #f5f7fa;
           padding: 8px;
           border-radius: 4px;
           font-size: 12px;
@@ -673,7 +673,7 @@ onUnmounted(() => {
 
       .buffer-sub {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.45);
+        color: #909399;
       }
     }
   }
@@ -688,14 +688,14 @@ onUnmounted(() => {
 
       .stat-label {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 8px;
       }
 
       .stat-value {
         font-size: 20px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
 
         &.healthy {
           color: #67C23A;
@@ -722,14 +722,14 @@ onUnmounted(() => {
 
       .status-label {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 12px;
       }
 
       .status-value {
         font-size: 48px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
         margin-bottom: 8px;
 
         &.small {
@@ -740,7 +740,7 @@ onUnmounted(() => {
         &.code {
           font-family: 'Courier New', monospace;
           font-size: 13px;
-          background: rgba(0, 0, 0, 0.3);
+          background: #f5f7fa;
           padding: 12px;
           border-radius: 6px;
         }
@@ -760,7 +760,7 @@ onUnmounted(() => {
 
       .status-sub {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.45);
+        color: #909399;
       }
     }
   }
@@ -771,20 +771,20 @@ onUnmounted(() => {
     gap: 20px;
 
     .strategy-item {
-      background: rgba(0, 0, 0, 0.2);
+      background: #f5f7fa;
       padding: 16px;
       border-radius: 6px;
 
       .strategy-title {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.75);
+        color: #303133;
         font-weight: 600;
         margin-bottom: 10px;
       }
 
       .strategy-content {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.85);
+        color: #606266;
         line-height: 1.6;
 
         &.code {
@@ -795,7 +795,7 @@ onUnmounted(() => {
 
       .strategy-desc {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-top: 8px;
         line-height: 1.6;
       }
@@ -847,7 +847,7 @@ onUnmounted(() => {
 
       .health-desc {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.65);
+        color: #606266;
       }
     }
   }
@@ -858,21 +858,21 @@ onUnmounted(() => {
     gap: 20px;
 
     .throughput-card {
-      background: rgba(0, 0, 0, 0.2);
+      background: #f5f7fa;
       padding: 20px;
       border-radius: 8px;
       text-align: center;
 
       .throughput-label {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 12px;
       }
 
       .throughput-value {
         font-size: 36px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
         margin-bottom: 4px;
 
         &.healthy {
@@ -886,13 +886,13 @@ onUnmounted(() => {
 
       .throughput-unit {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.45);
+        color: #909399;
         margin-bottom: 12px;
       }
 
       .throughput-desc {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         line-height: 1.5;
       }
     }
@@ -904,7 +904,7 @@ onUnmounted(() => {
     gap: 16px;
 
     .advantage-card {
-      background: rgba(0, 0, 0, 0.2);
+      background: #f5f7fa;
       padding: 16px;
       border-radius: 6px;
 
@@ -925,7 +925,7 @@ onUnmounted(() => {
 
         li {
           font-size: 12px;
-          color: rgba(255, 255, 255, 0.65);
+          color: #606266;
           line-height: 1.8;
         }
       }
@@ -972,7 +972,7 @@ onUnmounted(() => {
 
     .suggestion-desc {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.7);
+      color: #606266;
       line-height: 1.6;
     }
   }

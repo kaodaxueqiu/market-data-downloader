@@ -1,6 +1,6 @@
 <template>
   <div class="db-mgmt">
-    <div class="db-mgmt-left">
+    <el-card class="db-mgmt-left" shadow="never">
       <div class="db-tree-header">数据库导航</div>
       <el-scrollbar>
         <el-tree
@@ -23,16 +23,30 @@
           </template>
         </el-tree>
       </el-scrollbar>
-    </div>
+    </el-card>
 
     <div class="db-mgmt-right">
-      <el-tabs v-model="activeTab">
-        <el-tab-pane label="用户列表" name="users">
+      <!-- Tab 导航卡片 -->
+      <el-card class="db-nav-card" shadow="never" body-style="padding: 0;">
+        <el-tabs v-model="activeTab">
+          <el-tab-pane label="用户列表" name="users">
+          </el-tab-pane>
+          <el-tab-pane label="按库表授权" name="resource">
+          </el-tab-pane>
+          <el-tab-pane label="库表管理" name="schema">
+          </el-tab-pane>
+        </el-tabs>
+      </el-card>
+
+      <!-- 内容卡片 -->
+      <el-card class="db-content-card" shadow="never">
+        <!-- 用户列表 -->
+        <div v-show="activeTab === 'users'" class="users-pane">
           <div class="tab-toolbar">
             <el-button type="primary" size="small" @click="openCreateUserDialog">+ 创建用户</el-button>
             <el-input v-model="userSearch" placeholder="搜索用户名" size="small" clearable style="width:200px;margin-left:auto" />
           </div>
-          <el-table :data="filteredUsers" stripe v-loading="usersLoading" empty-text="暂无用户" size="small">
+          <el-table :data="filteredUsers" stripe v-loading="usersLoading" empty-text="暂无用户" size="small" height="100%">
             <el-table-column prop="username" label="用户名" min-width="140" />
             <el-table-column label="数据库类型" min-width="120">
               <template #default="{ row }">
@@ -48,9 +62,10 @@
               </template>
             </el-table-column>
           </el-table>
-        </el-tab-pane>
+        </div>
 
-        <el-tab-pane label="按库表授权" name="resource" class="res-tab-pane">
+        <!-- 按库表授权 -->
+        <div v-show="activeTab === 'resource'" class="res-tab-pane">
           <!-- 引擎 + 库选择 -->
           <div class="tab-toolbar">
             <el-radio-group v-model="resEngine" size="small" @change="onResEngineChange">
@@ -91,7 +106,7 @@
                   @click="confirmAndLoad"
                 >加载{{ resSelectedTables.length ? `（${resSelectedTables.length} 张）` : '' }}</el-button>
               </div>
-              <div class="res-table-chips">
+              <div ref="resChipsRef" class="res-table-chips">
                 <span
                   v-for="t in resTablePageList"
                   :key="t"
@@ -165,9 +180,10 @@
             <el-button size="small" type="danger" plain :disabled="resTablesStale" @click="clearSelectedTables">清空选中表的所有用户权限</el-button>
           </div>
 
-        </el-tab-pane>
+        </div>
 
-        <el-tab-pane label="库表管理" name="schema" class="schema-tab-pane">
+        <!-- 库表管理 -->
+        <div v-show="activeTab === 'schema'" class="schema-pane">
           <div class="schema-toolbar">
             <el-radio-group v-model="schemaEngine" size="small" @change="onSchemaEngineChange">
               <el-radio-button value="postgresql">PostgreSQL</el-radio-button>
@@ -181,7 +197,7 @@
             <el-button size="small" type="danger" plain :disabled="!schemaDb" @click="confirmDropDb(schemaEngine, schemaDb)">删除库</el-button>
           </div>
 
-          <el-table :data="schemaTables" stripe size="small" v-loading="schemaLoading" empty-text="请选择数据库">
+          <el-table :data="schemaTables" stripe size="small" v-loading="schemaLoading" empty-text="请选择数据库" height="100%">
             <el-table-column prop="name" label="表名" min-width="200" />
             <el-table-column label="操作" width="180" fixed="right">
               <template #default="{ row }">
@@ -190,8 +206,8 @@
               </template>
             </el-table-column>
           </el-table>
-        </el-tab-pane>
-      </el-tabs>
+        </div>
+      </el-card>
     </div>
 
     <!-- 查看权限弹窗 -->
@@ -399,7 +415,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Coin, DataLine } from '@element-plus/icons-vue'
 
@@ -596,11 +612,33 @@ const resSaving = ref(false)
 const batchPrivs = ref<string[]>([])
 
 const resTablePage = ref(1)
-const resTablePageSize = 60
+const resChipsRef = ref<HTMLElement | null>(null)
+const resTablePageSize = ref(80)
+
+// 根据容器尺寸自适应每页数量
+const calcPageSize = () => {
+  const el = resChipsRef.value
+  if (!el) return
+  const cols = Math.floor((el.clientWidth - 28) / (120 + 8)) || 1 // 减去padding，chip约120px宽+gap 8px
+  const rows = Math.floor((el.clientHeight - 24) / 32) || 1 // chip约32px高+gap 8px
+  resTablePageSize.value = Math.max(cols * rows, 20)
+}
+
+let resizeObserver: ResizeObserver | null = null
+const setupChipsObserver = () => {
+  nextTick(() => {
+    if (resChipsRef.value) {
+      calcPageSize()
+      if (resizeObserver) resizeObserver.disconnect()
+      resizeObserver = new ResizeObserver(() => calcPageSize())
+      resizeObserver.observe(resChipsRef.value)
+    }
+  })
+}
 
 const resTablePageList = computed(() => {
-  const start = (resTablePage.value - 1) * resTablePageSize
-  return resAllTables.value.slice(start, start + resTablePageSize)
+  const start = (resTablePage.value - 1) * resTablePageSize.value
+  return resAllTables.value.slice(start, start + resTablePageSize.value)
 })
 
 const resDbList = computed(() => {
@@ -675,6 +713,7 @@ async function onResDbChange() {
     const tables = (res.success && res.data?.tables) ? res.data.tables.map((t: any) => t.name) : []
     resAllTables.value = tables
     resSelectedTables.value = [...tables]  // 默认全选
+    setupChipsObserver()
   })
 }
 
@@ -1146,24 +1185,81 @@ onMounted(() => {
   loadDatabases()
   loadUsers()
 })
+
+// 切换到按库表授权 tab 时，重新计算每页数量
+watch(activeTab, (val) => {
+  if (val === 'resource') {
+    setupChipsObserver()
+  }
+})
 </script>
 
 <style scoped lang="scss">
 .db-mgmt {
-  display: flex; height: 100%; overflow: hidden;
+  display: flex; height: 100%; overflow: hidden; gap: 12px; padding: 10px 16px 10px 10px; box-sizing: border-box;
 }
 .db-mgmt-left {
-  width: 220px; flex-shrink: 0; border-right: 1px solid #e8e8e8; display: flex; flex-direction: column; background: #fafafa;
+  width: 220px; flex-shrink: 0; display: flex; flex-direction: column; background: #fff;
+  border-radius: 8px; border: 1px solid #ebeef5;
+  :deep(.el-card__body) { padding: 0; height: 100%; display: flex; flex-direction: column; }
   .db-tree-header { padding: 14px 16px 10px; font-size: 14px; font-weight: 600; color: #303133; }
   .el-scrollbar { flex: 1; }
   .tree-node { display: flex; align-items: center; font-size: 13px; }
 }
 .db-mgmt-right {
-  flex: 1; min-width: 0; padding: 8px 16px;
+  flex: 1; min-width: 0; padding: 0;
   display: flex; flex-direction: column; overflow: hidden;
-  :deep(.el-tabs) { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  :deep(.el-tabs__content) { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-  :deep(.el-tab-pane) { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+}
+
+.db-nav-card {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+
+  :deep(.el-tabs__header) {
+    margin: 0;
+    border-bottom: none;
+  }
+
+  :deep(.el-tabs__nav) {
+    padding-left: 16px;
+  }
+
+  :deep(.el-tabs__content) {
+    display: none;
+  }
+
+  :deep(.el-tabs__nav-wrap::after) {
+    display: none;
+  }
+}
+
+.db-content-card {
+  flex: 1;
+  min-height: 0;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+  overflow: hidden;
+
+  :deep(.el-card__body) {
+    height: 100%;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .users-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    .tab-toolbar {
+      flex-shrink: 0;
+    }
+  }
 }
 .tab-toolbar {
   display: flex; align-items: center; margin-bottom: 12px;
@@ -1174,6 +1270,9 @@ onMounted(() => {
 .priv-header { cursor: pointer; user-select: none; &:hover { color: #409eff; } }
 
 .res-tab-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow: hidden !important;
 }
 
@@ -1279,11 +1378,15 @@ onMounted(() => {
 
 .res-guide { padding: 40px 0; }
 
-.schema-tab-pane {
-  overflow: hidden !important;
+.schema-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .schema-toolbar {
   display: flex; align-items: center; margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .ct-columns-header {

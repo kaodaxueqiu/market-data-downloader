@@ -226,7 +226,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .market-monitoring-overview {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
@@ -238,7 +238,7 @@ onUnmounted(() => {
     h2 {
       margin: 0;
       font-size: 22px;
-      color: #4facfe;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -249,7 +249,7 @@ onUnmounted(() => {
 
       .update-time {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
       }
     }
   }
@@ -261,24 +261,22 @@ onUnmounted(() => {
   }
 
   .market-card {
-    background: rgba(50, 62, 85, 0.6);
-    border-radius: 12px;
+    background: #fff;
+    border-radius: 8px;
     padding: 18px 20px;
     cursor: pointer;
     transition: all 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
     position: relative;
     overflow: hidden;
-    backdrop-filter: blur(10px);
 
     &:hover {
       transform: translateY(-4px);
-      background: rgba(55, 68, 95, 0.7);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
-      border-color: rgba(79, 172, 254, 0.4);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+      border-color: #409EFF;
 
       .detail-link {
-        color: #4facfe;
+        color: #409EFF;
       }
     }
 
@@ -301,13 +299,13 @@ onUnmounted(() => {
           h3 {
             margin: 0 0 3px 0;
             font-size: 17px;
-            color: #4facfe;
+            color: #303133;
             font-weight: 600;
           }
 
           .market-subtitle {
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.55);
+            color: #909399;
           }
 
           .market-zz-range {
@@ -316,7 +314,7 @@ onUnmounted(() => {
             font-size: 11px;
             font-weight: 500;
             letter-spacing: 0.02em;
-            color: rgba(79, 172, 254, 0.9);
+            color: #409EFF;
           }
         }
       }
@@ -357,7 +355,7 @@ onUnmounted(() => {
 
         .metric-label {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
 
         .metric-value {
@@ -372,7 +370,7 @@ onUnmounted(() => {
           .unit {
             font-size: 12px;
             font-weight: normal;
-            color: rgba(255, 255, 255, 0.45);
+            color: #909399;
             margin-left: 3px;
           }
         }
@@ -381,11 +379,11 @@ onUnmounted(() => {
 
     .card-footer {
       padding-top: 12px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: 1px solid #e4e7ed;
 
       .detail-link {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.5);
+        color: #909399;
         transition: color 0.3s ease;
       }
     }

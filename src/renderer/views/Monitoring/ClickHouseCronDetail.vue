@@ -335,11 +335,15 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .cron-detail-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -353,7 +357,7 @@ onMounted(() => {
         h2 {
           margin: 0 0 4px 0;
           font-size: 20px;
-          color: #4facfe;
+          color: #303133;
           font-weight: 600;
         }
 
@@ -361,7 +365,7 @@ onMounted(() => {
           margin: 0;
           font-size: 12px;
           font-family: 'Courier New', monospace;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
       }
     }
@@ -370,16 +374,17 @@ onMounted(() => {
   .info-panel,
   .stats-section,
   .history-panel {
-    background: rgba(50, 62, 85, 0.6);
+    flex-shrink: 0;
+    background: #fff;
     padding: 20px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
     margin-bottom: 20px;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
   }
@@ -396,17 +401,17 @@ onMounted(() => {
 
       .info-label {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
       }
 
       .info-value {
         font-size: 14px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
 
         &.code {
           font-family: 'Courier New', monospace;
-          color: #4facfe;
+          color: #409EFF;
         }
       }
     }
@@ -420,19 +425,20 @@ onMounted(() => {
     .stats-card {
       text-align: center;
       padding: 16px;
-      background: rgba(0, 0, 0, 0.2);
+      background: #f5f7fa;
       border-radius: 6px;
+      border: 1px solid #e4e7ed;
 
       .stats-label {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
         margin-bottom: 8px;
       }
 
       .stats-value {
         font-size: 24px;
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
 
         &.healthy {
           color: #67C23A;
@@ -462,36 +468,9 @@ onMounted(() => {
   }
 
   .history-table {
-    :deep(.el-table) {
-      background-color: transparent !important;
-
-      &::before {
-        display: none !important;
-      }
-    }
-
-    :deep(.el-table tr),
-    :deep(.el-table td.el-table__cell),
-    :deep(.el-table__body-wrapper) {
-      background-color: transparent !important;
-      border-bottom: none !important;
-      color: rgba(255, 255, 255, 0.85);
-    }
-
-    :deep(.el-table th.el-table__cell) {
-      background-color: rgba(50, 62, 85, 0.6) !important;
-      color: rgba(255, 255, 255, 0.8) !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
-
-    :deep(.el-tag) {
-      background: transparent !important;
-      border: 1px solid !important;
-    }
-
     .time-text {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.75);
+      color: #606266;
     }
 
     .duration-text {
@@ -513,7 +492,7 @@ onMounted(() => {
 
     .no-data {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.35);
+      color: #909399;
     }
   }
 
@@ -545,13 +524,13 @@ onMounted(() => {
 
     .running-item {
       .label {
-        color: rgba(0, 0, 0, 0.6);
+        color: #909399;
       }
 
       .value {
         margin-left: 6px;
         font-weight: 600;
-        color: rgba(0, 0, 0, 0.85);
+        color: #303133;
 
         &.code {
           font-family: 'Courier New', monospace;
@@ -584,135 +563,8 @@ onMounted(() => {
       justify-content: center;
       margin-top: 20px;
     }
-
-    // 深色主题样式
-    :deep(.el-select) {
-      .el-input__wrapper {
-        background: rgba(50, 62, 85, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: none;
-      }
-
-      .el-input__inner {
-        color: #ffffff;
-      }
-    }
-
-    :deep(.el-button) {
-      background: rgba(50, 62, 85, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #ffffff;
-
-      &:hover {
-        background: rgba(50, 62, 85, 0.8);
-        border-color: rgba(255, 255, 255, 0.25);
-      }
-    }
-  }
-
-  // 分页组件深色主题
-  :deep(.el-pagination) {
-    .el-pagination__total,
-    .el-pagination__jump {
-      color: rgba(255, 255, 255, 0.75);
-    }
-
-    .btn-prev,
-    .btn-next,
-    .el-pager li {
-      background: rgba(50, 62, 85, 0.6) !important;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #ffffff !important;
-
-      &:hover {
-        background: rgba(50, 62, 85, 0.8) !important;
-        color: #4facfe !important;
-      }
-
-      &.is-active {
-        background: #4facfe !important;
-        color: #ffffff !important;
-        border-color: #4facfe;
-      }
-
-      &.disabled {
-        background: rgba(50, 62, 85, 0.3) !important;
-        color: rgba(255, 255, 255, 0.3) !important;
-      }
-    }
-
-    .el-pagination__sizes {
-      .el-select .el-input__wrapper {
-        background: rgba(50, 62, 85, 0.6) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        box-shadow: none !important;
-      }
-
-      .el-input__inner {
-        color: #ffffff !important;
-      }
-    }
-
-    .el-pagination__jump {
-      .el-input__wrapper {
-        background: rgba(50, 62, 85, 0.6) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        box-shadow: none !important;
-      }
-
-      .el-input__inner {
-        color: #ffffff !important;
-      }
-    }
-
-    // 修复分页大小选择器
-    .el-select {
-      .el-input__wrapper {
-        background: rgba(50, 62, 85, 0.6) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        box-shadow: none !important;
-      }
-
-      .el-input__inner {
-        color: #ffffff !important;
-      }
-
-      .el-select__suffix {
-        color: rgba(255, 255, 255, 0.6) !important;
-      }
-    }
-  }
-
-  // 下拉菜单深色主题
-  :deep(.el-popper) {
-    background: rgba(40, 48, 65, 0.95) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
   }
 }
-
-// 全局分页下拉菜单深色主题（必须在外层）
-:deep(.el-select-dropdown) {
-  background: rgba(40, 48, 65, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-
-  .el-select-dropdown__item {
-    color: rgba(255, 255, 255, 0.85) !important;
-
-    &:hover {
-      background: rgba(79, 172, 254, 0.2) !important;
-    }
-
-    &.is-selected {
-      background: rgba(79, 172, 254, 0.3) !important;
-      color: #4facfe !important;
-    }
-  }
-}
-
-:deep(.el-pagination__sizes .el-select-dropdown) {
-  background: rgba(40, 48, 65, 0.95) !important;
-}
-
 
 @keyframes pulse {
   0%, 100% {

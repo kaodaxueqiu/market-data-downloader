@@ -75,15 +75,15 @@
       <el-table
         :data="filteredDBs"
         style="width: 100%"
+        height="100%"
         :header-cell-style="{ 
-          background: 'rgba(50, 62, 85, 0.6)', 
-          color: 'rgba(255, 255, 255, 0.8)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+          background: '#f5f7fa', 
+          color: '#606266',
+          borderBottom: '1px solid #e4e7ed'
         }"
-        :row-style="{ background: 'transparent' }"
         :cell-style="{ 
-          color: 'rgba(255, 255, 255, 0.85)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+          color: '#606266',
+          borderBottom: '1px solid #e4e7ed'
         }"
       >
         <el-table-column prop="dbIndex" label="DB" width="100">
@@ -343,8 +343,11 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .redis-db-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
@@ -364,7 +367,7 @@ onUnmounted(() => {
     h2 {
       margin: 0;
       font-size: 20px;
-      color: #4facfe;
+      color: #303133;
       font-weight: 600;
     }
   }
@@ -372,7 +375,7 @@ onUnmounted(() => {
   .page-subtitle {
     margin: 0 0 20px 34px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.55);
+    color: #909399;
   }
 
   .stats-grid {
@@ -382,17 +385,16 @@ onUnmounted(() => {
     margin-bottom: 24px;
 
     .stat-card {
-      background: rgba(50, 62, 85, 0.6);
-      border-radius: 10px;
+      background: #fff;
+      border-radius: 8px;
       padding: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid #e4e7ed;
       display: flex;
       gap: 14px;
-      backdrop-filter: blur(10px);
       transition: all 0.3s ease;
 
       &:hover {
-        background: rgba(55, 68, 95, 0.7);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
         transform: translateY(-2px);
       }
 
@@ -407,7 +409,7 @@ onUnmounted(() => {
 
         .stat-label {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
           margin-bottom: 6px;
         }
 
@@ -420,7 +422,7 @@ onUnmounted(() => {
 
         .stat-sub {
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.45);
+          color: #909399;
         }
       }
     }
@@ -433,92 +435,49 @@ onUnmounted(() => {
 
     .search-input {
       flex: 1;
-      
-      :deep(.el-input__wrapper) {
-        background: rgba(50, 62, 85, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: none;
-      }
-      
-      :deep(.el-input__inner) {
-        color: #ffffff;
-      }
     }
 
     .filter-select {
       width: 160px;
-      
-      :deep(.el-input__wrapper) {
-        background: rgba(50, 62, 85, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: none;
-      }
-      
-      :deep(.el-input__inner) {
-        color: #ffffff;
-      }
     }
   }
 
   .db-table {
-    background: rgba(50, 62, 85, 0.4);
-    border-radius: 10px;
+    flex: 1;
+    background: #fff;
+    border-radius: 8px;
     padding: 16px;
     margin-bottom: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    overflow: hidden;
+    border: 1px solid #e4e7ed;
+    overflow-y: auto;
 
-    // 强制覆盖 Element Plus 表格的白色背景
-    :deep(.el-table) {
-      background-color: transparent !important;
-      
-      &::before {
-        display: none !important;
-      }
-      
-      .el-table__inner-wrapper {
-        background-color: transparent !important;
-      }
+    // 全局统一滚动条：默认隐藏，hover 显示
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+
+    &:hover {
+      scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
     }
-    
-    :deep(.el-table__body-wrapper) {
-      background-color: transparent !important;
+
+    &::-webkit-scrollbar {
+      width: 4px;
     }
-    
-    :deep(.el-table tr) {
-      background-color: transparent !important;
+    &::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 2px;
     }
-    
-    :deep(.el-table td.el-table__cell) {
-      background-color: transparent !important;
-      border-bottom: none !important;
-    }
-    
-    :deep(.el-table th.el-table__cell) {
-      background-color: rgba(50, 62, 85, 0.6) !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
-    
-    :deep(.el-table__body) {
-      border-bottom: none !important;
-    }
-    
-    :deep(.el-table__footer-wrapper) {
-      display: none !important;
-    }
-    
-    :deep(.el-table__append-wrapper) {
-      border-top: none !important;
+    &:hover::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.1);
     }
 
     .db-index {
       font-family: 'Courier New', monospace;
       font-weight: 600;
-      color: #4facfe;
+      color: #409EFF;
     }
 
     .message-type {
-      color: rgba(255, 255, 255, 0.75);
+      color: #606266;
     }
 
     .key-count {
@@ -540,33 +499,7 @@ onUnmounted(() => {
       }
 
       &.inactive {
-        background: #606266;
-      }
-    }
-    
-    // 覆盖类型标签的样式
-    :deep(.el-tag) {
-      background: transparent !important;
-      border: 1px solid !important;
-      
-      &.el-tag--success {
-        color: #67C23A !important;
-        border-color: rgba(103, 194, 58, 0.3) !important;
-      }
-      
-      &.el-tag--primary {
-        color: #409EFF !important;
-        border-color: rgba(64, 158, 255, 0.3) !important;
-      }
-      
-      &.el-tag--warning {
-        color: #E6A23C !important;
-        border-color: rgba(230, 162, 60, 0.3) !important;
-      }
-      
-      &.el-tag--info {
-        color: #909399 !important;
-        border-color: rgba(144, 147, 153, 0.3) !important;
+        background: #909399;
       }
     }
   }
@@ -574,7 +507,7 @@ onUnmounted(() => {
   .footer-info {
     text-align: center;
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.5);
+    color: #909399;
   }
 }
 

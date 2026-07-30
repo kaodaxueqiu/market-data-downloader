@@ -153,8 +153,8 @@ function createWindow() {
       contextIsolation: true
     },
     icon: join(__dirname, '../../../public/icon.ico'),
-    titleBarStyle: 'hidden',
-    frame: process.platform === 'darwin',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    frame: process.platform !== 'win32',
     show: false
   })
 

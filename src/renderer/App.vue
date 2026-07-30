@@ -239,8 +239,8 @@
                 </div>
               </el-popover>
 
-              <!-- 窗口控制按钮 -->
-              <div class="window-controls">
+              <!-- 窗口控制按钮（仅Windows显示） -->
+              <div v-if="!isMac" class="window-controls">
                 <button class="win-btn" @click="handleMinimize">
                   <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="4.5" width="8" height="1" fill="currentColor"/></svg>
                 </button>
@@ -628,6 +628,7 @@ const toggleSidebar = () => {
 
 // 窗口控制
 const isMaximized = ref(false)
+const isMac = computed(() => /Mac|iPhone|iPad|iPod/.test(navigator.userAgent))
 
 const handleMinimize = () => {
   window.electronAPI.window.minimize()

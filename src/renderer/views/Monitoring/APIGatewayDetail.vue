@@ -330,7 +330,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .api-gateway-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
@@ -347,14 +347,14 @@ onUnmounted(() => {
         h2 {
           margin: 0 0 4px 0;
           font-size: 20px;
-          color: #4facfe;
+          color: #303133;
           font-weight: 600;
         }
 
         .subtitle {
           margin: 0;
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
       }
     }
@@ -365,7 +365,7 @@ onUnmounted(() => {
         align-items: center;
         gap: 8px;
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
 
         .status-dot {
           width: 8px;
@@ -394,10 +394,10 @@ onUnmounted(() => {
   }
 
   .api-card {
-    background: rgba(50, 62, 85, 0.6);
-    border-radius: 10px;
+    background: #fff;
+    border-radius: 8px;
     padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
 
     .api-header {
       display: flex;
@@ -416,14 +416,14 @@ onUnmounted(() => {
         h3 {
           margin: 0 0 4px 0;
           font-size: 16px;
-          color: #ffffff;
+          color: #303133;
           font-weight: 600;
         }
 
         p {
           margin: 0;
           font-size: 12px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
       }
 
@@ -458,13 +458,13 @@ onUnmounted(() => {
 
         .label {
           font-size: 13px;
-          color: rgba(255, 255, 255, 0.55);
+          color: #909399;
         }
 
         .value {
           font-size: 14px;
           font-weight: 600;
-          color: #ffffff;
+          color: #303133;
 
           &.healthy {
             color: #67C23A;
@@ -481,7 +481,7 @@ onUnmounted(() => {
           .unit {
             font-size: 12px;
             font-weight: normal;
-            color: rgba(255, 255, 255, 0.45);
+            color: #909399;
           }
         }
       }
@@ -489,19 +489,19 @@ onUnmounted(() => {
 
     .api-footer {
       padding: 12px;
-      background: rgba(255, 255, 255, 0.03);
+      background: #f5f7fa;
       border-radius: 6px;
       margin-bottom: 12px;
 
       .footer-title {
         font-size: 11px;
-        color: rgba(255, 255, 255, 0.45);
+        color: #909399;
         margin-bottom: 4px;
       }
 
       .footer-content {
         font-size: 12px;
-        color: #4facfe;
+        color: #409EFF;
 
         &.code {
           font-family: 'Courier New', monospace;
@@ -516,16 +516,16 @@ onUnmounted(() => {
 
       .tech-item {
         padding: 8px;
-        background: rgba(0, 0, 0, 0.2);
+        background: #f5f7fa;
         border-radius: 4px;
         font-size: 11px;
 
         .tech-label {
-          color: rgba(255, 255, 255, 0.45);
+          color: #909399;
         }
 
         .tech-value {
-          color: rgba(255, 255, 255, 0.85);
+          color: #606266;
           margin-left: 4px;
         }
       }
@@ -533,16 +533,16 @@ onUnmounted(() => {
   }
 
   .runtime-panel {
-    background: rgba(50, 62, 85, 0.6);
-    border-radius: 10px;
+    background: #fff;
+    border-radius: 8px;
     padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
     margin-bottom: 24px;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -552,20 +552,20 @@ onUnmounted(() => {
       gap: 16px;
 
       .runtime-item {
-        background: rgba(0, 0, 0, 0.2);
+        background: #f5f7fa;
         padding: 14px;
         border-radius: 6px;
 
         .runtime-label {
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.45);
+          color: #909399;
           margin-bottom: 8px;
         }
 
         .runtime-value {
           font-size: 18px;
           font-weight: 600;
-          color: #ffffff;
+          color: #303133;
 
           &.healthy {
             color: #67C23A;
@@ -576,15 +576,15 @@ onUnmounted(() => {
   }
 
   .api-description-panel {
-    background: rgba(50, 62, 85, 0.6);
-    border-radius: 10px;
+    background: #fff;
+    border-radius: 8px;
     padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #e4e7ed;
 
     h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
-      color: #ffffff;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -597,7 +597,7 @@ onUnmounted(() => {
         h4 {
           margin: 0 0 12px 0;
           font-size: 14px;
-          color: rgba(255, 255, 255, 0.85);
+          color: #303133;
           font-weight: 600;
         }
 
@@ -608,7 +608,7 @@ onUnmounted(() => {
 
           li {
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.65);
+            color: #606266;
             line-height: 1.8;
           }
         }

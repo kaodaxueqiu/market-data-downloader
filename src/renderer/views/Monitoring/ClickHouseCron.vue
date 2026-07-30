@@ -366,20 +366,24 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .clickhouse-cron-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1f2e 0%, #2a3447 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f5f7fa;
   padding: 24px;
 
   .page-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
 
     h2 {
       margin: 0;
-      font-size: 22px;
-      color: #4facfe;
+      font-size: 20px;
+      color: #303133;
       font-weight: 600;
     }
 
@@ -390,7 +394,7 @@ onUnmounted(() => {
 
       .update-time {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
+        color: #909399;
       }
     }
   }
@@ -402,31 +406,39 @@ onUnmounted(() => {
     margin-bottom: 20px;
 
     .stat-card {
-      background: rgba(50, 62, 85, 0.6);
-      padding: 18px;
+      background: #fff;
+      padding: 16px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid #e4e7ed;
       display: flex;
       gap: 14px;
       align-items: center;
+      transition: all 0.3s ease;
+
+      &:hover {
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        transform: translateY(-2px);
+      }
 
       .stat-icon {
         font-size: 32px;
+        display: flex;
+        align-items: center;
       }
 
       .stat-content {
         flex: 1;
 
         .stat-label {
-          font-size: 12px;
-          color: rgba(255, 255, 255, 0.55);
+          font-size: 13px;
+          color: #909399;
           margin-bottom: 6px;
         }
 
         .stat-value {
           font-size: 24px;
           font-weight: 600;
-          color: #ffffff;
+          color: #303133;
 
           &.running {
             color: #E6A23C;
@@ -451,7 +463,7 @@ onUnmounted(() => {
       display: flex;
       gap: 12px;
       padding: 8px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid #e4e7ed;
       font-size: 13px;
 
       &:last-child {
@@ -460,18 +472,18 @@ onUnmounted(() => {
 
       .job-name {
         font-weight: 600;
-        color: #ffffff;
+        color: #303133;
         min-width: 120px;
       }
 
       .job-time {
-        color: rgba(255, 255, 255, 0.65);
+        color: #909399;
         min-width: 140px;
       }
 
       .job-error {
         flex: 1;
-        color: rgba(255, 255, 255, 0.75);
+        color: #606266;
       }
     }
   }
@@ -489,56 +501,20 @@ onUnmounted(() => {
       flex: 1;
       max-width: 400px;
     }
-    
+
     .el-button {
       min-width: 90px;
-    }
-
-    :deep(.el-input__wrapper),
-    :deep(.el-select .el-input__wrapper) {
-      background: rgba(50, 62, 85, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: none;
-    }
-
-    :deep(.el-input__inner) {
-      color: #ffffff;
     }
   }
 
   .jobs-table {
-    background: rgba(50, 62, 85, 0.4);
-    border-radius: 10px;
+    flex: 1;
+    background: #fff;
+    border-radius: 8px;
     padding: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #e4e7ed;
     margin-bottom: 20px;
-
-    :deep(.el-table) {
-      background-color: transparent !important;
-
-      &::before {
-        display: none !important;
-      }
-    }
-
-    :deep(.el-table tr),
-    :deep(.el-table td.el-table__cell),
-    :deep(.el-table__body-wrapper) {
-      background-color: transparent !important;
-      border-bottom: none !important;
-      color: rgba(255, 255, 255, 0.85);
-    }
-
-    :deep(.el-table th.el-table__cell) {
-      background-color: rgba(50, 62, 85, 0.6) !important;
-      color: rgba(255, 255, 255, 0.8) !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
-
-    :deep(.el-tag) {
-      background: transparent !important;
-      border: 1px solid !important;
-    }
+    overflow-y: auto;
 
     .job-name-cell {
       display: flex;
@@ -549,7 +525,7 @@ onUnmounted(() => {
       .job-display-name {
         font-size: 14px;
         font-weight: 500;
-        color: #4facfe;
+        color: #409EFF;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -558,7 +534,7 @@ onUnmounted(() => {
       .job-id {
         font-size: 11px;
         font-family: 'Courier New', monospace;
-        color: rgba(255, 255, 255, 0.4);
+        color: #909399;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -567,24 +543,12 @@ onUnmounted(() => {
 
     .time-text {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.75);
-    }
-
-    .duration-text {
-      font-size: 13px;
-      font-weight: 600;
-      color: #67C23A;
-    }
-
-    .rows-text {
-      font-size: 13px;
-      font-weight: 600;
-      color: #409EFF;
+      color: #606266;
     }
 
     .no-data {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.35);
+      color: #909399;
     }
 
     .success-rate {
@@ -606,6 +570,7 @@ onUnmounted(() => {
   }
 
   .pagination-bar {
+    flex-shrink: 0;
     display: flex;
     justify-content: center;
     padding: 20px 0;
