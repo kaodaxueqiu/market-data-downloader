@@ -86,7 +86,7 @@
                   </el-col>
                 </el-row>
                 <!-- 代码检查结果 -->
-                <div v-if="Object.keys(codeCheckResult).length > 0" class="code-check-panel">
+                <div v-if="Object.keys(codeCheckResult).length > 0 || codeFuncError" class="code-check-panel">
                   <div class="code-check-header">
                     <el-icon><Warning v-if="hasCodeCheckError" /><CircleCheck v-else /></el-icon>
                     <span>代码检查</span>
@@ -109,6 +109,12 @@
                     </el-button>
                   </div>
                   <div class="code-check-body">
+                    <div v-if="codeFuncError" class="check-item">
+                      <div class="check-table">
+                        <el-icon class="error"><CircleClose /></el-icon>
+                        <span style="color: #ef4444;">{{ codeFuncError }}</span>
+                      </div>
+                    </div>
                     <div v-for="(info, tableName) in codeCheckResult" :key="tableName" class="check-item">
                       <div class="check-table">
                         <el-icon :class="info.tableExists ? 'success' : 'error'">
@@ -1207,9 +1213,11 @@ interface CodeCheckInfo {
 }
 const codeCheckResult = ref<Record<string, CodeCheckInfo>>({})
 const codeChecking = ref(false)
+const codeFuncError = ref('')  // 函数入口检查错误
 
 // 计算属性：是否有检查错误
 const hasCodeCheckError = computed(() => {
+  if (codeFuncError.value) return true
   for (const info of Object.values(codeCheckResult.value)) {
     if (!info.tableExists) return true
     if (info.fields.some(f => !f.exists)) return true
@@ -1411,7 +1419,13 @@ function splitFactorCode(fullCode: string) {
 const onFactorSourceChange = () => {
   formData.factor_expression = ''
   codeCheckResult.value = {}
+  codeFuncError.value = ''
   formData.factor_code = ''
+  // 切离 code 模式时销毁编辑器
+  if (pyCodeEditor) {
+    pyCodeEditor.destroy()
+    pyCodeEditor = null
+  }
   if (factorSource.value === 'file') {
     pyFileName.value = ''
     pyFileContent.value = ''
@@ -1591,7 +1605,15 @@ const runCodeCheck = async () => {
   const code = formData.factor_code
   if (!code.trim()) {
     codeCheckResult.value = {}
+    codeFuncError.value = ''
     return
+  }
+  
+  // 检查必须包含 calculate_factor 函数
+  if (!code.includes('def calculate_factor')) {
+    codeFuncError.value = '缺少 calculate_factor 函数入口'
+  } else {
+    codeFuncError.value = ''
   }
   
   // 解析代码

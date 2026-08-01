@@ -802,7 +802,7 @@
         </el-form-item>
 
         <!-- Python代码模式：代码检查 -->
-        <div v-if="factorMode === 'pycode' && Object.keys(pyCodeCheckResult).length > 0" class="code-check-panel" style="margin-bottom: 16px;">
+        <div v-if="factorMode === 'pycode' && (Object.keys(pyCodeCheckResult).length > 0 || pyCodeFuncError)" class="code-check-panel" style="margin-bottom: 16px;">
           <div class="code-check-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
             <el-icon><Warning v-if="hasPyCodeCheckError" /><CircleCheck v-else /></el-icon>
             <span style="font-weight: 600;">代码检查</span>
@@ -811,6 +811,10 @@
             </el-button>
           </div>
           <div class="code-check-body">
+            <div v-if="pyCodeFuncError" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <el-icon style="color: #ef4444;"><CircleClose /></el-icon>
+              <span style="color: #ef4444;">{{ pyCodeFuncError }}</span>
+            </div>
             <div v-for="(info, tableName) in pyCodeCheckResult" :key="tableName" style="margin-bottom: 8px;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                 <el-icon :style="{ color: info.tableExists ? '#22c55e' : '#ef4444' }">
@@ -1283,7 +1287,7 @@
             <el-descriptions-item label="回测版本" :span="2" v-if="backtestVersion">
               <el-tag size="small" type="primary">将回测 v{{ backtestVersion }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="因子表达式" :span="2">
+            <el-descriptions-item :label="isPyCodeFactor(backtestFactors[0]) ? 'Python 代码' : '因子表达式'" :span="2">
               <code class="expression-code">{{ backtestFactors[0].expression }}</code>
             </el-descriptions-item>
             <el-descriptions-item label="数据依赖" :span="2">
@@ -1720,7 +1724,7 @@
           style="margin-top: 12px"
         >
           <template #title>
-            因子表达式和数据依赖将自动从因子库读取，回测完成后会自动更新因子绩效指标
+            {{ isPyCodeFactor(backtestFactors[0]) ? 'Python 代码' : '因子表达式' }}和数据依赖将自动从因子库读取，回测完成后会自动更新因子绩效指标
           </template>
         </el-alert>
       </div>
@@ -2119,8 +2123,10 @@ interface PyCodeCheckInfo {
 
 const pyCodeCheckResult = ref<Record<string, PyCodeCheckInfo>>({})
 const pyCodeChecking = ref(false)
+const pyCodeFuncError = ref('')  // 函数入口检查错误
 
 const hasPyCodeCheckError = computed(() => {
+  if (pyCodeFuncError.value) return true
   for (const info of Object.values(pyCodeCheckResult.value)) {
     if (!info.tableExists) return true
     if (info.fields.some(f => !f.exists)) return true
@@ -2177,7 +2183,15 @@ const runPyCodeCheck = async () => {
   const code = factorPyCode.value
   if (!code.trim()) {
     pyCodeCheckResult.value = {}
+    pyCodeFuncError.value = ''
     return
+  }
+  
+  // 检查必须包含 calculate_factor 函数
+  if (!code.includes('def calculate_factor')) {
+    pyCodeFuncError.value = '缺少 calculate_factor 函数入口'
+  } else {
+    pyCodeFuncError.value = ''
   }
   
   const parsed = parsePyCodeDataSources(code)

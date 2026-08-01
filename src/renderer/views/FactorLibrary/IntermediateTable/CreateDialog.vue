@@ -24,6 +24,10 @@
             <el-icon><InfoFilled /></el-icon>
             定义 build_intermediate_table 函数（旧名 prepare_data 仍兼容）
           </div>
+          <div v-if="form.py_code && !form.py_code.includes('def build_intermediate_table') && !form.py_code.includes('def prepare_data')" style="color: #ef4444; font-size: 12px; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+            <el-icon><CircleClose /></el-icon>
+            缺少 build_intermediate_table（或 prepare_data）函数入口
+          </div>
         </el-form-item>
         <el-form-item label="用户命名">
           <el-input
@@ -77,7 +81,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { InfoFilled } from '@element-plus/icons-vue'
+import { InfoFilled, CircleClose } from '@element-plus/icons-vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { python as pythonLang } from '@codemirror/lang-python'
 import { sql as sqlLang } from '@codemirror/lang-sql'
