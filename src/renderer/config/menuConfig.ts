@@ -68,6 +68,7 @@ export const allMenus: MenuItem[] = [
       { id: 'factor_backtest', name: '单因子回测', path: '/factor-library/backtest/submit', icon: null },
       { id: 'backtest_tasks', name: '任务详情', path: '/factor-library/backtest/tasks', icon: null },
       { id: 'expression_dict', name: '表达式字典', path: '/factor-library/expression-dict', icon: null },
+      { id: 'intermediate_table', name: '中间统计表', path: '/factor-library/intermediate-table', icon: null },
       {
         id: 'backtest_engine_config',
         name: '回测引擎配置',

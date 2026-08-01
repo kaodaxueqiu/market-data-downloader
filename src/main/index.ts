@@ -6124,6 +6124,144 @@ ipcMain.handle('backtest:getPriceTypeOptions', async () => {
 })
 
 // ============================================
+// 中间统计表（midstats）IPC Handlers
+// ============================================
+
+const MIDSTATS_API_BASE = 'http://61.151.241.233:8080/api/v1/midstats'
+
+// 中间统计表: 列出全部
+ipcMain.handle('intermediateTable:list', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MIDSTATS_API_BASE}/list`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取中间统计表列表失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取中间统计表列表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: 新建（Python 代码 / DDL 两种模式）
+ipcMain.handle('intermediateTable:create', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/create`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 30000
+    })
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '新建中间统计表失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 新建中间统计表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: 删除
+ipcMain.handle('intermediateTable:delete', async (_event, tableName: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.delete(
+      `${MIDSTATS_API_BASE}/${encodeURIComponent(tableName)}`,
+      { headers: { 'X-API-Key': apiKey }, timeout: 15000 }
+    )
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '删除中间统计表失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 删除中间统计表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: 重建（先删除再创建）
+ipcMain.handle('intermediateTable:update', async (_event, tableName: string, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.put(
+      `${MIDSTATS_API_BASE}/${encodeURIComponent(tableName)}`,
+      data,
+      { headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' }, timeout: 30000 }
+    )
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '重建中间统计表失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 重建中间统计表失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: 修改 TTL
+ipcMain.handle('intermediateTable:setTtl', async (_event, tableName: string, ttl: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.put(
+      `${MIDSTATS_API_BASE}/${encodeURIComponent(tableName)}/ttl`,
+      { ttl },
+      { headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' }, timeout: 15000 }
+    )
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '修改 TTL 失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 修改 TTL 失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// ============================================
 // 数据缓存管理（market-data-cache-manager）IPC Handlers
 // ============================================
 

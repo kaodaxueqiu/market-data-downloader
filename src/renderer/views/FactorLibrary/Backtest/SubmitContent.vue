@@ -59,25 +59,13 @@
               <!-- 方式2: Python代码 -->
               <template v-else-if="factorSource === 'code'">
                 <el-form-item label="Python代码">
-                  <el-input
-                    v-model="formData.factor_code"
-                    type="textarea"
-                    :rows="10"
-                    placeholder="# 函数一（可选）：对 CH 表操作得到中间统计表
-def prepare_data(sources, context):
-    df = sources[list(sources)[0]]
-    return df  # 也可不定义，直接在 calculate_factor 里拉表
-
-# 函数二（必填）：拉取中间统计表计算因子值
-def calculate_factor(data, context):
-    df = data[list(data)[0]]
-    df['factor_value'] = df['close'] / df['open'] - 1
-    return df[['trade_date', 'stock_code', 'factor_value']]
-
-# 回测引擎自动识别 prepare_data / calculate_factor 入口"
-                    class="code-textarea"
-                    @input="onCodeContentChange"
-                  />
+                  <div style="width: 100%;">
+                    <div ref="pyCodeEditorRef" class="py-code-editor"></div>
+                    <div class="form-hint" style="margin-top: 6px;">
+                      <el-icon><InfoFilled /></el-icon>
+                      需包含 calculate_factor 函数入口；可选定义 build_intermediate_table
+                    </div>
+                  </div>
                 </el-form-item>
                 <el-row :gutter="16">
                   <el-col :span="8">
@@ -152,6 +140,47 @@ def calculate_factor(data, context):
                   <el-icon><InfoFilled /></el-icon>
                   <span>粘贴代码后自动检查表和字段是否存在，key 是表名（如 <code>data['stock_daily']</code>）</span>
                 </div>
+              </template>
+
+              <!-- 方式3: Python文件 -->
+              <template v-else-if="factorSource === 'file'">
+                <el-form-item label="Python文件">
+                  <el-upload
+                    :auto-upload="false"
+                    :show-file-list="true"
+                    :limit="1"
+                    accept=".py"
+                    :on-change="onPyFileChange"
+                    :on-remove="onPyFileRemove"
+                  >
+                    <el-button type="primary" plain>
+                      <el-icon style="margin-right: 4px;"><Upload /></el-icon>
+                      选择 .py 文件
+                    </el-button>
+                  </el-upload>
+                  <div class="form-hint">
+                    <el-icon><InfoFilled /></el-icon>
+                    上传 Python 文件，需包含 calculate_factor 函数入口
+                  </div>
+                </el-form-item>
+                <el-row :gutter="16">
+                  <el-col :span="8">
+                    <el-form-item label="聚合方式">
+                      <el-select v-model="factorAggregation" style="width: 100%;">
+                        <el-option label="均值 (mean)" value="mean" />
+                        <el-option label="最新 (last)" value="last" />
+                        <el-option label="求和 (sum)" value="sum" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="16">
+                    <el-form-item label="依赖库">
+                      <el-select v-model="factorRequires" multiple collapse-tags placeholder="默认无额外依赖" style="width: 100%;">
+                        <el-option v-for="lib in factorRequireOptions" :key="lib" :label="lib" :value="lib" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
               </template>
             </div>
           </div>
@@ -278,7 +307,7 @@ def calculate_factor(data, context):
                   </el-select>
                 </el-form-item>
                 <!-- 自动识别字段（仅 Python 模式） -->
-                <el-form-item v-if="factorSource === 'code'" label-width="70px">
+                <el-form-item v-if="factorSource === 'code' || factorSource === 'file'" label-width="70px">
                   <el-checkbox v-model="ds.auto_fields">自动识别字段（fields 留空，引擎从代码推断）</el-checkbox>
                 </el-form-item>
                 <div class="date-code-row">
@@ -307,7 +336,7 @@ def calculate_factor(data, context):
                 </div>
                 
                 <!-- 高级：字段映射（中文列名表，仅 Python 模式） -->
-                <el-collapse v-if="factorSource === 'code' && ds.fields.length > 0" class="field-mapping-collapse">
+                <el-collapse v-if="(factorSource === 'code' || factorSource === 'file') && ds.fields.length > 0" class="field-mapping-collapse">
                   <el-collapse-item title="高级：字段映射（中文列名表）" name="mapping">
                     <div class="mapping-hint">用于中文列名的 ClickHouse 逐笔表。ASCII 列名 → 中文列名（可选）</div>
                     <div v-for="f in ds.fields" :key="f" class="mapping-row">
@@ -789,6 +818,111 @@ def calculate_factor(data, context):
             </div>
           </div>
 
+          <!-- 高级选项 -->
+          <div class="form-section">
+            <div class="section-header">
+              <el-icon class="section-icon"><Operation /></el-icon>
+              <span>高级选项</span>
+            </div>
+            <div class="section-body">
+              <!-- 内存预算 -->
+              <el-form-item label="内存预算(MB)">
+                <el-input-number v-model="memoryLimitMb" :min="256" :max="65536" :step="512" controls-position="right" placeholder="留空走引擎默认 4096 MB" style="width: 220px;" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  留空走引擎默认 4096 MB；调高前需确认宿主机内存充足
+                </div>
+              </el-form-item>
+
+              <!-- 子进程隔离执行 -->
+              <el-form-item label="隔离执行">
+                <el-switch v-model="factorIsolation" active-text="子进程隔离执行（ML 库 / 防崩溃隔离）" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  开启后因子在独立子进程执行，适用于引入 sklearn 等重型库或防止崩溃影响引擎
+                </div>
+              </el-form-item>
+
+              <!-- 调度配置 -->
+              <el-form-item label="长任务模式">
+                <el-switch v-model="allowLongRunning" active-text="允许长任务调度" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  适用于超长耗时任务，调度器会放宽超时限制
+                </div>
+              </el-form-item>
+              <el-form-item label="调度通道">
+                <el-select v-model="schedulingLane" style="width: 220px;">
+                  <el-option label="自动（auto）" value="auto" />
+                  <el-option label="快速（quick）" value="quick" />
+                  <el-option label="标准（standard）" value="standard" />
+                  <el-option label="慢速（slow）" value="slow" />
+                  <el-option label="大内存（highmem）" value="highmem" />
+                </el-select>
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  自动由网关根据任务属性判定 lane；指定具体值则覆盖网关判定
+                </div>
+              </el-form-item>
+
+              <!-- 参数扫描 -->
+              <el-form-item label="参数扫描">
+                <el-switch v-model="parameterScan.enabled" active-text="开启参数扫描" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  对因子参数进行网格搜索，自动展开多组候选参数
+                </div>
+              </el-form-item>
+              <template v-if="parameterScan.enabled">
+                <div class="param-scan-grid">
+                  <div class="grid-header">
+                    <span>参数网格（键=参数名，值=候选值数组）</span>
+                  </div>
+                  <div class="grid-add-row">
+                    <el-button size="small" type="primary" plain @click="parameterScan.grid.push({ key: '', values: '' })">添加参数</el-button>
+                  </div>
+                  <div v-for="(item, idx) in parameterScan.grid" :key="idx" class="grid-row">
+                    <el-input v-model="item.key" placeholder="参数名" style="width: 160px;" />
+                    <el-input v-model="item.values" placeholder="候选值，逗号分隔，如 1,5,10" style="flex: 1; margin: 0 8px;" />
+                    <el-button size="small" type="danger" plain @click="parameterScan.grid.splice(idx, 1)">删除</el-button>
+                  </div>
+                  <el-row :gutter="16" class="grid-options-row">
+                    <el-col :span="12">
+                      <el-form-item label="最大候选数">
+                        <el-input-number v-model="parameterScan.max_candidates" :min="1" :max="10000" :step="10" controls-position="right" style="width: 100%;" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                      <el-form-item label="仅展开不回测">
+                        <el-switch v-model="parameterScan.expand_only" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                </div>
+              </template>
+
+              <!-- 自定义算子 -->
+              <el-form-item label="自定义算子">
+                <el-button size="small" type="primary" plain @click="udfList.push({ name: '', body: '', param_count: 1, description: '' })">添加算子</el-button>
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  定义可在因子代码中调用的自定义算子
+                </div>
+              </el-form-item>
+              <div v-if="udfList.length > 0" class="udf-list">
+                <div v-for="(udf, idx) in udfList" :key="idx" class="udf-row">
+                  <div class="udf-row-head">
+                    <el-input v-model="udf.name" placeholder="算子名" style="width: 180px;" />
+                    <el-input-number v-model="udf.param_count" :min="0" :max="20" :step="1" controls-position="right" placeholder="参数个数" style="width: 130px; margin-left: 8px;" />
+                    <el-button size="small" type="danger" plain style="margin-left: 8px;" @click="udfList.splice(idx, 1)">删除</el-button>
+                  </div>
+                  <el-input v-model="udf.description" placeholder="描述（可选）" style="width: 100%; margin-top: 6px;" />
+                  <el-input v-model="udf.body" type="textarea" :rows="4" placeholder="函数体（Python 代码）" style="margin-top: 6px;" class="code-textarea" />
+                </div>
+              </div>
+            </div>
+          </div>
+
         </el-col>
       </el-row>
 
@@ -910,8 +1044,10 @@ def calculate_factor(data, context):
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { EditorView, basicSetup } from 'codemirror'
+import { python as pythonLang } from '@codemirror/lang-python'
 import { 
   Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts,
   Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, Check,
@@ -1094,8 +1230,27 @@ const canAutoConfig = computed(() => {
 
 const factorSourceOptions = [
   { label: '因子表达式', value: 'expression' },
-  { label: 'Python代码', value: 'code' }
+  { label: 'Python代码', value: 'code' },
+  { label: 'Python文件', value: 'file' }
 ]
+
+// Python 文件上传
+const pyFileName = ref('')
+const pyFileContent = ref('')
+
+const onPyFileChange = (file: any) => {
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    pyFileContent.value = e.target?.result as string
+    pyFileName.value = file.name
+  }
+  reader.readAsText(file.raw)
+}
+
+const onPyFileRemove = () => {
+  pyFileName.value = ''
+  pyFileContent.value = ''
+}
 
 // 计算选项
 const calcOptions = ref([
@@ -1105,6 +1260,27 @@ const calcOptions = ref([
 
 // 预热天数（高级选项，留空则引擎自动，默认 60，上限 750）
 const warmupDays = ref<number | null>(null)
+
+// 内存预算（MB，留空走引擎默认 4096）
+const memoryLimitMb = ref<number | null>(null)
+
+// 子进程隔离执行
+const factorIsolation = ref(false)
+
+// 调度配置
+const schedulingLane = ref<'auto' | 'quick' | 'standard' | 'slow' | 'highmem'>('auto')
+const allowLongRunning = ref(false)
+
+// 自定义算子列表
+const udfList = ref<Array<{ name: string; body: string; param_count: number; description: string }>>([])
+
+// 参数扫描配置
+const parameterScan = reactive({
+  enabled: false,
+  grid: [] as Array<{ key: string; values: string }>,  // values 为逗号分隔字符串，提交时解析
+  max_candidates: 100,
+  expand_only: false
+})
 
 // Python 因子高级 meta（1.4）
 const factorAggregation = ref<'mean' | 'last' | 'sum'>('mean')
@@ -1214,39 +1390,12 @@ const formRules: FormRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
 }
 
-const PYTHON_TEMPLATE_SINGLE = `# ===== 函数一（可选）：对 CH 表操作得到中间统计表 =====
-def prepare_data(sources, context):
-    # sources 键为 ClickHouse 表全名；聚合/过滤后返回中间统计表（也可不定义）
-    df = sources[list(sources)[0]]
-    return df.groupby(['stock_code', 'trade_date']).agg({
-        'close': 'last', 'volume': 'sum',
-    })
-
-# ===== 函数二（必填）：拉取中间统计表计算因子值 =====
-def calculate_factor(data, context):
-    # data 键为数据源配置的 name；若定义了 prepare_data 则自动重定向到物化中间表
-    df = data[list(data)[0]]
-    df['factor_value'] = df['close'].pct_change(5)
-    return df[['trade_date', 'stock_code', 'factor_value']]`
-
-const PYTHON_TEMPLATE_MULTI = `# ===== 函数一（可选）：对 CH 表操作得到中间统计表 =====
-def prepare_data(sources, context):
-    # sources 键为 ClickHouse 表全名；可关联多表后返回中间统计表
-    daily = sources[list(sources)[0]]
-    extra = sources[list(sources)[1]]
-    merged = daily.merge(extra, on=['stock_code', 'trade_date'])
-    return merged
-
-# ===== 函数二（必填）：拉取中间统计表计算因子值 =====
-def calculate_factor(data, context):
-    # data 键为数据源配置的 name；若定义了 prepare_data 则自动重定向到物化中间表
-    df = data[list(data)[0]]
-    df['factor_value'] = df['close'] / df['open'] - 1
-    return df[['trade_date', 'stock_code', 'factor_value']]`
-
-// 拆分双函数代码：提取 prepare_data（可选）和 calculate_factor（必填）
+// 拆分双函数代码：提取 build_intermediate_table / prepare_data（可选）和 calculate_factor（必填）
 function splitFactorCode(fullCode: string) {
+  // 优先匹配 build_intermediate_table，回退到 prepare_data
   const prepareMatch = fullCode.match(
+    /def\s+build_intermediate_table\s*\([\s\S]*?(?=\ndef\s+|\n#\s*=====|$)/
+  ) || fullCode.match(
     /def\s+prepare_data\s*\([\s\S]*?(?=\ndef\s+|\n#\s*=====|$)/
   )
   const calcMatch = fullCode.match(
@@ -1262,20 +1411,46 @@ function splitFactorCode(fullCode: string) {
 const onFactorSourceChange = () => {
   formData.factor_expression = ''
   codeCheckResult.value = {}
-  if (factorSource.value === 'code') {
-    formData.factor_code = formData.data_sources.length <= 1 ? PYTHON_TEMPLATE_SINGLE : PYTHON_TEMPLATE_MULTI
-  } else {
-    formData.factor_code = ''
+  formData.factor_code = ''
+  if (factorSource.value === 'file') {
+    pyFileName.value = ''
+    pyFileContent.value = ''
   }
+  // 切到 code 模式时 nextTick 初始化编辑器
+  if (factorSource.value === 'code') {
+    nextTick(() => initPyCodeEditor())
+  }
+}
+
+// Python 代码编辑器（CodeMirror 6）
+const pyCodeEditorRef = ref<HTMLElement>()
+let pyCodeEditor: EditorView | null = null
+
+const initPyCodeEditor = () => {
+  if (!pyCodeEditorRef.value || pyCodeEditor) return
+  pyCodeEditor = new EditorView({
+    doc: formData.factor_code || '',
+    extensions: [
+      basicSetup,
+      pythonLang(),
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          formData.factor_code = update.state.doc.toString()
+          onCodeContentChange()
+        }
+      })
+    ],
+    parent: pyCodeEditorRef.value
+  })
 }
 
 // 解析 Python 代码中的表名和字段（支持中文）
 const parseCodeDataSources = (code: string): Record<string, string[]> => {
   const result: Record<string, string[]> = {}
   
-  // 1. 找到所有 xxx = data['表名'] 或 xxx = data["表名"] 的模式
+  // 1. 找到所有 xxx = data['表名'] 或 xxx = sources['表名'] 的模式
   // 使用 [^'"\]]+ 来匹配表名（支持中文）
-  const dataAccessPattern = /(\w+)\s*=\s*data\[['"]([^'"\]]+)['"]\]/g
+  const dataAccessPattern = /(\w+)\s*=\s*(?:data|sources)\[['"]([^'"\]]+)['"]\]/g
   const varToTable: Record<string, string> = {}
   
   let match
@@ -1442,12 +1617,18 @@ const runCodeCheck = async () => {
         let foundTable: any = null
 
         try {
-          const searchResult = await window.electronAPI.dbdict.search(tableName)
+          // 搜索时只传表名部分（去掉库名前缀），提高搜索命中率
+          const searchKeyword = tableName.includes('.') ? tableName.split('.').pop()! : tableName
+          const searchResult = await window.electronAPI.dbdict.search(searchKeyword)
 
           // 在搜索结果中查找精确匹配的表（type='table' 且表名精确匹配）
+          // 搜索结果 table_name 不带库名前缀，需要用 database + table_name 组合匹配
           const results = searchResult.data || []
           for (const item of results) {
-            if (item.table_name === tableName && item.type === 'table') {
+            if (item.type !== 'table') continue
+            const fullName = `${item.database}.${item.table_name}`
+            // 支持 database.table 全名匹配，也支持纯表名匹配
+            if (fullName === tableName || item.table_name === tableName) {
               foundTable = item
               break
             }
@@ -1462,7 +1643,7 @@ const runCodeCheck = async () => {
 
           // 获取表的字段列表进行比对
           try {
-            const tableDetail = await window.electronAPI.dbdict.getTableDetail(foundTable.engine, foundTable.database, tableName)
+            const tableDetail = await window.electronAPI.dbdict.getTableDetail(foundTable.engine, foundTable.database, foundTable.table_name)
             if (tableDetail.code === 200 && tableDetail.data?.columns) {
               const dbFields = tableDetail.data.columns.map((c: any) => c.column_name)
               // 检查每个字段是否存在
@@ -1862,6 +2043,12 @@ const handleSubmit = async () => {
         return
       }
     }
+    if (factorSource.value === 'file') {
+      if (!pyFileContent.value.trim()) {
+        ElMessage.error('请选择Python文件')
+        return
+      }
+    }
     
     // 校验数据源
     if (formData.data_sources.length === 0) {
@@ -1968,20 +2155,26 @@ const handleSubmit = async () => {
           calc_long_short: calcOptions.value.includes('calc_long_short'),
           calc_turnover: calcOptions.value.includes('calc_turnover'),
           calc_drawdown: calcOptions.value.includes('calc_drawdown'),
-          warmup_days: warmupDays.value || undefined
+          warmup_days: warmupDays.value || undefined,
+          memory_limit_mb: memoryLimitMb.value || undefined
+        },
+        scheduling: {
+          allow_long_running: allowLongRunning.value,
+          preferred_lane: schedulingLane.value && schedulingLane.value !== 'auto' ? schedulingLane.value : undefined
         }
       }))
       
       // 因子配置（二选一）
       if (factorSource.value === 'expression') {
         requestData.factor_expression = formData.factor_expression
-      } else if (factorSource.value === 'code') {
+      } else if (factorSource.value === 'code' || factorSource.value === 'file') {
         // P0: 校验必须包含 calculate_factor 入口
-        if (!formData.factor_code.includes('def calculate_factor')) {
+        const codeContent = factorSource.value === 'file' ? pyFileContent.value : formData.factor_code
+        if (!codeContent.includes('def calculate_factor')) {
           ElMessage.warning('请定义 calculate_factor 函数作为因子计算入口')
           return
         }
-        const { factor_code, prepare_data_code } = splitFactorCode(formData.factor_code)
+        const { factor_code, prepare_data_code } = splitFactorCode(codeContent)
         requestData.factor_code = factor_code
         if (prepare_data_code) {
           requestData.prepare_data_code = prepare_data_code
@@ -1991,7 +2184,8 @@ const handleSubmit = async () => {
           allow_pandas: true,
           result_mode: 'dataframe',
           factor_aggregation: factorAggregation.value,
-          requires: factorRequires.value
+          requires: factorRequires.value,
+          isolation: factorIsolation.value
         }
       }
 
@@ -2022,6 +2216,31 @@ const handleSubmit = async () => {
         } else {
           requestData.risk_neutralization = { enabled: false }
         }
+      }
+
+      // 自定义算子（非空时传）
+      if (udfList.value.length > 0) {
+        requestData.udfs = JSON.parse(JSON.stringify(udfList.value.map(u => ({
+          name: u.name,
+          body: u.body,
+          param_count: u.param_count,
+          description: u.description || undefined
+        }))))
+      }
+
+      // 参数扫描（开启时传）
+      if (parameterScan.enabled) {
+        const gridObj: Record<string, any[]> = {}
+        for (const item of parameterScan.grid) {
+          if (!item.key) continue
+          gridObj[item.key] = item.values.split(',').map(v => v.trim()).filter(Boolean)
+        }
+        requestData.parameter_scan = JSON.parse(JSON.stringify({
+          enabled: true,
+          grid: gridObj,
+          max_candidates: parameterScan.max_candidates,
+          expand_only: parameterScan.expand_only
+        }))
       }
 
       const result = await window.electronAPI.backtest.submit(requestData)
@@ -2156,6 +2375,11 @@ onMounted(async () => {
   await initApiKey()
   loadStockPools()
   loadPriceTypeOptions()
+})
+
+onBeforeUnmount(() => {
+  pyCodeEditor?.destroy()
+  pyCodeEditor = null
 })
 
 // 初始化 API Key
@@ -2584,6 +2808,21 @@ const initApiKey = async () => {
         font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
         font-size: 13px;
         line-height: 1.5;
+      }
+    }
+
+    .py-code-editor {
+      width: 100%;
+      border: 1px solid #dcdfe6;
+      border-radius: 4px;
+      overflow: hidden;
+      :deep(.cm-editor) {
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 13px;
+      }
+      :deep(.cm-scroller) {
+        overflow: auto;
+        max-height: 500px;
       }
     }
     
@@ -3055,6 +3294,50 @@ const initApiKey = async () => {
       .form-hint {
         width: 100%;
         margin-left: 100px;
+      }
+    }
+
+    // 参数扫描网格
+    .param-scan-grid {
+      margin: 8px 0 12px 100px;
+
+      .grid-header {
+        margin-bottom: 8px;
+        font-size: 13px;
+        color: #6b7280;
+      }
+
+      .grid-add-row {
+        margin-bottom: 8px;
+      }
+
+      .grid-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .grid-options-row {
+        margin-top: 12px;
+        align-items: flex-end;
+      }
+    }
+
+    // 自定义算子列表
+    .udf-list {
+      margin: 8px 0 12px 100px;
+
+      .udf-row {
+        padding: 12px;
+        margin-bottom: 12px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+
+        .udf-row-head {
+          display: flex;
+          align-items: center;
+        }
       }
     }
     

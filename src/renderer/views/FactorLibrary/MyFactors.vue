@@ -291,7 +291,10 @@
                   {{ getStatusLabel(factor.status) }}
                 </el-tag>
                 <el-tag v-if="isPyFileFactor(factor)" size="small" type="warning" effect="plain">
-                  Py
+                  Py文件
+                </el-tag>
+                <el-tag v-else-if="isPyCodeFactor(factor)" size="small" type="success" effect="plain">
+                  Py代码
                 </el-tag>
                 <el-tag v-else size="small" type="info" effect="plain">
                   表达式
@@ -373,6 +376,11 @@
                     <el-text style="font-family: monospace; font-weight: 600; color: #409eff;">
                       {{ currentFactorDetail?.factor_code }}
                     </el-text>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="因子类型">
+                    <el-tag v-if="isPyFileFactor(currentFactorDetail)" size="small" type="warning" effect="plain">Py文件</el-tag>
+                    <el-tag v-else-if="isPyCodeFactor(currentFactorDetail)" size="small" type="success" effect="plain">Py代码</el-tag>
+                    <el-tag v-else size="small" type="info" effect="plain">表达式</el-tag>
                   </el-descriptions-item>
                   <el-descriptions-item label="英文名称">
                     {{ currentFactorDetail?.factor_name_en || '-' }}
@@ -475,7 +483,7 @@
               <!-- 因子表达式 / Py文件源码 -->
               <el-card shadow="never" class="info-section">
                 <template #header>
-                  <span>{{ isPyFileFactor(currentFactorDetail) ? 'Python 源码' : '因子表达式' }}</span>
+                  <span>{{ isPyFileFactor(currentFactorDetail) ? 'Python 源码' : isPyCodeFactor(currentFactorDetail) ? 'Python 代码' : '因子表达式' }}</span>
                 </template>
                 <template v-if="isPyFileFactor(currentFactorDetail)">
                   <div class="py-source-actions">
@@ -603,7 +611,7 @@
               </el-card>
 
               <!-- 回测历史（仅表达式模式因子显示） -->
-              <el-card v-if="!isPyFileFactor(currentFactorDetail)" shadow="never" class="info-section">
+              <el-card shadow="never" class="info-section">
                 <template #header>
                   <div class="section-header-with-action">
                     <span>回测历史</span>
@@ -673,7 +681,7 @@
                 >
                   版本升级
                 </el-button>
-                <!-- 单因子发起回测（受菜单权限 my_factor_backtest 控制；Py 文件因子不提供回测，仅表达式因子可见） -->
+                <!-- 单因子发起回测（受菜单权限 my_factor_backtest 控制；Py 文件因子不提供回测，仅表达式和Py代码因子可见） -->
                 <el-button 
                   v-if="hasPermission(FACTOR_BACKTEST_PERMISSION) && !isPyFileFactor(currentFactorDetail)"
                   type="success" 
@@ -700,7 +708,7 @@
                     type="warning"
                     :icon="Upload"
                     @click="handleSubmitPlaza(currentFactorDetail)"
-                    :disabled="submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) || (!isPyFileFactor(currentFactorDetail) && !currentVersionAdmissionPassed)"
+                    :disabled="isPyFileFactor(currentFactorDetail) ? submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) : (submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) || !currentVersionAdmissionPassed)"
                   >
                     {{ submittedVersions.includes(selectedVersion || Number(currentFactorDetail?.version)) ? `v${selectedVersion || Number(currentFactorDetail?.version)} 已提交` : `提交 v${selectedVersion || Number(currentFactorDetail?.version)} 到广场` }}
                   </el-button>
@@ -734,6 +742,7 @@
           <el-radio-group v-model="factorMode">
             <el-radio value="pyfile">Py 文件（上传本地 Python 脚本）</el-radio>
             <el-radio value="expression">表达式（输入因子表达式）</el-radio>
+            <el-radio value="pycode">Python 代码（在编辑器中编写）</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -746,7 +755,11 @@
                 v-model="form.factor_code" 
                 placeholder="英文代码，如 momentum_5d"
                 :disabled="isEdit"
+                @blur="checkFactorCodeDuplicate"
               />
+              <div v-if="factorCodeError" style="color: #f56c6c; font-size: 12px; line-height: 1; padding-top: 4px;">
+                {{ factorCodeError }}
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -776,6 +789,46 @@
             placeholder="输入因子表达式，如：(close - lag(close, 5)) / lag(close, 5)"
           />
         </el-form-item>
+
+        <!-- Python代码模式：CodeMirror编辑器 -->
+        <el-form-item label="Python 代码" v-if="factorMode === 'pycode'" required>
+          <div style="width: 100%;">
+            <div ref="factorPyCodeEditorRef" class="factor-py-code-editor"></div>
+            <div class="form-hint" style="margin-top: 6px;">
+              <el-icon><InfoFilled /></el-icon>
+              需包含 calculate_factor 函数入口；可选定义 build_intermediate_table
+            </div>
+          </div>
+        </el-form-item>
+
+        <!-- Python代码模式：代码检查 -->
+        <div v-if="factorMode === 'pycode' && Object.keys(pyCodeCheckResult).length > 0" class="code-check-panel" style="margin-bottom: 16px;">
+          <div class="code-check-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <el-icon><Warning v-if="hasPyCodeCheckError" /><CircleCheck v-else /></el-icon>
+            <span style="font-weight: 600;">代码检查</span>
+            <el-button type="primary" size="small" :loading="pyCodeChecking" @click="runPyCodeCheck">
+              重新检查
+            </el-button>
+          </div>
+          <div class="code-check-body">
+            <div v-for="(info, tableName) in pyCodeCheckResult" :key="tableName" style="margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <el-icon :style="{ color: info.tableExists ? '#22c55e' : '#ef4444' }">
+                  <CircleCheck v-if="info.tableExists" /><CircleClose v-else />
+                </el-icon>
+                <span style="font-family: 'SF Mono', Monaco, monospace; font-weight: 600;">{{ tableName }}</span>
+                <el-tag v-if="info.tableExists" size="small" type="info">{{ info.database }}</el-tag>
+                <el-tag v-else size="small" type="danger">表不存在</el-tag>
+              </div>
+              <div v-if="info.fields && info.fields.length > 0" style="display: flex; flex-wrap: wrap; gap: 4px; padding-left: 24px;">
+                <span style="font-size: 12px; color: #909399;">字段: </span>
+                <el-tag v-for="field in info.fields" :key="field.name" size="small" :type="field.exists ? 'success' : 'danger'" style="margin: 2px;">
+                  {{ field.name }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Py文件模式：文件选择 -->
         <el-form-item label="Python 文件" v-if="factorMode === 'pyfile'" required>
@@ -1126,7 +1179,7 @@
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">
+        <el-button type="primary" @click="handleSubmit" :loading="submitting" :disabled="submitDisabled">
           {{ isEdit ? '保存并迭代版本' : '创建' }}
         </el-button>
       </template>
@@ -1361,6 +1414,99 @@
               <div class="tiers-hint">{{ researchModeHint }}</div>
             </div>
           </el-form-item>
+
+          <!-- 调度通道（与 SubmitContent.vue 对齐） -->
+          <el-form-item label="调度通道">
+            <el-select v-model="backtestForm.scheduling_lane" style="width: 220px;">
+              <el-option label="自动（auto）" value="auto" />
+              <el-option label="快速（quick）" value="quick" />
+              <el-option label="标准（standard）" value="standard" />
+              <el-option label="慢速（slow）" value="slow" />
+              <el-option label="大内存（highmem）" value="highmem" />
+            </el-select>
+            <div class="form-hint">
+              <el-icon><InfoFilled /></el-icon>
+              自动由网关根据任务属性判定 lane；指定具体值则覆盖网关判定
+            </div>
+          </el-form-item>
+
+          <!-- 高级选项 -->
+          <div class="advanced-section">
+            <div class="advanced-title">高级选项</div>
+              <!-- 内存预算 -->
+              <el-form-item label="内存预算(MB)">
+                <el-input-number v-model="advancedOptions.memoryLimitMb" :min="256" :max="65536" :step="512" controls-position="right" placeholder="留空走引擎默认 4096 MB" style="width: 220px;" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  留空走引擎默认 4096 MB；调高前需确认宿主机内存充足
+                </div>
+              </el-form-item>
+
+              <!-- 长任务模式 -->
+              <el-form-item label="长任务模式">
+                <el-switch v-model="advancedOptions.allowLongRunning" active-text="允许长任务调度" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  适用于超长耗时任务，调度器会放宽超时限制
+                </div>
+              </el-form-item>
+
+              <!-- 参数扫描 -->
+              <el-form-item label="参数扫描">
+                <el-switch v-model="advancedOptions.parameterScan.enabled" active-text="开启参数扫描" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  对因子参数进行网格搜索，自动展开多组候选参数
+                </div>
+              </el-form-item>
+              <template v-if="advancedOptions.parameterScan.enabled">
+                <div class="param-scan-grid">
+                  <div class="grid-header">
+                    <span>参数网格（键=参数名，值=候选值数组）</span>
+                  </div>
+                  <div class="grid-add-row">
+                    <el-button size="small" type="primary" plain @click="advancedOptions.parameterScan.grid.push({ key: '', values: '' })">添加参数</el-button>
+                  </div>
+                  <div v-for="(item, idx) in advancedOptions.parameterScan.grid" :key="idx" class="grid-row">
+                    <el-input v-model="item.key" placeholder="参数名" style="width: 160px;" />
+                    <el-input v-model="item.values" placeholder="候选值，逗号分隔，如 1,5,10" style="flex: 1; margin: 0 8px;" />
+                    <el-button size="small" type="danger" plain @click="advancedOptions.parameterScan.grid.splice(idx, 1)">删除</el-button>
+                  </div>
+                  <el-row :gutter="16" class="grid-options-row">
+                    <el-col :span="12">
+                      <el-form-item label="最大候选数">
+                        <el-input-number v-model="advancedOptions.parameterScan.max_candidates" :min="1" :max="10000" :step="10" controls-position="right" style="width: 100%;" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                      <el-form-item label="仅展开">
+                        <el-switch v-model="advancedOptions.parameterScan.expand_only" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                </div>
+              </template>
+
+              <!-- 自定义算子 -->
+              <el-form-item label="自定义算子">
+                <el-button size="small" type="primary" plain @click="advancedOptions.udfList.push({ name: '', body: '', param_count: 1, description: '' })">添加算子</el-button>
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  定义可在因子代码中调用的自定义算子
+                </div>
+              </el-form-item>
+              <div v-if="advancedOptions.udfList.length > 0" class="udf-list">
+                <div v-for="(udf, idx) in advancedOptions.udfList" :key="idx" class="udf-row">
+                  <div class="udf-row-head">
+                    <el-input v-model="udf.name" placeholder="算子名" style="width: 180px;" />
+                    <el-input-number v-model="udf.param_count" :min="0" :max="20" :step="1" controls-position="right" placeholder="参数个数" style="width: 130px; margin-left: 8px;" />
+                    <el-button size="small" type="danger" plain style="margin-left: 8px;" @click="advancedOptions.udfList.splice(idx, 1)">删除</el-button>
+                  </div>
+                  <el-input v-model="udf.description" placeholder="描述（可选）" style="width: 100%; margin-top: 6px;" />
+                  <el-input v-model="udf.body" type="textarea" :rows="4" placeholder="函数体（Python 代码）" style="margin-top: 6px;" class="code-textarea" />
+                </div>
+              </div>
+          </div>
 
           <!-- 防前视自检（研究模式 quick/deep 显示；admission 引擎强制执行） -->
           <el-form-item v-if="researchMode !== 'admission'" label="防前视自检">
@@ -1820,10 +1966,12 @@
 import { ref, reactive, onMounted, computed, watch, nextTick, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { EditorView, basicSetup } from 'codemirror'
+import { python as pythonLang } from '@codemirror/lang-python'
 import { 
   Loading, Box, Plus, Search, Edit, Delete, DataAnalysis, WarningFilled, Refresh,
   Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document, Clock, TrendCharts,
-  Minus, InfoFilled
+  Minus, InfoFilled, Warning, CircleClose
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -1845,7 +1993,262 @@ const hasPermission = (menuId: string): boolean => {
 const FACTOR_BACKTEST_PERMISSION = 'my_factor_backtest'
 
 // 页面状态
-const factorMode = ref<'expression' | 'pyfile'>('pyfile')
+const factorMode = ref<'expression' | 'pyfile' | 'pycode'>('pyfile')
+
+// 因子代码重复检查
+const factorCodeError = ref('')
+const allFactorCodes = ref<Set<string>>(new Set())
+
+// 加载全量因子代码用于重复检查
+const loadAllFactorCodes = async () => {
+  try {
+    const codes: string[] = []
+    let page = 1
+    const pageSize = 20
+    let total = 0
+    do {
+      const result = await window.electronAPI.factor.myList({ page, page_size: pageSize })
+      const list = result?.data?.factors || []
+      codes.push(...list.map((f: any) => f.factor_code))
+      total = result?.data?.total || 0
+      page++
+    } while (codes.length < total)
+    allFactorCodes.value = new Set(codes)
+  } catch (e) {
+    allFactorCodes.value = new Set()
+  }
+}
+
+const checkFactorCodeDuplicate = () => {
+  const code = form.factor_code.trim()
+  if (isEdit.value || !code) {
+    factorCodeError.value = ''
+    return
+  }
+  const exists = allFactorCodes.value.has(code)
+  factorCodeError.value = exists ? '该因子代码已存在' : ''
+}
+
+// 创建按钮禁用状态
+const editOriginalSnapshot = ref('')
+
+const getSnapshotData = () => {
+    return JSON.stringify({
+      factor_name: form.factor_name,
+      factor_name_en: form.factor_name_en,
+      category_l3_id: form.category_l3_id,
+      expression: factorMode.value === 'pycode' ? factorPyCode.value : form.expression,
+      description: form.description,
+      tag_ids: form.tag_ids,
+      dataSources: dataSources.value.map(ds => ({
+        table: ds.table, engine: ds.engine, database: ds.database,
+        fields: ds.fields, date_field: ds.date_field, code_field: ds.code_field,
+        mode: ds.mode, time_field: ds.time_field, time_start: ds.time_start, time_end: ds.time_end,
+      })),
+    })
+  }
+
+  const takeEditSnapshot = () => {
+    editOriginalSnapshot.value = getSnapshotData()
+  }
+
+  const hasEditChanges = computed(() => {
+    if (!isEdit.value) return true
+    return getSnapshotData() !== editOriginalSnapshot.value
+  })
+
+const submitDisabled = computed(() => {
+    // 因子代码重名
+    if (factorCodeError.value) return true
+    // 必填项：因子代码
+    if (!form.factor_code.trim()) return true
+    // 必填项：因子名称
+    if (!form.factor_name.trim()) return true
+    // 必填项：因子分类
+    if (!form.category_l3_id) return true
+    // 表达式模式：必须有表达式
+    if (factorMode.value === 'expression' && !form.expression.trim()) return true
+    // pycode 模式：必须有代码
+    if (factorMode.value === 'pycode' && !factorPyCode.value.trim()) return true
+    // pycode 模式：代码检查不通过
+    if (factorMode.value === 'pycode' && hasPyCodeCheckError.value) return true
+    // pyfile 模式：必须选了文件（新建时）
+    if (factorMode.value === 'pyfile' && !isEdit.value && !pyFileInfo.fileName) return true
+    // 编辑模式：必须有变动
+    if (isEdit.value && !hasEditChanges.value) return true
+    return false
+  })
+
+// Python 代码编辑器（新建因子对话框用）
+const factorPyCodeEditorRef = ref<HTMLElement>()
+let factorPyCodeEditor: EditorView | null = null
+const factorPyCode = ref('')
+
+const initFactorPyCodeEditor = () => {
+  if (!factorPyCodeEditorRef.value || factorPyCodeEditor) return
+  factorPyCodeEditor = new EditorView({
+    doc: factorPyCode.value || '',
+    extensions: [
+      basicSetup,
+      pythonLang(),
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          factorPyCode.value = update.state.doc.toString()
+        }
+      })
+    ],
+    parent: factorPyCodeEditorRef.value
+  })
+}
+
+const destroyFactorPyCodeEditor = () => {
+  factorPyCodeEditor?.destroy()
+  factorPyCodeEditor = null
+}
+
+// pycode 模式代码检查
+interface PyCodeCheckFieldInfo {
+  name: string
+  exists: boolean
+}
+interface PyCodeCheckInfo {
+  tableExists: boolean
+  database?: string
+  fields: PyCodeCheckFieldInfo[]
+}
+
+const pyCodeCheckResult = ref<Record<string, PyCodeCheckInfo>>({})
+const pyCodeChecking = ref(false)
+
+const hasPyCodeCheckError = computed(() => {
+  for (const info of Object.values(pyCodeCheckResult.value)) {
+    if (!info.tableExists) return true
+    if (info.fields.some(f => !f.exists)) return true
+  }
+  return false
+})
+
+// 解析代码中的数据源引用
+const parsePyCodeDataSources = (code: string): Record<string, string[]> => {
+  const result: Record<string, string[]> = {}
+  const dataAccessPattern = /(\w+)\s*=\s*(?:data|sources)\[['"]([^'"\]]+)['"]\]/g
+  const varToTable: Record<string, string> = {}
+  
+  let match
+  while ((match = dataAccessPattern.exec(code)) !== null) {
+    const varName = match[1]
+    const tableName = match[2]
+    varToTable[varName] = tableName
+    if (!result[tableName]) {
+      result[tableName] = []
+    }
+  }
+  
+  // 找字段访问
+  const assignedFields: Set<string> = new Set()
+  for (const [varName] of Object.entries(varToTable)) {
+    const assignPattern = new RegExp(`${varName}\\[['"]([^'"\\]]+)['"]\\]\\s*=`, 'g')
+    while ((match = assignPattern.exec(code)) !== null) {
+      assignedFields.add(match[1])
+    }
+  }
+  
+  for (const [varName, tableName] of Object.entries(varToTable)) {
+    const fieldPattern = new RegExp(`${varName}\\[['"]([^'"\\]]+)['"]\\]`, 'g')
+    while ((match = fieldPattern.exec(code)) !== null) {
+      const fieldName = match[1]
+      if (!assignedFields.has(fieldName) && !result[tableName].includes(fieldName)) {
+        result[tableName].push(fieldName)
+      }
+    }
+    const dotPattern = new RegExp(`${varName}\\.([a-zA-Z_][a-zA-Z0-9_]*)`, 'g')
+    while ((match = dotPattern.exec(code)) !== null) {
+      const fieldName = match[1]
+      const excludeMethods = ['groupby', 'merge', 'sort_values', 'drop_duplicates', 'fillna', 'dropna', 'reset_index', 'set_index', 'rename', 'apply', 'transform', 'agg', 'aggregate', 'rolling', 'shift', 'diff', 'pct_change', 'rank', 'cumsum', 'cumprod', 'cummax', 'cummin', 'head', 'tail', 'describe', 'info', 'shape', 'dtypes', 'columns', 'index', 'values', 'T', 'copy', 'astype', 'to_numpy', 'to_dict', 'to_list', 'tolist', 'iloc', 'loc', 'at', 'iat', 'isin', 'between', 'clip', 'abs', 'round', 'mean', 'std', 'var', 'sum', 'min', 'max', 'count', 'nunique', 'unique', 'value_counts', 'corr', 'cov', 'median', 'quantile', 'idxmin', 'idxmax', 'mode', 'sample', 'nlargest', 'nsmallest', 'pipe', 'assign', 'query', 'eval', 'melt', 'pivot', 'pivot_table', 'stack', 'unstack', 'explode', 'str', 'dt', 'cat', 'plot', 'hist', 'map', 'replace', 'where', 'mask', 'any', 'all', 'empty', 'bool', 'squeeze', 'swaplevel', 'droplevel', 'xs', 'items', 'iterrows', 'itertuples', 'iteritems', 'pop', 'insert', 'drop', 'filter', 'reindex', 'first_valid_index', 'last_valid_index', 'resample', 'tz_localize', 'tz_convert', 'combine_first', 'update', 'append', 'join', 'combine']
+      if (!excludeMethods.includes(fieldName) && !result[tableName].includes(fieldName)) {
+        result[tableName].push(fieldName)
+      }
+    }
+  }
+  return result
+}
+
+const runPyCodeCheck = async () => {
+  const code = factorPyCode.value
+  if (!code.trim()) {
+    pyCodeCheckResult.value = {}
+    return
+  }
+  
+  const parsed = parsePyCodeDataSources(code)
+  if (Object.keys(parsed).length === 0) {
+    pyCodeCheckResult.value = {}
+    return
+  }
+  
+  pyCodeChecking.value = true
+  const result: Record<string, PyCodeCheckInfo> = {}
+  
+  try {
+    for (const [tableName, fields] of Object.entries(parsed)) {
+      result[tableName] = {
+        tableExists: false,
+        fields: fields.map(f => ({ name: f, exists: false }))
+      }
+      
+      try {
+        let foundTable: any = null
+        const searchKeyword = tableName.includes('.') ? tableName.split('.').pop()! : tableName
+        const searchResult = await window.electronAPI.dbdict.search(searchKeyword)
+        const results = searchResult.data || []
+        for (const item of results) {
+          if (item.type !== 'table') continue
+          const fullName = `${item.database}.${item.table_name}`
+          if (fullName === tableName || item.table_name === tableName) {
+            foundTable = item
+            break
+          }
+        }
+        
+        if (foundTable) {
+          result[tableName].tableExists = true
+          result[tableName].database = foundTable.database
+          
+          try {
+            const tableDetail = await window.electronAPI.dbdict.getTableDetail(foundTable.engine, foundTable.database, foundTable.table_name)
+            if (tableDetail.code === 200 && tableDetail.data?.columns) {
+              const dbFields = tableDetail.data.columns.map((c: any) => c.column_name)
+              result[tableName].fields = fields.map(f => ({
+                name: f,
+                exists: dbFields.includes(f)
+              }))
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+    pyCodeCheckResult.value = result
+  } finally {
+    pyCodeChecking.value = false
+  }
+}
+
+// 代码变化时自动检查（防抖）
+let pyCodeCheckTimer: ReturnType<typeof setTimeout> | null = null
+watch(factorPyCode, () => {
+  if (pyCodeCheckTimer) clearTimeout(pyCodeCheckTimer)
+  pyCodeCheckTimer = setTimeout(() => {
+    runPyCodeCheck()
+  }, 1000)
+})
+
+watch(factorMode, (mode) => {
+  if (mode === 'pycode') {
+    nextTick(() => initFactorPyCodeEditor())
+  } else {
+    destroyFactorPyCodeEditor()
+  }
+})
 const pageLoading = ref(true)
 const isInitialized = ref(false)
 const dbStatus = ref<{ initialized: boolean; database_name: string; user_name: string } | null>(null)
@@ -2298,9 +2701,33 @@ const parseDataSources = (dataSourcesStr: string | object | null) => {
     return ds
   })
   
-  // 加载每个表的字段
-  dataSources.value.forEach((_, index) => {
-    handleTableChange(index)
+  // 加载每个表的可用字段（不清空已回填的 fields/date_field/code_field）
+  dataSources.value.forEach(async (source) => {
+    if (!source.table) return
+    source.loadingFields = true
+    try {
+      // 如果 table 是全限定名（库.表），从中提取 database
+      let engine = source.engine
+      let database = source.database
+      let bareTable = source.table
+      if (source.table.includes('.')) {
+        const parts = source.table.split('.')
+        database = parts[0]
+        bareTable = parts[1]
+        // 如果 engine 是默认值，尝试推断
+        if (!engine || engine === 'clickhouse') {
+          engine = 'clickhouse'
+        }
+      }
+      const result = await window.electronAPI.dbdict.getTableFields(engine, database, bareTable)
+      if (result.code === 200) {
+        source.availableFields = result.data || []
+      }
+    } catch {
+      source.availableFields = []
+    } finally {
+      source.loadingFields = false
+    }
   })
 }
 
@@ -3046,9 +3473,22 @@ const formatFileSize = (bytes: number): string => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-// 判断因子是否为 Py 文件模式
+// 获取因子类型
+const getExpressionType = (factor: any): string => {
+  if (factor?.expression_type && factor.expression_type !== '') {
+    return factor.expression_type
+  }
+  // 回退兼容
+  if (factor?.expression === '__py_file__') return 'py_file'
+  return 'expr'
+}
+
 const isPyFileFactor = (factor: any): boolean => {
-  return factor?.expression === '__py_file__'
+  return getExpressionType(factor) === 'py_file'
+}
+
+const isPyCodeFactor = (factor: any): boolean => {
+  return getExpressionType(factor) === 'py_code'
 }
 
 // 判断因子是否有绩效数据
@@ -3172,6 +3612,10 @@ const openCreateDialog = async () => {
   pyFileInfo.fileName = ''
   pyFileInfo.filePath = ''
   pyFileInfo.fileSize = 0
+  factorPyCode.value = ''
+  pyCodeCheckResult.value = {}
+  factorCodeError.value = ''
+  destroyFactorPyCodeEditor()
   Object.assign(perfForm, {
     ic_mean: undefined,
     ic_ir: undefined,
@@ -3204,6 +3648,8 @@ const openCreateDialog = async () => {
   if (!stockPoolData.value) {
     loadStockPools()
   }
+  // 加载全量因子代码（用于重复检查）
+  loadAllFactorCodes()
   dialogVisible.value = true
 }
 
@@ -3212,7 +3658,7 @@ const handleEdit = async (factor: any) => {
   if (!factor) return
   isEdit.value = true
   editingId.value = factor.factor_id
-  factorMode.value = isPyFileFactor(factor) ? 'pyfile' : 'expression'
+  factorMode.value = isPyFileFactor(factor) ? 'pyfile' : isPyCodeFactor(factor) ? 'pycode' : 'expression'
   Object.assign(form, {
     factor_code: factor.factor_code,
     factor_name: factor.factor_name,
@@ -3254,7 +3700,23 @@ const handleEdit = async (factor: any) => {
   if (detail.data_start_date) perfForm.backtest_start = detail.data_start_date.split('T')[0]
   if (detail.data_end_date) perfForm.backtest_end = detail.data_end_date.split('T')[0]
   if (detail.backtest_period) perfForm.backtest_period = detail.backtest_period
+  // pycode 模式：回填代码到编辑器
+  if (factorMode.value === 'pycode') {
+    factorPyCode.value = factor.expression || ''
+    pyCodeCheckResult.value = {}
+  }
   dialogVisible.value = true
+  // 记录编辑快照（用于变动检测）
+  nextTick(() => takeEditSnapshot())
+  // pycode 模式：nextTick 后初始化编辑器
+  if (factorMode.value === 'pycode') {
+    nextTick(() => {
+      destroyFactorPyCodeEditor()
+      initFactorPyCodeEditor()
+      // 初始化后自动跑一次代码检查
+      runPyCodeCheck()
+    })
+  }
 }
 
 
@@ -3266,6 +3728,15 @@ const handleSubmit = async () => {
     await formRef.value.validate()
   } catch {
     return
+  }
+  
+  // 因子代码重复检查
+  if (!isEdit.value) {
+    checkFactorCodeDuplicate()
+    if (factorCodeError.value) {
+      ElMessage.error(factorCodeError.value)
+      return
+    }
   }
   
   // Py文件模式额外验证
@@ -3335,6 +3806,19 @@ const handleSubmit = async () => {
       return
     }
   }
+
+  // Python代码模式验证
+  if (factorMode.value === 'pycode' && !isEdit.value) {
+    if (!factorPyCode.value.trim()) {
+      ElMessage.error('请输入 Python 代码')
+      return
+    }
+    // 代码检查未通过时拦截
+    if (hasPyCodeCheckError.value) {
+      ElMessage.error('代码检查未通过，请检查表名和字段是否正确')
+      return
+    }
+  }
   
   // 验证数据依赖（必填）
   const dataSourcesObj = buildDataSources()
@@ -3384,7 +3868,14 @@ const handleSubmit = async () => {
   submitting.value = true
   
   try {
-    const expressionValue = factorMode.value === 'pyfile' ? '__py_file__' : form.expression
+    let expressionValue: string
+    if (factorMode.value === 'pyfile') {
+      expressionValue = '__py_file__'
+    } else if (factorMode.value === 'pycode') {
+      expressionValue = factorPyCode.value
+    } else {
+      expressionValue = form.expression
+    }
     
     if (isEdit.value && editingId.value) {
       const updatePayload: Record<string, any> = {
@@ -3450,6 +3941,7 @@ const handleSubmit = async () => {
         factor_name_en: form.factor_name_en || undefined,
         category_l3_id: form.category_l3_id,
         expression: expressionValue,
+        expression_type: factorMode.value === 'pyfile' ? 'py_file' : factorMode.value === 'pycode' ? 'py_code' : 'expr',
         description: form.description || undefined,
         data_sources: dataSourcesObj,
         tag_ids: form.tag_ids.length > 0 ? form.tag_ids : undefined
@@ -3631,7 +4123,22 @@ const backtestForm = reactive({
   // 费率三件套（单位 bp），留空则引擎回退 A 股拆分模型
   risk_free_rate: null as number | null,
   buy_cost_bps: null as number | null,
-  sell_cost_bps: null as number | null
+  sell_cost_bps: null as number | null,
+  // 调度通道（批量回测只用 preferred_lane，不加 allow_long_running）
+  scheduling_lane: 'auto' as 'auto' | 'quick' | 'standard' | 'slow' | 'highmem'
+})
+
+// 高级选项（批量回测）
+const advancedOptions = reactive({
+  memoryLimitMb: null as number | null,
+  allowLongRunning: false,
+  parameterScan: {
+    enabled: false,
+    grid: [] as Array<{ key: string; values: string }>,
+    max_candidates: 100,
+    expand_only: false
+  },
+  udfList: [] as Array<{ name: string; body: string; param_count: number; description: string }>
 })
 
 // 研究模式（顶层字段）
@@ -4090,6 +4597,42 @@ const submitBacktest = async () => {
         risk_free_rate: backtestForm.risk_free_rate ?? undefined,
         buy_cost_bps: backtestForm.buy_cost_bps ?? undefined,
         sell_cost_bps: backtestForm.sell_cost_bps ?? undefined
+      },
+      scheduling: {
+        allow_long_running: advancedOptions.allowLongRunning || undefined,
+        preferred_lane: backtestForm.scheduling_lane && backtestForm.scheduling_lane !== 'auto' ? backtestForm.scheduling_lane : undefined
+      }
+    }
+
+    // calc_options（内存预算，留空不传）
+    if (advancedOptions.memoryLimitMb) {
+      data.calc_options = {
+        memory_limit_mb: advancedOptions.memoryLimitMb
+      }
+    }
+
+    // 自定义算子（非空时传）
+    if (advancedOptions.udfList.length > 0) {
+      data.udfs = advancedOptions.udfList.map(u => ({
+        name: u.name,
+        body: u.body,
+        param_count: u.param_count,
+        description: u.description || undefined
+      }))
+    }
+
+    // 参数扫描（开启时传）
+    if (advancedOptions.parameterScan.enabled) {
+      const gridObj: Record<string, any[]> = {}
+      for (const item of advancedOptions.parameterScan.grid) {
+        if (!item.key) continue
+        gridObj[item.key] = item.values.split(',').map(v => v.trim()).filter(Boolean)
+      }
+      data.parameter_scan = {
+        enabled: true,
+        grid: gridObj,
+        max_candidates: advancedOptions.parameterScan.max_candidates,
+        expand_only: advancedOptions.parameterScan.expand_only
       }
     }
 
@@ -4538,6 +5081,7 @@ const formatFullTime = (time: string) => {
 onMounted(async () => {
   await checkStatus()
   loadPriceTypeOptions()
+  loadAllFactorCodes()
   // 若从回测任务页带 factorId 跳转过来，自动定位到该因子
   locateFactorFromQuery()
 })
@@ -4563,6 +5107,69 @@ onMounted(async () => {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
+}
+
+// 高级选项区域
+.advanced-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+
+  .advanced-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #4b5563;
+    margin-bottom: 12px;
+  }
+
+  .param-scan-grid {
+    margin: 8px 0 12px;
+
+    .grid-header {
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .grid-add-row {
+      margin-bottom: 8px;
+    }
+
+    .grid-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .grid-options-row {
+      margin-top: 12px;
+      align-items: flex-end;
+    }
+  }
+
+  .udf-list {
+    margin: 8px 0 12px;
+
+    .udf-row {
+      padding: 12px;
+      margin-bottom: 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+
+      .udf-row-head {
+        display: flex;
+        align-items: center;
+      }
+    }
+  }
+
+  .code-textarea {
+    :deep(.el-textarea__inner) {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+    }
+  }
 }
 
 // 三档递进包含可视化（回测弹窗内）
@@ -5516,6 +6123,22 @@ onMounted(async () => {
 }
 
 // 回测对话框样式
+// 回测配置对话框
+:deep(.el-dialog) {
+  // 修正关闭按钮点击热区错位（内容区 overflow 导致 header 被遮挡）
+  .el-dialog__header {
+    position: relative;
+    z-index: 10;
+    margin-right: 0;
+  }
+
+  .el-dialog__headerbtn {
+    top: 4px;
+    right: 6px;
+    z-index: 11;
+  }
+}
+
 .backtest-dialog-content {
   max-height: 80vh;
   overflow-y: auto;
@@ -5929,5 +6552,20 @@ onMounted(async () => {
   0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); border-color: #3b82f6; background: #eff6ff; }
   30% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); border-color: #3b82f6; background: #eff6ff; }
   100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+.factor-py-code-editor {
+  width: 100%;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.factor-py-code-editor :deep(.cm-editor) {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+}
+.factor-py-code-editor :deep(.cm-scroller) {
+  overflow: auto;
+  max-height: 400px;
 }
 </style>

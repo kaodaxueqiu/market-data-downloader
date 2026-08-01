@@ -224,7 +224,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     myCategories: () => ipcRenderer.invoke('factor:myCategories'),
     myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) =>
       ipcRenderer.invoke('factor:myList', params || {}),
-    myCreate: (data: { factor_code: string; factor_name: string; category_l3_id: number; expression: string; factor_name_en?: string; description?: string; data_sources?: Record<string, string[]>; lookback_period?: number }) =>
+    myCreate: (data: { factor_code: string; factor_name: string; category_l3_id: number; expression: string; expression_type?: 'expr' | 'py_file' | 'py_code'; factor_name_en?: string; description?: string; data_sources?: Record<string, string[]>; lookback_period?: number }) =>
       ipcRenderer.invoke('factor:myCreate', data),
     myBatchCreate: (factors: any[]) => ipcRenderer.invoke('factor:myBatchCreate', factors),
     myDetail: (factorId: string | number) => ipcRenderer.invoke('factor:myDetail', factorId),
@@ -298,6 +298,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:getFactorValueDistribution', taskId, params),
     downloadFactorValues: (taskId: string, tradeDate?: string) =>
       ipcRenderer.invoke('backtest:downloadFactorValues', taskId, tradeDate)
+  },
+
+  // 中间统计表 API
+  intermediateTable: {
+    list: () => ipcRenderer.invoke('intermediateTable:list'),
+    create: (data: any) => ipcRenderer.invoke('intermediateTable:create', data),
+    delete: (tableName: string) => ipcRenderer.invoke('intermediateTable:delete', tableName),
+    update: (tableName: string, data: any) => ipcRenderer.invoke('intermediateTable:update', tableName, data),
+    setTtl: (tableName: string, ttl: string) => ipcRenderer.invoke('intermediateTable:setTtl', tableName, ttl)
   },
 
   // 数据缓存管理 API
@@ -896,6 +905,13 @@ declare global {
         getFactorValueStats: (taskId: string, tradeDate: string) => Promise<{ success: boolean; data?: any; error?: string }>
         getFactorValueDistribution: (taskId: string, params: { trade_date: string; bins?: number }) => Promise<{ success: boolean; data?: any; error?: string }>
         downloadFactorValues: (taskId: string, tradeDate?: string) => Promise<{ success: boolean; filePath?: string; error?: string }>
+      }
+      intermediateTable: {
+        list: () => Promise<{ success: boolean; data?: any; error?: string }>
+        create: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        delete: (tableName: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        update: (tableName: string, data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        setTtl: (tableName: string, ttl: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }
       marketData: {
         listDefinitions: () => Promise<{ success: boolean; data?: any; error?: string }>

@@ -102,6 +102,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'cache-manager',
         redirect: '/factor-library/engine-config/cache'
+      },
+      {
+        path: 'intermediate-table',
+        name: 'IntermediateTable',
+        component: () => import('../views/FactorLibrary/IntermediateTable/Main.vue'),
+        meta: { menuId: 'intermediate_table' }
       }
     ]
   },
