@@ -218,14 +218,33 @@
             <el-collapse v-if="loadSummaryList.length" class="load-diag-collapse" style="margin: 8px 16px; border-radius: 6px; overflow: hidden;">
               <el-collapse-item title="数据加载诊断" name="load-summary">
                 <el-table :data="loadSummaryList" size="small" border stripe>
-                  <el-table-column prop="name" label="数据源" min-width="120" />
-                  <el-table-column prop="table" label="表" min-width="120" />
-                  <el-table-column prop="final_rows" label="行数" width="90" />
-                  <el-table-column prop="final_columns" label="列数" width="70" />
-                  <el-table-column label="日期范围" min-width="180">
+                  <el-table-column label="数据源" min-width="140">
+                    <template #default="{ row }">
+                      <div>{{ splitQualifiedTable(row.table).database || '—' }}</div>
+                      <div v-if="row.name" class="source-logical-name">{{ row.name }}</div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="表" min-width="180" show-overflow-tooltip>
+                    <template #default="{ row }">{{ splitQualifiedTable(row.table).table || '—' }}</template>
+                  </el-table-column>
+                  <el-table-column prop="final_rows" label="行数" width="100" align="right" />
+                  <el-table-column label="列数" width="80" align="center">
+                    <template #default="{ row }">
+                      <el-tooltip
+                        v-if="Array.isArray(row.final_columns)"
+                        placement="top"
+                        popper-class="load-diag-tooltip"
+                        :content="row.final_columns.join('，')"
+                      >
+                        <span class="column-count">{{ row.final_columns.length }}</span>
+                      </el-tooltip>
+                      <span v-else>{{ row.final_columns ?? '—' }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="日期范围" width="220" align="center">
                     <template #default="{ row }">{{ row.min_date || '—' }} ~ {{ row.max_date || '—' }}</template>
                   </el-table-column>
-                  <el-table-column label="覆盖警告" min-width="160">
+                  <el-table-column label="覆盖警告" min-width="220">
                     <template #default="{ row }">
                       <span v-if="row.coverage_warning" style="color: #e6a23c; font-weight: 600">{{ row.coverage_warning }}</span>
                       <span v-else style="color: #909399">—</span>
@@ -1524,6 +1543,15 @@ const loadSummaryList = computed<any[]>(() => {
   return Array.isArray(ls) ? ls : []
 })
 
+// 拆分全限定表名：market_mart.zz_500D → { database: 'market_mart', table: 'zz_500D' }
+const splitQualifiedTable = (t: string) => {
+  if (!t) return { database: '', table: '' }
+  const idx = t.indexOf('.')
+  return idx > 0
+    ? { database: t.slice(0, idx), table: t.slice(idx + 1) }
+    : { database: '', table: t }
+}
+
 // ============ admission effective 字段读取（v0.2.7 对接） ============
 // 仅 admission 模式且 v0.2.7+ 任务才会有这些字段；历史任务需降级到 task_config
 const isAdmissionMode = computed<boolean>(() => {
@@ -2759,6 +2787,12 @@ onUnmounted(() => {
     padding-right: 16px;
   }
 }
+
+// 数据加载诊断：列数数字（可悬停查看完整列名）
+.column-count {
+  border-bottom: 1px dashed #c0c4cc;
+  cursor: default;
+}
 // ============================================
 // Tab 样式优化 - 圆角分段式
 // ============================================
@@ -2830,11 +2864,19 @@ $radius-md: 10px;
 $radius-lg: 14px;
 $font-mono: 'Fira Code', 'JetBrains Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 $transition-fast: 150ms ease;
+
+// 数据加载诊断：数据源逻辑名（库名下方的灰色小字）
+.source-logical-name {
+  font-size: 12px;
+  color: $text-muted;
+  line-height: 1.4;
+}
 $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 
 .result-content {
   background: $bg-page;
-  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
 
   // ===== 研究分析（回测三模式） =====
   .research-analysis {
@@ -3063,6 +3105,9 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
     background: $bg-card;
     border-radius: $radius-lg;
     box-shadow: $shadow-sm;
+    position: sticky;
+    top: 0;
+    z-index: 10;
     
     .header-actions {
       display: flex;
@@ -3227,122 +3272,114 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
     }
   }
   
-  // 信息横幅 - 专业深蓝渐变
+  // 信息横幅 - 浅色卡片，与页面其他卡片一致
   .info-banner {
-    background: linear-gradient(135deg, $primary 0%, #1E3A8A 50%, #312E81 100%);
+    background: $bg-card;
+    border: 1px solid $border;
     border-radius: $radius-lg;
-    padding: 28px 32px;
-    color: #fff;
-    margin-bottom: 28px;
-    box-shadow: $shadow-lg;
-    position: relative;
-    overflow: hidden;
-    
-    // 装饰图案
-    &::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      right: -20%;
-      width: 400px;
-      height: 400px;
-      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    
+    padding: 20px 24px;
+    color: $text-primary;
+    margin-bottom: 20px;
+    box-shadow: $shadow-sm;
+
     .banner-main {
-      position: relative;
-      z-index: 1;
-      
       .banner-top {
-        margin-bottom: 20px;
-        
+        margin-bottom: 16px;
+
         h2 {
-          margin: 0 0 14px 0;
-          font-size: 24px;
-          font-weight: 700;
+          margin: 0 0 12px 0;
+          font-size: 20px;
+          font-weight: 600;
           letter-spacing: -0.025em;
         }
       }
-      
+
       .banner-meta {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 16px;
-        font-size: 14px;
-        
+        gap: 12px;
+        font-size: 13px;
+        color: $text-secondary;
+
         .status-badge {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 6px 14px;
-          background: rgba(255, 255, 255, 0.2);
+          padding: 4px 12px;
+          background: #f4f4f5;
+          color: $text-muted;
           border-radius: $radius-sm;
           font-weight: 600;
-          backdrop-filter: blur(4px);
-          
-          &.completed { 
-            background: rgba($positive, 0.3);
+          font-size: 12px;
+
+          &.completed {
+            background: rgba($positive, 0.12);
+            color: $positive;
           }
-          &.running { 
-            background: rgba($accent, 0.3);
+          &.running {
+            background: rgba($primary, 0.12);
+            color: $primary;
           }
           &.deferred {
-            background: rgba($warning, 0.35);
+            background: rgba($warning, 0.15);
+            color: $warning;
+          }
+          &.failed {
+            background: rgba($negative, 0.12);
+            color: $negative;
           }
         }
-        
+
         .meta-divider {
-          opacity: 0.4;
-          color: #fff;
+          color: $border;
         }
-        
+
         .task-id-text {
           font-family: $font-mono;
           font-size: 12px;
-          opacity: 0.75;
-          background: rgba(255,255,255,0.1);
-          padding: 4px 10px;
+          color: $text-muted;
+          background: $bg-muted;
+          padding: 3px 10px;
           border-radius: $radius-sm;
         }
         .engine-version {
           font-size: 12px;
-          opacity: 0.85;
-          background: rgba(255,255,255,0.12);
-          padding: 4px 10px;
+          color: $text-secondary;
+          background: $bg-muted;
+          padding: 3px 10px;
           border-radius: $radius-sm;
         }
       }
-      
+
       .banner-config {
         display: flex;
         flex-wrap: wrap;
-        gap: 20px;
-        padding-top: 20px;
-        margin-top: 20px;
-        border-top: 1px solid rgba(255, 255, 255, 0.15);
-        
+        gap: 12px 20px;
+        padding-top: 16px;
+        margin-top: 16px;
+        border-top: 1px solid $border;
+
         .config-item {
           display: flex;
           align-items: center;
-          gap: 10px;
-          
+          gap: 8px;
+
           .config-label {
             font-size: 13px;
-            opacity: 0.75;
+            color: $text-muted;
             display: inline-flex;
             align-items: center;
             gap: 4px;
           }
-          
+
           .config-value {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 5px 12px;
+            color: $text-primary;
+            background: $bg-muted;
+            padding: 4px 10px;
             border-radius: $radius-sm;
-            backdrop-filter: blur(4px);
           }
 
           .override-badge {

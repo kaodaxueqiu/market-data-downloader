@@ -241,7 +241,7 @@
     <el-dialog
       v-model="detailDialogVisible"
       title="任务详情"
-      width="700px"
+      width="960px"
       :close-on-click-modal="false"
       class="detail-dialog"
     >
@@ -1161,14 +1161,14 @@ onMounted(() => {
   }
 }
 
-// 详情弹窗
-.detail-dialog {
-  :deep(.el-dialog__body) {
-    padding: 0;
-    max-height: 70vh;
-    overflow-y: auto;
-  }
+// 详情弹窗（el-dialog teleport 到 body，scoped 选择器无法命中，必须用 :global）
+:global(.detail-dialog.el-dialog .el-dialog__body) {
+  padding: 0;
+  height: 62vh;
+  overflow-y: auto;
+}
 
+.detail-dialog {
   .detail-content {
     min-height: 200px;
 

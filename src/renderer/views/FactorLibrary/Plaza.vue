@@ -161,6 +161,20 @@
                       {{ activeDetail?.factor_id || selectedFactor.factor_id }}
                     </span>
                   </el-descriptions-item>
+                  <el-descriptions-item label="因子类型">
+                    <el-tag v-if="isPyFileFactor(detailData || selectedFactor)" size="small" type="warning" effect="plain">Py文件</el-tag>
+                    <el-tag v-else-if="isPyCodeFactor(detailData || selectedFactor)" size="small" type="success" effect="plain">Py代码</el-tag>
+                    <el-tag v-else size="small" type="info" effect="plain">表达式</el-tag>
+                  </el-descriptions-item>
+                  <el-descriptions-item v-if="isPyCodeFactor(detailData || selectedFactor)" label="聚合方式">
+                    {{ activeDetail?.factor_code_meta?.factor_aggregation || detailData?.factor_code_meta?.factor_aggregation || 'mean' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item v-if="isPyCodeFactor(detailData || selectedFactor)" label="依赖库">
+                    <template v-if="(activeDetail?.factor_code_meta?.requires || detailData?.factor_code_meta?.requires || []).length">
+                      <el-tag v-for="lib in (activeDetail?.factor_code_meta?.requires || detailData?.factor_code_meta?.requires)" :key="lib" size="small" type="info" effect="plain" style="margin-right: 4px;">{{ lib }}</el-tag>
+                    </template>
+                    <span v-else style="color: #909399;">无</span>
+                  </el-descriptions-item>
                   <el-descriptions-item label="英文名称">
                     {{ activeDetail?.factor_name_en || '-' }}
                   </el-descriptions-item>
@@ -244,7 +258,7 @@
               <!-- 因子表达式 / Py文件源码 -->
               <el-card shadow="never" class="info-section">
                 <template #header>
-                  <span>{{ isPyFileFactor(detailData || selectedFactor) ? 'Python 源码' : '因子表达式' }}</span>
+                  <span>{{ isPyFileFactor(detailData || selectedFactor) ? 'Python 源码' : isPyCodeFactor(detailData || selectedFactor) ? 'Python 代码' : '因子表达式' }}</span>
                 </template>
                 <template v-if="isPyFileFactor(detailData || selectedFactor)">
                   <div class="py-source-actions">
@@ -402,7 +416,8 @@
           </el-table-column>
           <el-table-column label="类型" width="90" align="center">
             <template #default="{ row }">
-              <el-tag v-if="row.expression_type === 'py_file'" size="small" type="warning" effect="plain">Py</el-tag>
+              <el-tag v-if="row.expression_type === 'py_file'" size="small" type="warning" effect="plain">Py文件</el-tag>
+              <el-tag v-else-if="row.expression_type === 'py_code'" size="small" type="success" effect="plain">Py代码</el-tag>
               <el-tag v-else size="small" type="info" effect="plain">表达式</el-tag>
             </template>
           </el-table-column>
@@ -710,7 +725,12 @@ const viewSource = async () => {
 
 const isPyFileFactor = (factor: any) => {
   if (!factor) return false
-  return factor.expression === '__py_file__'
+  return factor.expression === '__py_file__' || factor.expression_type === 'py_file'
+}
+
+const isPyCodeFactor = (factor: any) => {
+  if (!factor) return false
+  return factor.expression_type === 'py_code'
 }
 
 const hasDataSources = (ds: any) => {
@@ -1181,5 +1201,10 @@ onMounted(() => {
     background: #ecf5ff;
     border: 1px solid #b3d8ff;
   }
+}
+
+// 描述列表 label 不换行（避免标题折成两行）
+:deep(.el-descriptions__label) {
+  white-space: nowrap;
 }
 </style>

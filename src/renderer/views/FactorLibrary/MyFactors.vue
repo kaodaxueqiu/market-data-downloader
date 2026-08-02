@@ -382,6 +382,15 @@
                     <el-tag v-else-if="isPyCodeFactor(currentFactorDetail)" size="small" type="success" effect="plain">Py代码</el-tag>
                     <el-tag v-else size="small" type="info" effect="plain">表达式</el-tag>
                   </el-descriptions-item>
+                  <el-descriptions-item v-if="isPyCodeFactor(currentFactorDetail)" label="聚合方式">
+                    {{ currentFactorDetail?.factor_code_meta?.factor_aggregation || 'mean' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item v-if="isPyCodeFactor(currentFactorDetail)" label="依赖库">
+                    <div v-if="currentFactorDetail?.factor_code_meta?.requires?.length" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                      <el-tag v-for="lib in currentFactorDetail.factor_code_meta.requires" :key="lib" size="small" type="info" effect="plain">{{ lib }}</el-tag>
+                    </div>
+                    <span v-else style="color: #909399;">无</span>
+                  </el-descriptions-item>
                   <el-descriptions-item label="英文名称">
                     {{ currentFactorDetail?.factor_name_en || '-' }}
                   </el-descriptions-item>
@@ -592,6 +601,15 @@
                   <el-descriptions-item label="描述">
                     {{ activeDetail?.description || '-' }}
                   </el-descriptions-item>
+                  <el-descriptions-item v-if="isPyCodeFactor(currentFactorDetail)" label="聚合方式">
+                    {{ activeDetail?.factor_code_meta?.factor_aggregation || 'mean' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item v-if="isPyCodeFactor(currentFactorDetail)" label="依赖库">
+                    <div v-if="activeDetail?.factor_code_meta?.requires?.length" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                      <el-tag v-for="lib in activeDetail.factor_code_meta.requires" :key="lib" size="small" type="info" effect="plain">{{ lib }}</el-tag>
+                    </div>
+                    <span v-else style="color: #909399;">无</span>
+                  </el-descriptions-item>
                   <el-descriptions-item label="IC均值">
                     {{ activeDetail?.ic_mean?.toFixed(4) || '-' }}
                   </el-descriptions-item>
@@ -800,6 +818,26 @@
             </div>
           </div>
         </el-form-item>
+
+        <!-- Python代码模式：聚合方式 + 依赖库 -->
+        <el-row v-if="factorMode === 'pycode'" :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="聚合方式">
+              <el-select v-model="factorAggregation" style="width: 100%;">
+                <el-option label="均值 (mean)" value="mean" />
+                <el-option label="最新 (last)" value="last" />
+                <el-option label="求和 (sum)" value="sum" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="16">
+            <el-form-item label="依赖库">
+              <el-select v-model="factorRequires" multiple collapse-tags placeholder="默认无额外依赖" style="width: 100%;">
+                <el-option v-for="lib in factorRequireOptions" :key="lib" :label="lib" :value="lib" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <!-- Python代码模式：代码检查 -->
         <div v-if="factorMode === 'pycode' && (Object.keys(pyCodeCheckResult).length > 0 || pyCodeFuncError)" class="code-check-panel" style="margin-bottom: 16px;">
@@ -1297,6 +1335,13 @@
                   <span class="ds-fields">{{ ds.fields.join(', ') }}</span>
                 </div>
               </div>
+              <span v-else style="color: #909399;">无</span>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="isPyCodeFactor(backtestFactors[0])" label="聚合方式">
+              {{ backtestMeta?.factor_aggregation || 'mean' }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="isPyCodeFactor(backtestFactors[0])" label="依赖库">
+              <span v-if="backtestMeta?.requires?.length">{{ backtestMeta.requires.join('、') }}</span>
               <span v-else style="color: #909399;">无</span>
             </el-descriptions-item>
           </el-descriptions>
@@ -1905,64 +1950,6 @@
         </el-button>
       </template>
     </el-dialog>
-
-    <!-- 版本详情弹窗 -->
-    <el-dialog
-      v-model="versionDetailVisible"
-      :title="`版本 v${versionDetailData?.version || ''} 详情`"
-      width="700px"
-      top="8vh"
-    >
-      <div v-loading="loadingVersionDetail" style="max-height: 60vh; overflow-y: auto;">
-        <el-descriptions v-if="versionDetailData" :column="2" size="small" border>
-          <el-descriptions-item label="因子名称" :span="2">
-            {{ versionDetailData.factor_name }}
-          </el-descriptions-item>
-          <el-descriptions-item label="因子代码">
-            <el-text style="font-family: monospace;">{{ versionDetailData.factor_code }}</el-text>
-          </el-descriptions-item>
-          <el-descriptions-item label="版本">
-            <el-tag size="small">v{{ versionDetailData.version }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="描述" :span="2">
-            {{ versionDetailData.description || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="IC均值">
-            {{ versionDetailData.ic_mean?.toFixed(4) || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="Rank IC IR">
-            {{ versionDetailData.rank_ic_ir?.toFixed(4) || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="夏普比率">
-            {{ versionDetailData.sharpe_ratio?.toFixed(2) || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="最大回撤">
-            {{ versionDetailData.max_drawdown ? (versionDetailData.max_drawdown * 100).toFixed(2) + '%' : '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="换手率">
-            {{ versionDetailData.turnover ? (versionDetailData.turnover * 100).toFixed(2) + '%' : '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="回测周期">
-            {{ versionDetailData.backtest_period || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="数据起始">
-            {{ versionDetailData.data_start_date || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="数据截止">
-            {{ versionDetailData.data_end_date || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="股票域类型">
-            {{ versionDetailData.universe_type || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="股票域">
-            {{ versionDetailData.universe_id || versionDetailData.universe_desc || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="更新时间" :span="2">
-            {{ formatTime(versionDetailData.updated_at) }}
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -2042,6 +2029,8 @@ const getSnapshotData = () => {
       factor_name_en: form.factor_name_en,
       category_l3_id: form.category_l3_id,
       expression: factorMode.value === 'pycode' ? factorPyCode.value : form.expression,
+      factor_aggregation: factorMode.value === 'pycode' ? factorAggregation.value : undefined,
+      requires: factorMode.value === 'pycode' ? factorRequires.value : undefined,
       description: form.description,
       tag_ids: form.tag_ids,
       dataSources: dataSources.value.map(ds => ({
@@ -2087,6 +2076,13 @@ const submitDisabled = computed(() => {
 const factorPyCodeEditorRef = ref<HTMLElement>()
 let factorPyCodeEditor: EditorView | null = null
 const factorPyCode = ref('')
+// pycode 模式：执行元信息（factor_code_meta）
+const factorAggregation = ref<'mean' | 'last' | 'sum'>('mean')
+const factorRequires = ref<string[]>([])
+const factorRequireOptions = [
+  'numpy', 'pandas', 'pyarrow', 'polars', 'numba',
+  'scipy', 'sklearn', 'statsmodels', 'lightgbm', 'xgboost'
+]
 
 const initFactorPyCodeEditor = () => {
   if (!factorPyCodeEditorRef.value || factorPyCodeEditor) return
@@ -3581,11 +3577,6 @@ const currentVersionHasSource = computed(() => {
   return found.has_source !== false
 })
 
-// 查看历史版本详情（弹窗）
-const versionDetailVisible = ref(false)
-const versionDetailData = ref<any>(null)
-const loadingVersionDetail = ref(false)
-
 // 查看 Py 源码（从服务器获取，按版本）
 const pySourceContent = ref('')
 const loadingPySource = ref(false)
@@ -3629,6 +3620,8 @@ const openCreateDialog = async () => {
   factorPyCode.value = ''
   pyCodeCheckResult.value = {}
   factorCodeError.value = ''
+  factorAggregation.value = 'mean'
+  factorRequires.value = []
   destroyFactorPyCodeEditor()
   Object.assign(perfForm, {
     ic_mean: undefined,
@@ -3718,6 +3711,10 @@ const handleEdit = async (factor: any) => {
   if (factorMode.value === 'pycode') {
     factorPyCode.value = factor.expression || ''
     pyCodeCheckResult.value = {}
+    // 回填执行元信息（factor_code_meta）
+    const meta = detail.factor_code_meta || {}
+    factorAggregation.value = meta.factor_aggregation || 'mean'
+    factorRequires.value = Array.isArray(meta.requires) ? meta.requires : []
   }
   dialogVisible.value = true
   // 记录编辑快照（用于变动检测）
@@ -3901,6 +3898,17 @@ const handleSubmit = async () => {
         data_sources: dataSourcesObj,
         tag_ids: form.tag_ids.length > 0 ? form.tag_ids : undefined
       }
+      // pycode 模式：携带完整执行元信息（自包含，不依赖网关补齐）
+      if (factorMode.value === 'pycode') {
+        updatePayload.factor_code_meta = {
+          entrypoint: 'calculate_factor',
+          allow_pandas: true,
+          result_mode: 'dataframe',
+          factor_aggregation: factorAggregation.value,
+          requires: factorRequires.value,
+          isolation: false
+        }
+      }
       // Py文件模式：将绩效、回测周期、股票域合并到同一次 PUT
       if (factorMode.value === 'pyfile') {
         if (perfForm.ic_mean !== undefined) updatePayload.ic_mean = perfForm.ic_mean
@@ -3959,6 +3967,17 @@ const handleSubmit = async () => {
         description: form.description || undefined,
         data_sources: dataSourcesObj,
         tag_ids: form.tag_ids.length > 0 ? form.tag_ids : undefined
+      }
+      // pycode 模式：携带完整执行元信息（自包含，不依赖网关补齐）
+      if (factorMode.value === 'pycode') {
+        createPayload.factor_code_meta = {
+          entrypoint: 'calculate_factor',
+          allow_pandas: true,
+          result_mode: 'dataframe',
+          factor_aggregation: factorAggregation.value,
+          requires: factorRequires.value,
+          isolation: false
+        }
       }
       // Py文件模式：将绩效、回测周期、股票域合并到创建请求
       if (factorMode.value === 'pyfile') {
@@ -4520,6 +4539,7 @@ const openBacktest = async (factor: any) => {
   riskNeutralization.includeEach = false
   backtestFactor.value = factor
   backtestFactors.value = [factor]
+  resolveBacktestMeta(factor)
   // 确保选项已加载
   if (standardIndexes.value.length === 0) {
     await loadPriceTypeOptions()
@@ -4540,6 +4560,7 @@ const openAdmission = async (factor: any) => {
   researchMode.value = 'admission'
   backtestFactor.value = factor
   backtestFactors.value = [factor]
+  resolveBacktestMeta(factor)
   if (standardIndexes.value.length === 0) {
     await loadPriceTypeOptions()
   }
@@ -4557,6 +4578,24 @@ const backtestVersion = computed(() => {
   const ver = selectedVersion.value || Number(backtestFactor.value.version)
   return ver && !Number.isNaN(ver) ? ver : null
 })
+
+// 回测弹窗展示的 pycode 执行元信息（按回测版本取，与后端组装口径一致）
+const backtestMeta = ref<{ factor_aggregation?: string; requires?: string[] } | null>(null)
+
+const resolveBacktestMeta = async (factor: any) => {
+  backtestMeta.value = null
+  if (!isPyCodeFactor(factor)) return
+  const ver = selectedVersion.value || Number(factor.version)
+  // 指定了老版本：取该版本快照的 meta，而非最新版
+  if (ver && ver !== Number(factor.version)) {
+    try {
+      const result = await window.electronAPI.factor.myVersionDetail(factor.factor_id, ver)
+      backtestMeta.value = result?.data?.factor_code_meta || null
+      return
+    } catch { /* 拉取失败回退到列表项 meta */ }
+  }
+  backtestMeta.value = factor.factor_code_meta || null
+}
 
 // 解析回测因子的数据依赖
 const parsedBacktestDataSources = computed(() => {
@@ -6581,5 +6620,10 @@ onMounted(async () => {
 .factor-py-code-editor :deep(.cm-scroller) {
   overflow: auto;
   max-height: 400px;
+}
+
+// 描述列表 label 不换行（避免标题折成两行）
+:deep(.el-descriptions__label) {
+  white-space: nowrap;
 }
 </style>

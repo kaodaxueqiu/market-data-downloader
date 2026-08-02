@@ -62,7 +62,8 @@ html, body {
 // 卡片内部滚动条：默认隐藏，hover显示
 .left-panel,
 .middle-panel,
-.right-panel {
+.right-panel,
+.result-content {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 
@@ -82,6 +83,36 @@ html, body {
   &:hover::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.1);
   }
+}
+
+// 详情弹窗内容区滚动条：与侧边栏一致，细+默认隐藏，hover显示
+.detail-dialog.el-dialog .el-dialog__body,
+.task-detail-dialog.el-dialog .el-dialog__body {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+  }
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 2px;
+  }
+
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+  }
+}
+
+// 数据加载诊断列名 tooltip：限制最大宽度并换行
+.load-diag-tooltip {
+  max-width: 480px;
+  word-break: break-all;
 }
 
 // el-scrollbar 滚动条：hover 淡入，离开淡出

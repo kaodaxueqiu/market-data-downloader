@@ -325,7 +325,7 @@
     <el-dialog
       v-model="detailDialogVisible"
       title="任务详情"
-      width="700px"
+      width="960px"
       :close-on-click-modal="false"
       class="task-detail-dialog"
     >
@@ -1755,14 +1755,14 @@ onUnmounted(() => stopPolling())
   50% { opacity: 0.5; }
 }
 
-// 详情弹窗样式
+// 详情弹窗样式（el-dialog teleport 到 body，scoped 选择器无法命中，必须用 :global）
+:global(.task-detail-dialog.el-dialog .el-dialog__body) {
+  padding: 0;
+  height: 62vh;
+  overflow-y: auto;
+}
+
 .task-detail-dialog {
-  :deep(.el-dialog__body) {
-    padding: 0;
-    max-height: 70vh;
-    overflow-y: auto;
-  }
-  
   .detail-content {
     min-height: 200px;
     

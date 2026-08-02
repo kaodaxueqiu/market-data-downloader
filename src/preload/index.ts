@@ -224,7 +224,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     myCategories: () => ipcRenderer.invoke('factor:myCategories'),
     myList: (params?: { category_l3_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }) =>
       ipcRenderer.invoke('factor:myList', params || {}),
-    myCreate: (data: { factor_code: string; factor_name: string; category_l3_id: number; expression: string; expression_type?: 'expr' | 'py_file' | 'py_code'; factor_name_en?: string; description?: string; data_sources?: Record<string, string[]>; lookback_period?: number }) =>
+    myCreate: (data: { factor_code: string; factor_name: string; category_l3_id: number; expression: string; expression_type?: 'expr' | 'py_file' | 'py_code'; factor_code_meta?: { entrypoint?: string; allow_pandas?: boolean; result_mode?: string; factor_aggregation?: string; requires?: string[]; isolation?: boolean }; factor_name_en?: string; description?: string; data_sources?: Record<string, string[]>; lookback_period?: number }) =>
       ipcRenderer.invoke('factor:myCreate', data),
     myBatchCreate: (factors: any[]) => ipcRenderer.invoke('factor:myBatchCreate', factors),
     myDetail: (factorId: string | number) => ipcRenderer.invoke('factor:myDetail', factorId),
