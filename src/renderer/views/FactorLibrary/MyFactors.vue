@@ -575,7 +575,7 @@
                       {{ activeDetail?.max_drawdown ? (activeDetail.max_drawdown * 100).toFixed(2) + '%' : '-' }}
                     </el-text>
                   </el-descriptions-item>
-                  <el-descriptions-item label="年化收益">
+                  <el-descriptions-item label="年化收益(纯多头几何年化)">
                     <el-text :type="(activeDetail?.annual_return || 0) > 0 ? 'success' : 'danger'">
                       {{ activeDetail?.annual_return ? (activeDetail.annual_return * 100).toFixed(2) + '%' : '-' }}
                     </el-text>
@@ -3900,8 +3900,9 @@ const handleSubmit = async () => {
       }
       // pycode 模式：携带完整执行元信息（自包含，不依赖网关补齐）
       if (factorMode.value === 'pycode') {
+        const codeForEntry = factorPyCode.value || ''
         updatePayload.factor_code_meta = {
-          entrypoint: 'calculate_factor',
+          entrypoint: codeForEntry.includes('def calculate_factor') ? 'calculate_factor' : 'factor',
           allow_pandas: true,
           result_mode: 'dataframe',
           factor_aggregation: factorAggregation.value,
@@ -3970,8 +3971,9 @@ const handleSubmit = async () => {
       }
       // pycode 模式：携带完整执行元信息（自包含，不依赖网关补齐）
       if (factorMode.value === 'pycode') {
+        const codeForEntry = factorPyCode.value || ''
         createPayload.factor_code_meta = {
-          entrypoint: 'calculate_factor',
+          entrypoint: codeForEntry.includes('def calculate_factor') ? 'calculate_factor' : 'factor',
           allow_pandas: true,
           result_mode: 'dataframe',
           factor_aggregation: factorAggregation.value,

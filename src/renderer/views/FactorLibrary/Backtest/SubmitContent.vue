@@ -956,6 +956,9 @@
       class="table-search-dialog"
     >
       <div class="search-dialog-content">
+        <el-tabs v-model="dialogActiveTab" class="search-tabs">
+          <!-- Tab 1: 搜索 -->
+          <el-tab-pane label="搜索数据表" name="search">
         <!-- 搜索框 -->
         <div class="search-header">
           <el-input
@@ -1044,6 +1047,64 @@
             </div>
           </div>
         </div>
+          </el-tab-pane>
+
+          <!-- Tab 2: 手动输入表全名 -->
+          <el-tab-pane label="手动输入" name="manual">
+            <div class="manual-input-wrap">
+              <el-input
+                v-model="manualTableName"
+                placeholder="输入表全名，如 factor_mid_yuyang.my_table"
+                clearable
+                size="large"
+              >
+                <template #prefix>
+                  <el-icon><EditPen /></el-icon>
+                </template>
+              </el-input>
+              <el-button type="primary" @click="confirmManualTable" style="margin-top: 16px;">
+                确认选择
+              </el-button>
+              <div class="manual-hint">
+                输入 ClickHouse 中存在的表全名（database.table 格式），后端会自动探测表位置和字段。
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <!-- Tab 3: 从中间统计表选择 -->
+          <el-tab-pane label="中间统计表" name="midstats">
+            <div class="midstats-list-wrap">
+              <div v-if="midstatsLoading" class="results-loading">
+                <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+                <span>加载中...</span>
+              </div>
+              <div v-else-if="midstatsError" class="results-empty">
+                <el-icon :size="48"><Warning /></el-icon>
+                <span>{{ midstatsError }}</span>
+              </div>
+              <div v-else-if="midstatsTables.length === 0" class="results-empty">
+                <el-icon :size="48"><Document /></el-icon>
+                <span>暂无中间统计表，请先在中间统计表页面初始化并创建</span>
+              </div>
+              <div v-else class="results-content">
+                <div
+                  v-for="item in midstatsTables"
+                  :key="item.full_name"
+                  class="table-card"
+                  @click="selectMidstatsTable(item)"
+                >
+                  <div class="card-header">
+                    <span class="table-name">{{ item.full_name }}</span>
+                    <el-tag size="small" type="warning">中间统计表</el-tag>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-comment">{{ item.user_name || item.fingerprint?.slice(0, 16) || '—' }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
     </el-dialog>
   </div>
@@ -1057,7 +1118,7 @@ import { python as pythonLang } from '@codemirror/lang-python'
 import { 
   Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts,
   Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, Check,
-  Warning, CircleCheck, CircleClose, Close, Folder, Clock, Minus
+  Warning, CircleCheck, CircleClose, Close, Folder, Clock, Minus, EditPen
 } from '@element-plus/icons-vue'
 
 const emit = defineEmits<{
@@ -1200,6 +1261,15 @@ const dialogSearchResults = ref<any>(null)
 const dialogSearchLoading = ref(false)
 const fieldListMap = ref<Record<string, any[]>>({}) // 字段列表，key: "database:table"
 const fieldListLoading = ref<Record<number, boolean>>({})
+
+// 弹窗 tab 切换
+const dialogActiveTab = ref('search')
+// 手动输入表全名
+const manualTableName = ref('')
+// 中间统计表列表
+const midstatsTables = ref<any[]>([])
+const midstatsLoading = ref(false)
+const midstatsError = ref('')
 
 // 代码检查相关
 interface CodeCheckField {
@@ -1398,7 +1468,7 @@ const formRules: FormRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
 }
 
-// 拆分双函数代码：提取 build_intermediate_table / prepare_data（可选）和 calculate_factor（必填）
+// 拆分双函数代码：提取 build_intermediate_table / prepare_data（可选）和 calculate_factor / factor（必填）
 function splitFactorCode(fullCode: string) {
   // 优先匹配 build_intermediate_table，回退到 prepare_data
   const prepareMatch = fullCode.match(
@@ -1408,12 +1478,14 @@ function splitFactorCode(fullCode: string) {
   )
   const calcMatch = fullCode.match(
     /def\s+calculate_factor\s*\([\s\S]*?(?=\ndef\s+|\n#\s*=====|$)/
+  ) || fullCode.match(
+    /def\s+factor\s*\([\s\S]*?(?=\ndef\s+|\n#\s*=====|$)/
   )
   const imports = fullCode.match(/^(?:import|from)\s.*$/gm)?.join('\n') ?? ''
-  const prepare_data_code = prepareMatch ? prepareMatch[0].trim() : null
+  const intermediate_table_code = prepareMatch ? prepareMatch[0].trim() : null
   const factor_code = [imports, calcMatch ? calcMatch[0].trim() : fullCode]
     .filter(Boolean).join('\n\n')
-  return { factor_code, prepare_data_code }
+  return { factor_code, intermediate_table_code }
 }
 
 const onFactorSourceChange = () => {
@@ -1735,8 +1807,93 @@ const openSearchDialog = (index: number) => {
   currentSearchIndex.value = index
   dialogSearchKeyword.value = ''
   dialogSearchResults.value = null
+  dialogActiveTab.value = 'search'
+  manualTableName.value = ''
+  midstatsTables.value = []
+  midstatsError.value = ''
   searchDialogVisible.value = true
 }
+
+// 手动输入表全名：确认选择
+const confirmManualTable = () => {
+  const input = manualTableName.value.trim()
+  if (!input) {
+    ElMessage.warning('请输入表全名')
+    return
+  }
+  const dotIdx = input.indexOf('.')
+  if (dotIdx < 0) {
+    ElMessage.warning('请输入 database.table 格式的表全名')
+    return
+  }
+  const database = input.slice(0, dotIdx)
+  const table = input.slice(dotIdx + 1)
+  const index = currentSearchIndex.value
+  const ds = formData.data_sources[index]
+  ds.table = table
+  ds.database = database
+  ds.name = table
+  ds.fields = []
+  ds.date_field = ''
+  ds.code_field = ''
+  ds.auto_fields = false
+  ds.field_mappings = {}
+  searchDialogVisible.value = false
+  loadFieldList(index)
+}
+
+// 加载中间统计表列表
+const loadMidstatsTables = async () => {
+  midstatsLoading.value = true
+  midstatsError.value = ''
+  try {
+    const result = await window.electronAPI.intermediateTable.list()
+    if (result.success) {
+      const tables = result.data?.tables || []
+      midstatsTables.value = tables.map((t: any) => ({
+        full_name: t.full_name,
+        user_name: t.meta?.user_name,
+        fingerprint: t.meta?.fingerprint
+      }))
+    } else {
+      midstatsError.value = result.error || '加载失败'
+    }
+  } catch (e: any) {
+    midstatsError.value = e.message || '加载失败'
+  } finally {
+    midstatsLoading.value = false
+  }
+}
+
+// 从中间统计表选择
+const selectMidstatsTable = (item: any) => {
+  const index = currentSearchIndex.value
+  const ds = formData.data_sources[index]
+  const fullName = item.full_name
+  const dotIdx = fullName.indexOf('.')
+  if (dotIdx > 0) {
+    ds.database = fullName.slice(0, dotIdx)
+    ds.table = fullName.slice(dotIdx + 1)
+  } else {
+    ds.table = fullName
+    ds.database = ''
+  }
+  ds.name = item.user_name || fullName
+  ds.fields = []
+  ds.date_field = ''
+  ds.code_field = ''
+  ds.auto_fields = false
+  ds.field_mappings = {}
+  searchDialogVisible.value = false
+  loadFieldList(index)
+}
+
+// tab 切换时按需加载中间统计表
+watch(dialogActiveTab, (tab) => {
+  if (tab === 'midstats' && midstatsTables.value.length === 0 && !midstatsError.value) {
+    loadMidstatsTables()
+  }
+})
 
 // 弹窗搜索
 let dialogSearchTimer: any = null
@@ -2189,20 +2346,24 @@ const handleSubmit = async () => {
       // 因子配置（二选一）
       if (factorSource.value === 'expression') {
         requestData.factor_expression = formData.factor_expression
+        requestData.expression_type = 'expr'
       } else if (factorSource.value === 'code' || factorSource.value === 'file') {
-        // P0: 校验必须包含 calculate_factor 入口
+        // P0: 校验必须包含 calculate_factor 或 factor 入口
         const codeContent = factorSource.value === 'file' ? pyFileContent.value : formData.factor_code
-        if (!codeContent.includes('def calculate_factor')) {
-          ElMessage.warning('请定义 calculate_factor 函数作为因子计算入口')
+        const hasCalculateFactor = codeContent.includes('def calculate_factor')
+        const hasFactor = codeContent.includes('def factor')
+        if (!hasCalculateFactor && !hasFactor) {
+          ElMessage.warning('请定义 calculate_factor 或 factor 函数作为因子计算入口')
           return
         }
-        const { factor_code, prepare_data_code } = splitFactorCode(codeContent)
+        const { factor_code, intermediate_table_code } = splitFactorCode(codeContent)
         requestData.factor_code = factor_code
-        if (prepare_data_code) {
-          requestData.prepare_data_code = prepare_data_code
+        requestData.expression_type = factorSource.value === 'file' ? 'py_file' : 'py_code'
+        if (intermediate_table_code) {
+          requestData.intermediate_table_code = intermediate_table_code
         }
         requestData.factor_code_meta = {
-          entrypoint: 'calculate_factor',
+          entrypoint: hasCalculateFactor ? 'calculate_factor' : 'factor',
           allow_pandas: true,
           result_mode: 'dataframe',
           factor_aggregation: factorAggregation.value,
@@ -3715,6 +3876,99 @@ const initApiKey = async () => {
     .uploaded-file {
       margin-top: 16px;
       text-align: center;
+    }
+  }
+}
+
+// 弹窗 tab：手动输入 + 中间统计表
+.search-dialog-content {
+  .manual-input-wrap {
+    padding: 40px 20px;
+    text-align: center;
+
+    .manual-hint {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #909399;
+      line-height: 1.6;
+    }
+  }
+
+  .midstats-list-wrap {
+    height: 500px;
+    overflow-y: auto;
+
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #c0c4cc;
+      border-radius: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: #f5f7fa;
+    }
+
+    .results-loading,
+    .results-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #909399;
+      gap: 16px;
+
+      .el-icon {
+        color: #c0c4cc;
+      }
+
+      span {
+        font-size: 15px;
+      }
+    }
+
+    .results-content {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+
+      .table-card {
+        background: white;
+        border: 1px solid #e4e7ed;
+        border-radius: 8px;
+        padding: 14px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+
+        &:hover {
+          border-color: #409eff;
+          box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+          transform: translateY(-2px);
+        }
+
+        .card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 10px;
+
+          .table-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #303133;
+            font-family: 'SF Mono', 'Consolas', monospace;
+          }
+        }
+
+        .card-body {
+          .table-comment {
+            font-size: 13px;
+            color: #606266;
+          }
+        }
+      }
     }
   }
 }

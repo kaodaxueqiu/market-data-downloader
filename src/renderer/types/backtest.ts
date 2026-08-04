@@ -15,7 +15,7 @@ export interface FactorCodeMeta {
 }
 
 // 中间统计表物化配置（retention 已废弃）
-export interface PrepareDataConfig {
+export interface IntermediateTableConfig {
   workspace_db?: string
 }
 
@@ -37,8 +37,9 @@ export interface BacktestSubmitRequest {
   factor_expression?: string
   factor_code?: string
   factor_code_meta?: FactorCodeMeta
-  prepare_data_code?: string
-  prepare_data_config?: PrepareDataConfig
+  expression_type: 'expr' | 'py_code' | 'py_file'
+  intermediate_table_code?: string
+  intermediate_table_config?: IntermediateTableConfig
   start_date: string
   end_date: string
   data_sources: any[]
