@@ -484,6 +484,29 @@ onUnmounted(() => {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+    align-content: start;
+    padding-right: 8px;
+
+    // 全局统一滚动条：默认隐藏，hover 显示（跟随侧边栏样式）
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+
+    &:hover {
+      scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+    }
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 2px;
+    }
+    &:hover::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.1);
+    }
   }
 
   .subscription-card {
