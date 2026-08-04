@@ -143,30 +143,15 @@
       </el-form>
     </el-card>
     
-    <!-- 关于和更新 -->
+    <!-- 关于 -->
     <el-card class="settings-card" shadow="never">
       <template #header>
-        <span>关于和更新</span>
+        <span>关于</span>
       </template>
       
       <el-form label-width="120px">
         <el-form-item label="当前版本">
           <el-tag type="primary" size="large">v{{ appVersion }}</el-tag>
-        </el-form-item>
-        
-        <el-form-item label="检查更新">
-          <el-button 
-            type="primary" 
-            @click="checkForUpdates" 
-            :loading="checking"
-            :disabled="downloading"
-          >
-            <el-icon><Refresh /></el-icon>
-            检查更新
-          </el-button>
-          <span v-if="updateInfo" style="margin-left: 15px; color: #67c23a">
-            发现新版本：v{{ updateInfo.version }}
-          </span>
         </el-form-item>
         
         <el-form-item label="更新进度" v-if="downloading">
@@ -240,7 +225,6 @@ const appConfig = reactive({
 })
 
 // 更新相关状态
-const checking = ref(false)
 const downloading = ref(false)
 const downloadProgress = ref(0)
 const downloadStatus = ref('')
@@ -450,41 +434,6 @@ const loadConfig = async () => {
     }
   } catch (error) {
     console.error('加载配置失败:', error)
-  }
-}
-
-// 检查更新
-const checkForUpdates = async () => {
-  checking.value = true
-  updateInfo.value = null
-  
-  try {
-    const result = await window.electronAPI.updater.checkForUpdates()
-    
-    if (result.updateAvailable) {
-      updateInfo.value = result
-      
-      // 询问是否下载
-      ElMessageBox.confirm(
-        `发现新版本 v${result.version}，是否立即下载？`,
-        '更新提示',
-        {
-          confirmButtonText: '立即下载',
-          cancelButtonText: '稍后再说',
-          type: 'info'
-        }
-      ).then(() => {
-        downloadUpdate()
-      }).catch(() => {
-        ElMessage.info('已取消更新')
-      })
-    } else {
-      ElMessage.success('当前已是最新版本')
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || '检查更新失败，请检查网络连接')
-  } finally {
-    checking.value = false
   }
 }
 
