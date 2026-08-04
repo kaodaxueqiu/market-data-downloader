@@ -158,7 +158,7 @@ const sampleMetrics = [
   { key: 'ic_mean', label: 'IC 均值', fmt: 'ratio' },
   { key: 'icir', label: 'ICIR', fmt: 'ratio' },
   { key: 'rank_ic_mean', label: 'Rank IC 均值', fmt: 'ratio' },
-  { key: 'excess_annual_return', label: '超额年化', fmt: 'pct' },
+  { key: 'excess_annual_return', label: '超额年化(纯多头几何年化口径)', fmt: 'pct' },
   { key: 'turnover_mean', label: '平均换手', fmt: 'ratio' },
   { key: 'sharpe', label: 'Sharpe', fmt: 'ratio' },
   { key: 'max_drawdown', label: '最大回撤', fmt: 'pct' },
@@ -382,7 +382,7 @@ const buildOption = (chart: any): echarts.EChartsOption | null => {
     case 'cost_sensitivity':
       return {
         tooltip: { trigger: 'axis' },
-        legend: { data: ['年化净收益', 'Sharpe(净)'] },
+        legend: { data: ['年化净收益(纯多头几何年化)', 'Sharpe(净)'] },
         grid: baseGrid,
         xAxis: { type: 'category', name: 'bps', data: (chart.cost_bps_levels || []).map((v: number) => String(v)) },
         yAxis: [
@@ -390,14 +390,14 @@ const buildOption = (chart: any): echarts.EChartsOption | null => {
           { type: 'value', name: 'Sharpe', position: 'right' }
         ],
         series: [
-          { name: '年化净收益', type: 'line', data: chart.annual_return_net || [] },
+          { name: '年化净收益(纯多头几何年化)', type: 'line', data: chart.annual_return_net || [] },
           { name: 'Sharpe(净)', type: 'line', yAxisIndex: 1, data: chart.sharpe_net || [] }
         ]
       }
     case 'capacity_curve':
       return {
         tooltip: { trigger: 'axis' },
-        legend: { data: ['年化净收益', 'Sharpe(净)', '平均参与率'] },
+        legend: { data: ['年化净收益(纯多头几何年化)', 'Sharpe(净)', '平均参与率'] },
         grid: baseGrid,
         xAxis: { type: 'category', name: 'AUM(元)', data: (chart.aum_yuan || []).map((v: number) => String(v)) },
         yAxis: [
@@ -405,7 +405,7 @@ const buildOption = (chart: any): echarts.EChartsOption | null => {
           { type: 'value', name: '参与率', position: 'right' }
         ],
         series: [
-          { name: '年化净收益', type: 'line', data: chart.annual_return_net || [] },
+          { name: '年化净收益(纯多头几何年化)', type: 'line', data: chart.annual_return_net || [] },
           { name: 'Sharpe(净)', type: 'line', data: chart.sharpe_net || [] },
           { name: '平均参与率', type: 'line', yAxisIndex: 1, data: chart.avg_participation_rate || [] }
         ]
@@ -445,13 +445,13 @@ const buildOption = (chart: any): echarts.EChartsOption | null => {
     case 'alpha_decay':
       return {
         tooltip: { trigger: 'axis' },
-        legend: { data: ['Rank IC', '多空年化'] },
+        legend: { data: ['Rank IC', '多空年化(spread口径)'] },
         grid: baseGrid,
         xAxis: { type: 'category', name: '持有期', data: (chart.horizons || []).map((v: number) => `${v}日`) },
         yAxis: { type: 'value' },
         series: [
           { name: 'Rank IC', type: 'bar', data: chart.rank_ic_mean || [] },
-          { name: '多空年化', type: 'line', connectNulls: true, data: chart.long_short_annual_return || [] }
+          { name: '多空年化(spread口径)', type: 'line', connectNulls: true, data: chart.long_short_annual_return || [] }
         ]
       }
     case 'autocorrelation_curve':

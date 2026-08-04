@@ -175,8 +175,8 @@ const assessmentMetricRows = computed(() => {
   const m = groups[g - 1]?.metrics
   if (!m) return []
   const keys: [string, string][] = [
-    ['interval_return', '区间收益'], ['ann_return', '年化收益'],
-    ['interval_excess_return', '区间超额'], ['ann_excess_return', '年化超额'],
+    ['interval_return', '区间收益'], ['ann_return', '年化收益(纯多头几何年化)'],
+    ['interval_excess_return', '区间超额'], ['ann_excess_return', '年化超额(纯多头几何年化口径)'],
     ['excess_sharpe', '超额夏普'], ['ir', 'IR'],
     ['max_drawdown', '最大回撤'], ['excess_max_drawdown', '超额最大回撤'],
     ['ann_volatility', '年化波动'], ['ann_turnover', '年化换手'], ['n_days', '天数']

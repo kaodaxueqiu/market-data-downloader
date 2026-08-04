@@ -150,7 +150,7 @@
               <div class="metric-group">
                 <h4>收益分析</h4>
                 <div class="metric-item">
-                  <span class="label">年化收益</span>
+                  <span class="label">多头年化</span>
                   <span class="value" :class="getValueClass(factor.annual_return)">
                     {{ formatPercent(factor.annual_return) }}
                   </span>

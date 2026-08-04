@@ -61,6 +61,14 @@
 
     <!-- 选中任务时，显示结果详情 -->
     <template v-else>
+      <!-- 年化口径变更提示 -->
+      <el-alert
+        title="年化收益口径已更新为 252 几何年化（因子最大组纯多头），历史回测的年化值不可复现，请以新跑的结果为准。"
+        type="warning"
+        :closable="true"
+        show-icon
+        style="margin-bottom: 12px;"
+      />
       <!-- 返回按钮 & 操作区 -->
       <div class="detail-header">
         <el-button :icon="ArrowLeft" @click="handleBack">返回列表</el-button>
@@ -828,7 +836,7 @@
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.annual_return)">
                   {{ formatPercent(getCurrentPeriodData(factor, index)?.annual_return) }}
                 </div>
-                <el-tooltip content="回测区间年化收益率。>0 为正收益" placement="top">
+                <el-tooltip content="回测区间年化收益率（因子最大组纯多头几何年化，252 交易日）。>0 为正收益" placement="top">
                   <div class="metric-label">年化收益</div>
                 </el-tooltip>
               </div>
@@ -836,7 +844,7 @@
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.sharpe_ratio)">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.sharpe_ratio, 2) }}
                 </div>
-                <el-tooltip content="风险调整后收益 = (年化收益 - 无风险利率) / 年化波动率。>1 为良好，>2 为优秀" placement="top">
+                <el-tooltip content="风险调整后收益 = (年化收益 - 无风险利率) / 年化波动率（多空组合口径）。>1 为良好，>2 为优秀" placement="top">
                   <div class="metric-label">夏普比率</div>
                 </el-tooltip>
               </div>
@@ -844,7 +852,7 @@
                 <div class="metric-value negative">
                   {{ formatPercent(getCurrentPeriodData(factor, index)?.max_drawdown) }}
                 </div>
-                <el-tooltip content="回测区间内从历史最高点到最低点的最大跌幅，越小越好" placement="top">
+                <el-tooltip content="回测区间内从历史最高点到最低点的最大跌幅（多空组合口径），越小越好" placement="top">
                   <div class="metric-label">最大回撤</div>
                 </el-tooltip>
               </div>
@@ -872,7 +880,9 @@
               <div class="detail-panel" v-if="factor.period_ic_stats?.length">
                 <div class="panel-title">
                   <el-icon><TrendCharts /></el-icon>
-                  多周期完整指标对比
+                  <el-tooltip content="年化收益为因子最大组纯多头几何年化口径" placement="top">
+                    <span>多周期完整指标对比</span>
+                  </el-tooltip>
                 </div>
                 <div class="panel-body">
                   <el-table 
@@ -895,7 +905,7 @@
                         <span :class="getValueClass(row.rank_ic_mean)">{{ formatNumber(row.rank_ic_mean, 4) }}</span>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="annual_return" label="年化收益" width="90">
+                    <el-table-column prop="annual_return" label="多头年化" width="90">
                       <template #default="{ row }">
                         <span :class="getValueClass(row.annual_return)">{{ formatPercent(row.annual_return) }}</span>
                       </template>
@@ -931,7 +941,7 @@
               <div class="detail-panel" v-if="getCurrentPeriodData(factor, index)?.layer_returns?.length">
                 <div class="panel-title">
                   <el-icon><Histogram /></el-icon>
-                  分层收益 ({{ getCurrentPeriodData(factor, index)?.layer_returns?.length }}组) - {{ layerReturnType === 'annual' ? '年化收益率' : '区间累计收益' }}
+                  分层收益 ({{ getCurrentPeriodData(factor, index)?.layer_returns?.length }}组) - {{ layerReturnType === 'annual' ? '年化收益率（各组单边几何年化）' : '区间累计收益' }}
                   <span class="period-tag">({{ selectedPeriods[index] }}日)</span>
                   <!-- 年化/累计切换 -->
                   <div class="return-type-switch">
@@ -968,7 +978,7 @@
                   </div>
                   <div class="table-hint">
                     <el-icon><InfoFilled /></el-icon>
-                    年化收益率 = 回测区间累计收益按 252 日年化折算；累计收益 = 回测区间内的总累计收益。两者数值差异源于回测天数。
+                    年化收益率 = 回测区间累计收益按 252 日年化折算（几何年化、因子最大组纯多头口径）；累计收益 = 回测区间内的总累计收益。两者数值差异源于回测天数。
                   </div>
                 </div>
               </div>
@@ -1651,7 +1661,7 @@ const renderNeutralCompareChart = () => {
   const metrics = [
     { name: 'Rank IC', pick: (g: any) => g.rank_ic_mean },
     { name: 'Sharpe', pick: (g: any) => g.sharpe_ratio },
-    { name: '年化收益', pick: (g: any) => g.annual_return }
+    { name: '多头年化(中性化残差)', pick: (g: any) => g.annual_return }
   ]
   neutralCompareChart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (v: any) => (typeof v === 'number' ? v.toFixed(4) : v) },
@@ -2442,14 +2452,48 @@ const friendlyErrorMap: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /timeout|timed out/i,
     message: '计算超时。可能是股票池过大或表达式过于复杂，建议缩小回测区间或简化因子。'
+  },
+  {
+    pattern: /代码引用 data\["(.+?)"\]，但字段目录未登记该表/,
+    message: '表 $1 未在字段目录登记，请在数据源配置里手动填写表名和字段'
+  },
+  {
+    pattern: /代码包含动态字段引用/,
+    message: '代码里有动态字段引用，引擎无法静态识别，请显式配置 fields'
   }
 ]
 
 const getFriendlyError = (rawError: string | undefined): { friendly: string; hasMatch: boolean } => {
   if (!rawError) return { friendly: '未知错误，请联系管理员', hasMatch: false }
+
+  // 优先解析结构化 JSON：unresolved_fields / ambiguous_fields
+  try {
+    // 尝试从 error 字符串中提取 JSON 片段
+    const jsonMatch = rawError.match(/\{[\s\S]*"unresolved_fields"[\s\S]*\}|\{[\s\S]*"ambiguous_fields"[\s\S]*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0])
+      if (parsed.unresolved_fields?.length) {
+        return {
+          friendly: `字段 ${parsed.unresolved_fields.join(', ')} 在字段目录里找不到，请检查字段名`,
+          hasMatch: true
+        }
+      }
+      if (parsed.ambiguous_fields?.length) {
+        const parts = parsed.ambiguous_fields.map((af: any) => {
+          const candidates = af.candidates?.map((c: any) => c.table || c.table_name || c).join(', ') || ''
+          return `字段 ${af.field} 在多张表里都有（${candidates}），请在 fields 里显式指定`
+        })
+        return { friendly: parts.join('；'), hasMatch: true }
+      }
+    }
+  } catch { /* JSON 解析失败，走正则匹配 */ }
+
+  // 正则匹配，支持 $1 捕获组替换
   for (const item of friendlyErrorMap) {
-    if (item.pattern.test(rawError)) {
-      return { friendly: item.message, hasMatch: true }
+    const m = rawError.match(item.pattern)
+    if (m) {
+      const msg = item.message.replace('$1', m[1] || '')
+      return { friendly: msg, hasMatch: true }
     }
   }
   return { friendly: rawError, hasMatch: false }

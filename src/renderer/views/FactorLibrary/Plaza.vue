@@ -337,7 +337,7 @@
                       {{ activeDetail?.max_drawdown ? (activeDetail.max_drawdown * 100).toFixed(2) + '%' : '-' }}
                     </el-text>
                   </el-descriptions-item>
-                  <el-descriptions-item label="年化收益">
+                  <el-descriptions-item label="年化收益(纯多头几何年化)">
                     <el-text :type="(activeDetail?.annual_return || 0) > 0 ? 'success' : 'danger'">
                       {{ activeDetail?.annual_return ? (activeDetail.annual_return * 100).toFixed(2) + '%' : '-' }}
                     </el-text>
