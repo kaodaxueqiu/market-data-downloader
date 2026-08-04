@@ -1,5 +1,41 @@
 <template>
   <div class="list-content">
+    <!-- 加载中 -->
+    <div v-if="pageLoading" class="loading-wrap">
+      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+    </div>
+
+    <!-- 接口错误：重试页 -->
+    <div v-else-if="initError" class="init-container">
+      <div class="init-card">
+        <p class="init-desc">无法连接服务器，请检查网络后重试</p>
+        <el-button type="primary" @click="checkStatus">重新检查</el-button>
+      </div>
+    </div>
+
+    <!-- 未初始化：引导页 -->
+    <div v-else-if="!isInitialized" class="init-container">
+      <div class="init-card">
+        <div class="init-icon">
+          <el-icon :size="80"><Coin /></el-icon>
+        </div>
+        <h2>初始化中间统计表工作区</h2>
+        <p class="init-desc">
+          在 ClickHouse 中为您创建独立的工作区库，<br>
+          用于管理回测引擎物化的中间统计表。
+        </p>
+        <div class="init-info" v-if="dbStatus">
+          <el-tag type="warning">{{ dbStatus.database }}</el-tag>
+        </div>
+        <el-button type="primary" size="large" :loading="initLoading" @click="handleInit">
+          <el-icon><Plus /></el-icon>
+          初始化工作区
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 已初始化：原有列表内容 -->
+    <template v-else>
     <div class="header-bar">
       <div class="header-left">
         <span class="page-title">中间统计表</span>
@@ -84,13 +120,14 @@
 
     <CreateDialog v-model="createVisible" :rebuild-row="rebuildRow" @created="onCreated" />
     <TTLDialog v-model="ttlVisible" :row="ttlRow" @updated="loadList" />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Plus } from '@element-plus/icons-vue'
+import { Refresh, Plus, Loading, Coin } from '@element-plus/icons-vue'
 import CreateDialog from './CreateDialog.vue'
 import TTLDialog from './TTLDialog.vue'
 import type { IntermediateTableMeta } from '@/types/backtest'
@@ -101,6 +138,53 @@ const createVisible = ref(false)
 const rebuildRow = ref<IntermediateTableMeta | null>(null)
 const ttlVisible = ref(false)
 const ttlRow = ref<IntermediateTableMeta | null>(null)
+
+// 四态状态
+const pageLoading = ref(true)
+const initLoading = ref(false)
+const isInitialized = ref(false)
+const initError = ref(false)
+const dbStatus = ref<{ initialized: boolean; database: string; factor_user?: string } | null>(null)
+
+const checkStatus = async () => {
+  pageLoading.value = true
+  initError.value = false
+  try {
+    const result = await window.electronAPI.intermediateTable.status()
+    if (result.success && result.data) {
+      dbStatus.value = result.data
+      isInitialized.value = result.data.initialized
+      if (isInitialized.value) {
+        await loadList()
+      }
+    } else {
+      initError.value = true
+      ElMessage.error(result.error || '检查工作区状态失败')
+    }
+  } catch (e: any) {
+    initError.value = true
+    ElMessage.error(e.message || '检查工作区状态失败')
+  } finally {
+    pageLoading.value = false
+  }
+}
+
+const handleInit = async () => {
+  initLoading.value = true
+  try {
+    const result = await window.electronAPI.intermediateTable.init()
+    if (result.success) {
+      ElMessage.success(result.message || '初始化成功')
+      await checkStatus()
+    } else {
+      ElMessage.error(result.error || '初始化失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || '初始化失败')
+  } finally {
+    initLoading.value = false
+  }
+}
 
 const loadList = async () => {
   loading.value = true
@@ -187,7 +271,7 @@ const formatTime = (raw: string): string => {
 }
 
 onMounted(() => {
-  loadList()
+  checkStatus()
 })
 </script>
 
@@ -248,5 +332,30 @@ onMounted(() => {
 }
 .src-tag {
   margin: 0;
+}
+.loading-wrap, .init-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+}
+.init-card {
+  text-align: center;
+  max-width: 480px;
+}
+.init-icon {
+  color: #67C23A;
+  margin-bottom: 16px;
+}
+.init-desc {
+  color: #606266;
+  line-height: 1.8;
+  margin: 12px 0 20px;
+}
+.init-info {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
 }
 </style>

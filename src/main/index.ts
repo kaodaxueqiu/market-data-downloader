@@ -6129,6 +6129,58 @@ ipcMain.handle('backtest:getPriceTypeOptions', async () => {
 
 const MIDSTATS_API_BASE = 'http://61.151.241.233:8080/api/v1/midstats'
 
+// 中间统计表: 检查工作区库状态
+ipcMain.handle('intermediateTable:status', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.get(`${MIDSTATS_API_BASE}/status`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 15000
+    })
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '检查工作区状态失败' }
+    }
+  } catch (error: any) {
+    console.error('检查工作区库状态失败:', error.response?.status, error.response?.data || error.message)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: 初始化工作区库
+ipcMain.handle('intermediateTable:init', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/init`, {}, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 30000
+    })
+    if (response.data.success) {
+      return { success: true, data: response.data.data, message: response.data.message }
+    } else {
+      return { success: false, error: response.data.error || '初始化工作区库失败' }
+    }
+  } catch (error: any) {
+    console.error('初始化工作区库失败:', error.response?.data || error.message)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
 // 中间统计表: 列出全部
 ipcMain.handle('intermediateTable:list', async () => {
   try {

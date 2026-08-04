@@ -302,6 +302,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 中间统计表 API
   intermediateTable: {
+    status: () => ipcRenderer.invoke('intermediateTable:status'),
+    init: () => ipcRenderer.invoke('intermediateTable:init'),
     list: () => ipcRenderer.invoke('intermediateTable:list'),
     create: (data: any) => ipcRenderer.invoke('intermediateTable:create', data),
     delete: (tableName: string) => ipcRenderer.invoke('intermediateTable:delete', tableName),
@@ -907,6 +909,8 @@ declare global {
         downloadFactorValues: (taskId: string, tradeDate?: string) => Promise<{ success: boolean; filePath?: string; error?: string }>
       }
       intermediateTable: {
+        status: () => Promise<{ success: boolean; data?: any; error?: string }>
+        init: () => Promise<{ success: boolean; data?: any; message?: string; error?: string }>
         list: () => Promise<{ success: boolean; data?: any; error?: string }>
         create: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         delete: (tableName: string) => Promise<{ success: boolean; data?: any; error?: string }>
