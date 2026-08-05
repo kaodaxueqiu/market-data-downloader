@@ -1433,33 +1433,11 @@
 
           <el-form-item label="研究模式">
             <el-radio-group v-model="researchMode" style="width: 100%">
-              <el-radio-button v-if="!admissionLocked" value="quick">快速初筛</el-radio-button>
-              <el-radio-button v-if="!admissionLocked" value="deep">深度研究</el-radio-button>
+              <el-radio-button v-if="!admissionLocked" value="research">研究</el-radio-button>
               <el-radio-button v-if="admissionLocked" value="admission">入库审核</el-radio-button>
             </el-radio-group>
 
-            <!-- 递进包含关系可视化 -->
             <div class="research-tiers">
-              <div class="tiers-note" v-if="!admissionLocked">
-                <el-icon><InfoFilled /></el-icon>
-                三档为递进包含：选高档自动包含低档全部能力，无需多选
-              </div>
-              <div
-                v-for="(tier, i) in researchTiers"
-                v-show="admissionLocked ? tier.mode === 'admission' : tier.mode !== 'admission'"
-                :key="tier.mode"
-                class="tier-row"
-                :class="{ included: i <= currentModeIndex, current: tier.mode === researchMode }"
-              >
-                <el-icon class="tier-mark">
-                  <CircleCheck v-if="i <= currentModeIndex" />
-                  <Minus v-else />
-                </el-icon>
-                <span class="tier-label">{{ tier.label }}</span>
-                <span class="tier-adds">
-                  <span v-if="i > 0" class="plus">+</span>{{ tier.adds.join('、') }}
-                </span>
-              </div>
               <div class="tiers-hint">{{ researchModeHint }}</div>
             </div>
           </el-form-item>
@@ -1599,7 +1577,7 @@
             </div>
           </el-form-item>
 
-          <el-form-item v-if="researchMode === 'deep'" label="walk-forward">
+          <el-form-item v-if="researchMode !== 'admission'" label="walk-forward">
             <el-switch v-model="walkForward.enabled" active-text="开启滚动验证" />
             <div style="color: #909399; font-size: 12px; margin-top: 4px;">
               开启 walk-forward 会多次重算因子和回测，耗时明显增加
@@ -1962,7 +1940,7 @@ import { python as pythonLang } from '@codemirror/lang-python'
 import { 
   Loading, Box, Plus, Search, Edit, Delete, DataAnalysis, WarningFilled, Refresh,
   Grid, EditPen, CircleCheck, Connection, Folder, PriceTag, Upload, Download, Document, Clock, TrendCharts,
-  Minus, InfoFilled, Warning, CircleClose
+  InfoFilled, Warning, CircleClose
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -4177,24 +4155,14 @@ const advancedOptions = reactive({
 })
 
 // 研究模式（顶层字段）
-const researchMode = ref<'quick' | 'deep' | 'admission'>('quick')
-// 入库审核锁定：由「入库审核」按钮发起时锁定 admission 档，禁止改选 quick/deep
+const researchMode = ref<'research' | 'admission'>('research')
+// 入库审核锁定：由「入库审核」按钮发起时锁定 admission 档，禁止改选 research
 const admissionLocked = ref(false)
 const researchModeHints: Record<string, string> = {
-  quick: '快速初筛，仅用于调参/筛选，不可直接入库或实盘',
-  deep: '深度研究：含 CNE6 风格中性化、泛化性诊断',
+  research: '研究：完整 IC / 分层 / CNE6 风格中性化 / 泛化诊断',
   admission: '入库审核：含前视快照、库级共线性/正交、治理结论（最慢）'
 }
 const researchModeHint = computed(() => researchModeHints[researchMode.value] || '')
-
-// 三档递进包含：每档展示「新增」能力
-const researchModeOrder = ['quick', 'deep', 'admission']
-const researchTiers = [
-  { mode: 'quick', label: '快速初筛', adds: ['核心：IC / 分层 / 样本外摘要'] },
-  { mode: 'deep', label: '深度研究', adds: ['CNE6 风格中性化', '泛化诊断'] },
-  { mode: 'admission', label: '入库审核', adds: ['前视快照', '库级共线性 / 正交', '治理结论'] }
-]
-const currentModeIndex = computed(() => researchModeOrder.indexOf(researchMode.value))
 
 // admission 模式：universe / forward_periods / 费率会被引擎强制覆盖
 const isAdmissionMode = computed(() => researchMode.value === 'admission')
@@ -4214,16 +4182,15 @@ const RISK_FACTOR_OPTIONS = [
   { value: 'liquidity', label: '流动性' },
   { value: 'industry', label: '行业' }
 ]
-// quick 默认关、deep 默认开（deep 引擎本就会剥离）
+// 研究模式默认开启风险剥离（引擎本就会剥离）
 const riskNeutralization = reactive({
-  enabled: false,
+  enabled: true,
   selected: [] as string[],
   includeEach: false  // 逐风格剥离：额外产出 20 个 neutral_each_* variant
 })
-// 切换研究模式时联动剥离默认值：deep 默认开、quick 默认关（用户可再手动调整）
+// 切换研究模式时联动剥离默认值：research 默认开（用户可再手动调整）
 watch(researchMode, (mode) => {
-  if (mode === 'deep') riskNeutralization.enabled = true
-  else if (mode === 'quick') riskNeutralization.enabled = false
+  if (mode === 'research') riskNeutralization.enabled = true
 })
 
 // walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
@@ -4535,8 +4502,8 @@ const openBatchBacktest = async () => {
 const openBacktest = async (factor: any) => {
   if (!factor) return
   admissionLocked.value = false
-  researchMode.value = 'quick'
-  riskNeutralization.enabled = false
+  researchMode.value = 'research'
+  riskNeutralization.enabled = true
   riskNeutralization.selected = []
   riskNeutralization.includeEach = false
   backtestFactor.value = factor
@@ -4701,8 +4668,8 @@ const submitBacktest = async () => {
       }
     }
 
-    // walk-forward（顶层，仅 deep 且开启时传；admission 引擎全权接管，前端不传）
-    if (researchMode.value === 'deep' && walkForward.enabled) {
+    // walk-forward（顶层，研究模式且开启时传；admission 引擎全权接管，前端不传）
+    if (researchMode.value !== 'admission' && walkForward.enabled) {
       data.walk_forward = {
         enabled: true,
         max_folds: walkForward.max_folds,

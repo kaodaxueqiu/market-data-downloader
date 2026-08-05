@@ -46,7 +46,7 @@ export interface BacktestSubmitRequest {
   universe: any
   backtest_params: any
   calc_options?: CalcOptions
-  research_mode?: 'quick' | 'deep' | 'admission'
+  research_mode?: 'research' | 'admission'
   walk_forward?: any
   lookahead_check?: any
   risk_neutralization?: any

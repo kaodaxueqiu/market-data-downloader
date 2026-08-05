@@ -39,6 +39,7 @@
           style="width: 120px;"
           @change="handleFilterChange"
         >
+          <el-option label="研究" value="research" />
           <el-option label="快速初筛" value="quick" />
           <el-option label="深度研究" value="deep" />
           <el-option label="入库审核" value="admission" />
@@ -599,6 +600,7 @@ const getTaskTypeName = (type: string) => {
 // 运行类型（研究模式）中文名
 const getResearchModeName = (mode?: string) => {
   const map: Record<string, string> = {
+    'research': '研究',
     'quick': '快速初筛',
     'deep': '深度研究',
     'admission': '入库审核'
