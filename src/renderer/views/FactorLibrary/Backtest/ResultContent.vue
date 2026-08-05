@@ -1589,7 +1589,9 @@ const displayForwardPeriods = computed<number[]>(() => {
   if (isAdmissionMode.value && Array.isArray(s?.effective_forward_periods) && s.effective_forward_periods.length > 0) {
     return s.effective_forward_periods
   }
-  return task.value?.task_config?.backtest_params?.forward_periods ?? []
+  return task.value?.task_config?.backtest_params?.ic_periods
+    ?? task.value?.task_config?.backtest_params?.forward_periods
+    ?? []
 })
 
 // 买入费率（单位 bp）：admission 读 effective_buy_bps，其他读用户配置

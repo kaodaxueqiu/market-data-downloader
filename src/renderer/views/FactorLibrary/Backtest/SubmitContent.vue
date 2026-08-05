@@ -2320,7 +2320,10 @@ const handleSubmit = async () => {
         data_sources: processedDataSources,
         universe: formData.universe,
         backtest_params: {
-          ...formData.backtest_params,
+          ...(({ forward_periods, ...rest }) => rest)(formData.backtest_params),
+          // 预测周期单选映射为引擎的 IC 周期与收益周期（同一份选择）
+          ic_periods: formData.backtest_params.forward_periods,
+          return_periods: formData.backtest_params.forward_periods,
           benchmarks: selectedBenchmarks.value,
           // 费率留空则不提交，交由引擎回退默认模型（admission 模式引擎强制覆盖）
           risk_free_rate: formData.backtest_params.risk_free_rate ?? undefined,

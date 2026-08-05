@@ -445,7 +445,7 @@
                 <el-descriptions-item label="分组数">{{ taskDetail.task_config.backtest_params.num_groups }}</el-descriptions-item>
                 <el-descriptions-item label="因子方向">{{ getDirectionName(taskDetail.task_config.backtest_params.factor_direction) }}</el-descriptions-item>
                 <el-descriptions-item label="预测周期">
-                  {{ taskDetail.task_config.backtest_params.forward_periods?.join(', ') || '-' }}
+                  {{ (taskDetail.task_config.backtest_params.ic_periods ?? taskDetail.task_config.backtest_params.forward_periods)?.join(', ') || '-' }}
                 </el-descriptions-item>
                 <el-descriptions-item label="买入价格" v-if="taskDetail.task_config.backtest_params.buy_price_type">
                   {{ getBuyPriceTypeName(taskDetail.task_config.backtest_params.buy_price_type) }}

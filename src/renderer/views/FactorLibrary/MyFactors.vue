@@ -4644,7 +4644,9 @@ const submitBacktest = async () => {
       },
       backtest_params: {
         num_groups: Number(backtestForm.num_groups),
-        forward_periods: [...backtestForm.forward_periods],
+        // 预测周期单选映射为引擎的 IC 周期与收益周期（同一份选择）
+        ic_periods: [...backtestForm.forward_periods],
+        return_periods: [...backtestForm.forward_periods],
         factor_direction: backtestForm.factor_direction,
         rebalance_price_type: backtestForm.rebalance_price_type,
         benchmarks: [...selectedBenchmarks.value],
