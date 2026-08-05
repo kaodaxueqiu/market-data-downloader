@@ -562,24 +562,6 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-primary);
   line-height: 1.4;
 }
-.admission-score {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 18px 24px;
-  border-radius: 10px;
-  margin-bottom: 14px;
-  border: 1px solid #eef0f4;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-
-  &.wq-pass { background: rgba(103, 194, 58, 0.12); color: #529b2e; }
-  &.wq-reject { background: rgba(245, 108, 108, 0.12); color: #c45656; }
-  &.wq-pending { background: rgba(230, 162, 60, 0.12); color: #b88230; }
-  &.wq-na { background: var(--el-fill-color-light); color: var(--el-text-color-secondary); }
-}
-.score-label { font-size: 13px; }
-.score-value { font-size: 28px; font-weight: 700; }
-.score-hint { font-size: 14px; font-weight: 600; }
 
 /* R7 引擎判定区块 */
 .admission-decision {
