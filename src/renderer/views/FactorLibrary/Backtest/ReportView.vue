@@ -3,15 +3,6 @@
     <!-- 入库审核看板（仅 admission 模式） -->
     <div class="report-section" v-if="admission">
       <h4 class="report-section-title">入库审核看板</h4>
-      <div class="admission-score" :class="`wq-${admissionLevel}`">
-        <span class="score-label">WQ 综合评分</span>
-        <span class="score-value">
-          {{ admission.wq_score !== null && admission.wq_score !== undefined ? Number(admission.wq_score).toFixed(4) : '样本不足' }}
-        </span>
-        <span class="score-hint">
-          {{ admissionLevel === 'pass' ? '通过' : admissionLevel === 'reject' ? '拒绝' : admissionLevel === 'pending' ? '待复核' : '—' }}
-        </span>
-      </div>
 
       <!-- 引擎判定结果（R7：直接读 decision/reject_reasons，不再前端预判） -->
       <div v-if="admission.decision" class="admission-decision" :class="`decision-${admission.decision}`">
@@ -145,13 +136,6 @@ const tables = computed<any[]>(() => props.report?.tables ?? [])
 
 // ========== 入库审核看板 ==========
 const admission = computed<any>(() => props.admissionReport ?? null)
-
-// R7：直接读引擎 decision（pass/reject/pending），不再前端预判
-const admissionLevel = computed<'pass' | 'reject' | 'pending' | 'na'>(() => {
-  const d = admission.value?.decision
-  if (d === 'pass' || d === 'reject' || d === 'pending') return d
-  return 'na'
-})
 
 // 样本内外指标对比行（null → 样本不足）
 const sampleMetrics = [

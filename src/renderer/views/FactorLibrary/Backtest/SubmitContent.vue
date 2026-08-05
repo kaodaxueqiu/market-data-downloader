@@ -1681,9 +1681,9 @@ const runCodeCheck = async () => {
     return
   }
   
-  // 检查必须包含 calculate_factor 函数
-  if (!code.includes('def calculate_factor')) {
-    codeFuncError.value = '缺少 calculate_factor 函数入口'
+  // 检查必须包含 calculate_factor 或 factor 函数入口
+  if (!code.includes('def calculate_factor') && !code.includes('def factor')) {
+    codeFuncError.value = '缺少 calculate_factor 或 factor 函数入口'
   } else {
     codeFuncError.value = ''
   }

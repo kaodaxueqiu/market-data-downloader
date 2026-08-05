@@ -385,13 +385,6 @@
               </div>
               <!-- P4: 原始数据展示 -->
               <div v-if="admissionReport" class="admission-raw-data">
-                <div class="raw-data-item">
-                  <span class="label">WQ 评分</span>
-                  <span class="value" :class="typeof admissionReport.wq_score === 'number' && admissionReport.wq_score < 0.3 ? 'negative' : ''">
-                    {{ typeof admissionReport.wq_score === 'number' ? admissionReport.wq_score.toFixed(2) : '-' }}
-                  </span>
-                  <span class="hint">（入库阈值通常 ≥ 0.3）</span>
-                </div>
                 <!-- R7: 引擎拒绝原因 -->
                 <div class="raw-data-item" v-if="admissionReport.decision === 'reject' && admissionReport.reject_reasons?.length">
                   <span class="label">拒绝原因</span>
