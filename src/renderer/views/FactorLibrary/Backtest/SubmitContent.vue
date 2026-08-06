@@ -603,8 +603,9 @@
               
               <div class="param-divider"></div>
 
-              <el-form-item label="预测周期">
-                <el-select v-model="formData.backtest_params.forward_periods" multiple style="width: 100%;">
+              <el-form-item label="IC 回测周期">
+                <el-select v-model="formData.backtest_params.ic_periods" multiple
+                           :disabled="isAdmissionMode" style="width: 100%;">
                   <el-option label="1日" :value="1" />
                   <el-option label="5日" :value="5" />
                   <el-option label="10日" :value="10" />
@@ -613,7 +614,22 @@
                 </el-select>
                 <div class="form-hint">
                   <el-icon><InfoFilled /></el-icon>
-                  计算因子与未来第N日收益的相关性
+                  决定 Rank IC 曲线 / 统计按哪些周期展示
+                </div>
+              </el-form-item>
+
+              <el-form-item label="收益计算周期">
+                <el-select v-model="formData.backtest_params.return_periods" multiple
+                           :disabled="isAdmissionMode" style="width: 100%;">
+                  <el-option label="1日" :value="1" />
+                  <el-option label="5日" :value="5" />
+                  <el-option label="10日" :value="10" />
+                  <el-option label="20日" :value="20" />
+                  <el-option label="60日" :value="60" />
+                </el-select>
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  决定多周期对比 / 超额收益曲线按哪些周期展示
                 </div>
               </el-form-item>
               
@@ -1377,7 +1393,8 @@ const formData = reactive({
   },
   backtest_params: {
     num_groups: 10,
-    forward_periods: [1, 5, 10, 20],
+    ic_periods: [1, 5, 10, 20],
+    return_periods: [1, 5, 10, 20],
     factor_direction: 'positive',
     rebalance_price_type: 'daily_open',
     benchmarks: [] as string[],
@@ -1396,7 +1413,7 @@ const researchModeHints: Record<string, string> = {
 }
 const researchModeHint = computed(() => researchModeHints[researchMode.value] || '')
 
-// admission 模式：universe / forward_periods / 费率会被引擎强制覆盖
+// admission 模式：universe / ic_periods / return_periods / 费率会被引擎强制覆盖
 const isAdmissionMode = computed(() => researchMode.value === 'admission')
 
 // walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
@@ -2289,10 +2306,7 @@ const handleSubmit = async () => {
         data_sources: processedDataSources,
         universe: formData.universe,
         backtest_params: {
-          ...(({ forward_periods, ...rest }) => rest)(formData.backtest_params),
-          // 预测周期单选映射为引擎的 IC 周期与收益周期（同一份选择）
-          ic_periods: formData.backtest_params.forward_periods,
-          return_periods: formData.backtest_params.forward_periods,
+          ...formData.backtest_params,
           benchmarks: selectedBenchmarks.value,
           // 费率留空则不提交，交由引擎回退默认模型（admission 模式引擎强制覆盖）
           risk_free_rate: formData.backtest_params.risk_free_rate ?? undefined,

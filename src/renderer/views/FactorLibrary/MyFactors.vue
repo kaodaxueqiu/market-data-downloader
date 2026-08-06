@@ -1598,14 +1598,28 @@
             </el-row>
           </el-form-item>
           
-          <el-form-item label="预测周期">
-            <el-select v-model="backtestForm.forward_periods" multiple style="width: 100%">
+          <el-form-item label="IC 回测周期">
+            <el-select v-model="backtestForm.ic_periods" multiple
+                       :disabled="isAdmissionMode" style="width: 100%">
               <el-option label="1日" :value="1" />
               <el-option label="5日" :value="5" />
               <el-option label="10日" :value="10" />
               <el-option label="20日" :value="20" />
               <el-option label="60日" :value="60" />
             </el-select>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px;">决定 Rank IC 曲线 / 统计按哪些周期展示</div>
+          </el-form-item>
+
+          <el-form-item label="收益计算周期">
+            <el-select v-model="backtestForm.return_periods" multiple
+                       :disabled="isAdmissionMode" style="width: 100%">
+              <el-option label="1日" :value="1" />
+              <el-option label="5日" :value="5" />
+              <el-option label="10日" :value="10" />
+              <el-option label="20日" :value="20" />
+              <el-option label="60日" :value="60" />
+            </el-select>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px;">决定多周期对比 / 超额收益曲线按哪些周期展示</div>
           </el-form-item>
           
           <el-row :gutter="16">
@@ -4129,7 +4143,8 @@ const backtestForm = reactive({
   end_date: new Date().toISOString().split('T')[0],
   universe_preset: 'all',
   num_groups: 10,
-  forward_periods: [1, 5, 10, 20],
+  ic_periods: [1, 5, 10, 20],
+  return_periods: [1, 5, 10, 20],
   factor_direction: 'positive',
   rebalance_price_type: 'daily_open',
   benchmarks: [] as string[],
@@ -4611,9 +4626,8 @@ const submitBacktest = async () => {
       },
       backtest_params: {
         num_groups: Number(backtestForm.num_groups),
-        // 预测周期单选映射为引擎的 IC 周期与收益周期（同一份选择）
-        ic_periods: [...backtestForm.forward_periods],
-        return_periods: [...backtestForm.forward_periods],
+        ic_periods: [...backtestForm.ic_periods],
+        return_periods: [...backtestForm.return_periods],
         factor_direction: backtestForm.factor_direction,
         rebalance_price_type: backtestForm.rebalance_price_type,
         benchmarks: [...selectedBenchmarks.value],

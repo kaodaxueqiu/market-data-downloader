@@ -181,8 +181,12 @@
                 <span class="config-value">{{ task.task_config.backtest_params?.num_groups || 10 }}组</span>
               </div>
               <div class="config-item">
-                <span class="config-label">预测周期</span>
-                <span class="config-value">{{ displayForwardPeriods.join('/') || '-' }}日</span>
+                <span class="config-label">IC 周期</span>
+                <span class="config-value">{{ displayIcPeriods.join('/') || '-' }}日</span>
+              </div>
+              <div class="config-item">
+                <span class="config-label">收益周期</span>
+                <span class="config-value">{{ displayReturnPeriods.join('/') || '-' }}日</span>
               </div>
               <div class="config-item">
                 <span class="config-label">买入费率</span>
@@ -1583,13 +1587,25 @@ const showPoolOverrideBadge = computed(() => {
   return summary.value?.pool_override === true
 })
 
-// 预测周期：admission 读 effective_forward_periods（数组），其他读用户配置
-const displayForwardPeriods = computed<number[]>(() => {
+// IC 周期 / 收益周期：admission 读 effective_forward_periods（数组），其他读用户配置
+const effectivePeriods = computed<number[] | null>(() => {
   const s = summary.value
   if (isAdmissionMode.value && Array.isArray(s?.effective_forward_periods) && s.effective_forward_periods.length > 0) {
     return s.effective_forward_periods
   }
-  return task.value?.task_config?.backtest_params?.ic_periods
+  return null
+})
+
+const displayIcPeriods = computed<number[]>(() => {
+  return effectivePeriods.value
+    ?? task.value?.task_config?.backtest_params?.ic_periods
+    ?? task.value?.task_config?.backtest_params?.forward_periods
+    ?? []
+})
+
+const displayReturnPeriods = computed<number[]>(() => {
+  return effectivePeriods.value
+    ?? task.value?.task_config?.backtest_params?.return_periods
     ?? task.value?.task_config?.backtest_params?.forward_periods
     ?? []
 })
