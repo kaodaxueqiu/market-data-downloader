@@ -940,13 +940,13 @@
                   <el-icon><Histogram /></el-icon>
                   分层收益 ({{ getCurrentPeriodData(factor, index)?.layer_returns?.length }}组) - {{ layerReturnType === 'annual' ? '年化收益率（各组单边几何年化）' : '区间累计收益' }}
                   <span class="period-tag">({{ selectedPeriods[index] }}日)</span>
-                  <!-- 年化/累计切换 -->
-                  <div class="return-type-switch">
-                    <el-radio-group v-model="layerReturnType" size="small">
-                      <el-radio-button label="annual">年化</el-radio-button>
-                      <el-radio-button label="total">累计</el-radio-button>
-                    </el-radio-group>
-                  </div>
+                </div>
+                <!-- 年化/累计切换：独占一行 -->
+                <div class="return-type-switch-row">
+                  <el-radio-group v-model="layerReturnType" size="small">
+                    <el-radio-button label="annual">年化</el-radio-button>
+                    <el-radio-button label="total">累计</el-radio-button>
+                  </el-radio-group>
                 </div>
                 <div class="panel-body">
                   <!-- 添加 key 强制响应式更新 -->
@@ -3777,27 +3777,32 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
           color: $primary;
           font-size: 18px;
         }
+      }
+      
+      // 年化/累计切换：独占一行
+      .return-type-switch-row {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 10px 20px;
+        background: $bg-muted;
+        border-bottom: 1px solid $border;
         
-        // 年化/累计切换按钮
-        .return-type-switch {
-          margin-left: auto;
+        :deep(.el-radio-group) {
+          .el-radio-button__inner {
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 500;
+            border-color: $border;
+            background: $bg-card;
+            color: $text-secondary;
+          }
           
-          :deep(.el-radio-group) {
-            .el-radio-button__inner {
-              padding: 6px 14px;
-              font-size: 12px;
-              font-weight: 500;
-              border-color: $border;
-              background: $bg-card;
-              color: $text-secondary;
-            }
-            
-            .el-radio-button__original-radio:checked + .el-radio-button__inner {
-              background: $primary;
-              border-color: $primary;
-              color: #fff;
-              box-shadow: none;
-            }
+          .el-radio-button__original-radio:checked + .el-radio-button__inner {
+            background: $primary;
+            border-color: $primary;
+            color: #fff;
+            box-shadow: none;
           }
         }
       }
@@ -3943,6 +3948,8 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
     padding: 2px 8px;
     border-radius: $radius-sm;
     margin-left: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   // 每日明细折叠 - 整洁设计
