@@ -571,7 +571,10 @@ const viewDetail = async (row: any) => {
 const viewResult = (row: any) => {
   if (row.status === 'completed' && row.task_id) {
     detailDialogVisible.value = false
-    router.push(`/factor-library/backtest/result/${row.task_id}`)
+    router.push({
+      path: `/factor-library/backtest/result/${row.task_id}`,
+      query: { from: 'research' }
+    })
   }
 }
 

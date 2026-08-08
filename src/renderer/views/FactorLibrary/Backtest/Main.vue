@@ -84,11 +84,16 @@ const handleViewResult = (taskId: string) => {
   }
 }
 
-// 从结果详情返回「任务详情」列表
+// 从结果详情返回来源列表（研究成果 or 任务列表）
 const handleBackToResult = () => {
+  const from = route.query.from as string
   currentTaskId.value = ''
-  activeTab.value = 'tasks'
-  router.push('/factor-library/backtest/tasks')
+  if (from === 'research') {
+    router.push('/factor-library/research-results')
+  } else {
+    activeTab.value = 'tasks'
+    router.push('/factor-library/backtest/tasks')
+  }
 }
 
 // 监听路由变化

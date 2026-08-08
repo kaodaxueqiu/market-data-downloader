@@ -517,6 +517,10 @@ const breadcrumb = computed<string[]>(() => {
   const path = route.path
   // 动态路由
   if (path.startsWith('/factor-library/backtest/result/')) {
+    // 从研究成果进入时，面包屑归属「研究成果」；否则归属「任务详情」
+    if (route.query.from === 'research') {
+      return ['因子库', '研究成果']
+    }
     return ['因子库', '任务详情']
   }
   return childTitles[path] || ['资舟量化研究平台']
