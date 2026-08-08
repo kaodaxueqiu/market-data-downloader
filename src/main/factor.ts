@@ -71,7 +71,6 @@ interface FactorPerformance {
   ic_value: number
   rank_ic_value: number
   turnover: number
-  long_short_return: number
   created_at: string
 }
 

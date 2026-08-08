@@ -841,7 +841,7 @@
                 <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.sharpe_ratio)">
                   {{ formatNumber(getCurrentPeriodData(factor, index)?.sharpe_ratio, 2) }}
                 </div>
-                <el-tooltip content="风险调整后收益 = (年化收益 - 无风险利率) / 年化波动率（多空组合口径）。>1 为良好，>2 为优秀" placement="top">
+                <el-tooltip content="风险调整后收益 = (年化收益 - 无风险利率) / 年化波动率（纯多头口径）。>1 为良好，>2 为优秀" placement="top">
                   <div class="metric-label">夏普比率</div>
                 </el-tooltip>
               </div>
@@ -849,7 +849,7 @@
                 <div class="metric-value negative">
                   {{ formatPercent(getCurrentPeriodData(factor, index)?.max_drawdown) }}
                 </div>
-                <el-tooltip content="回测区间内从历史最高点到最低点的最大跌幅（多空组合口径），越小越好" placement="top">
+                <el-tooltip content="回测区间内从历史最高点到最低点的最大跌幅（纯多头口径），越小越好" placement="top">
                   <div class="metric-label">最大回撤</div>
                 </el-tooltip>
               </div>
@@ -1253,11 +1253,6 @@
                     <span :class="getValueClass(row.layer_returns?.[groupIdx - 1])">
                       {{ formatPercent(row.layer_returns?.[groupIdx - 1]) }}
                     </span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="long_short_return" label="多空收益" width="100">
-                  <template #default="{ row }">
-                    <span :class="getValueClass(row.long_short_return)">{{ formatPercent(row.long_short_return) }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column prop="turnover" label="换手率" width="90">

@@ -24,7 +24,6 @@ export interface CalcOptions {
   calc_ic?: boolean
   calc_rank_ic?: boolean
   calc_layer_return?: boolean
-  calc_long_short?: boolean
   calc_turnover?: boolean
   calc_drawdown?: boolean
   warmup_days?: number | null

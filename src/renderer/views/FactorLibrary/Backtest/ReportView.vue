@@ -429,13 +429,12 @@ const buildOption = (chart: any): echarts.EChartsOption | null => {
     case 'alpha_decay':
       return {
         tooltip: { trigger: 'axis' },
-        legend: { data: ['Rank IC', '多空年化(spread口径)'] },
+        legend: { data: ['Rank IC'] },
         grid: baseGrid,
         xAxis: { type: 'category', name: '持有期', data: (chart.horizons || []).map((v: number) => `${v}日`) },
         yAxis: { type: 'value' },
         series: [
-          { name: 'Rank IC', type: 'bar', data: chart.rank_ic_mean || [] },
-          { name: '多空年化(spread口径)', type: 'line', connectNulls: true, data: chart.long_short_annual_return || [] }
+          { name: 'Rank IC', type: 'bar', data: chart.rank_ic_mean || [] }
         ]
       }
     case 'autocorrelation_curve':

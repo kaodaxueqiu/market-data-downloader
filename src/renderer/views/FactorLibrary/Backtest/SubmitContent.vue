@@ -803,7 +803,6 @@
                   <el-checkbox value="calc_ic">IC分析</el-checkbox>
                   <el-checkbox value="calc_rank_ic">Rank IC</el-checkbox>
                   <el-checkbox value="calc_layer_return">分层收益</el-checkbox>
-                  <el-checkbox value="calc_long_short">多空组合</el-checkbox>
                   <el-checkbox value="calc_turnover">换手率</el-checkbox>
                   <el-checkbox value="calc_drawdown">最大回撤</el-checkbox>
                 </el-checkbox-group>
@@ -1328,7 +1327,7 @@ const onPyFileRemove = () => {
 // 计算选项
 const calcOptions = ref([
   'calc_ic', 'calc_rank_ic', 'calc_layer_return',
-  'calc_long_short', 'calc_turnover', 'calc_drawdown'
+  'calc_turnover', 'calc_drawdown'
 ])
 
 // 预热天数（高级选项，留空则引擎自动，默认 60，上限 750）
@@ -2317,7 +2316,6 @@ const handleSubmit = async () => {
           calc_ic: calcOptions.value.includes('calc_ic'),
           calc_rank_ic: calcOptions.value.includes('calc_rank_ic'),
           calc_layer_return: calcOptions.value.includes('calc_layer_return'),
-          calc_long_short: calcOptions.value.includes('calc_long_short'),
           calc_turnover: calcOptions.value.includes('calc_turnover'),
           calc_drawdown: calcOptions.value.includes('calc_drawdown'),
           warmup_days: warmupDays.value || undefined,
