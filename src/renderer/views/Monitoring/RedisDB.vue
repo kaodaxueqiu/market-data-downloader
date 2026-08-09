@@ -104,7 +104,7 @@
 
         <el-table-column prop="messageType" label="消息类型" min-width="200">
           <template #default="{ row }">
-            <span class="message-type">{{ row.messageType || '-' }}</span>
+            <span class="message-type">{{ row.messageType }}</span>
           </template>
         </el-table-column>
 
