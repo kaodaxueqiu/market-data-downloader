@@ -59,10 +59,12 @@
         class="search-input"
       />
       <el-select v-model="filterType" placeholder="全部类型" class="filter-select">
-        <el-option label="全部类型" value="all" />
-        <el-option label="DECODED 数据" value="DECODED" />
-        <el-option label="RAW 数据" value="RAW" />
-        <el-option label="系统 DB" value="SYSTEM" />
+        <el-option
+          v-for="opt in typeOptions"
+          :key="opt"
+          :label="opt === 'all' ? '全部类型' : opt"
+          :value="opt"
+        />
       </el-select>
       <el-select v-model="sortBy" placeholder="按 DB 编号" class="filter-select">
         <el-option label="按 DB 编号" value="db" />
@@ -135,6 +137,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { prometheusService } from '@/services/prometheus.service'
 import { getInstanceByPort } from '@/config/redisInstances'
+import { API_CONFIG } from '@/api/constants'
 
 interface RedisDB {
   db: string
@@ -142,7 +145,13 @@ interface RedisDB {
   keys: number
   expires: number
   avgTTL: number
-  dataType: 'RAW' | 'DECODED' | 'SYSTEM' | 'UNKNOWN'
+  dataType: string
+  messageType?: string
+}
+
+// Redis DB 数据字典：{ 端口: { DB号: { type, messageType } } }
+interface DBDictEntry {
+  type?: string
   messageType?: string
 }
 
@@ -182,6 +191,28 @@ const filterType = ref('all')
 const sortBy = ref('db')
 let refreshTimer: NodeJS.Timeout | null = null
 
+// 数据字典：{ 端口: { DB号: { type, messageType } } }
+let dbDict: Record<string, Record<string, DBDictEntry>> = {}
+
+// 拉取 Redis DB 数据字典（相对稳定，无需随监控数据轮询）
+const fetchDBDict = async () => {
+  try {
+    const res = await fetch(`${API_CONFIG.BASE_URL}/redis-dbdict`)
+    const json = await res.json()
+    dbDict = json?.instances || {}
+  } catch (e) {
+    console.error('获取 Redis DB 数据字典失败:', e)
+    dbDict = {}
+  }
+}
+
+// 按端口 + DB号 查字典
+const lookupDBDict = (portStr: string, dbIndex: number): DBDictEntry | null => {
+  const inst = dbDict[portStr]
+  if (!inst) return null
+  return inst[String(dbIndex)] || null
+}
+
 // 过滤和排序
 const filteredDBs = computed(() => {
   return databases.value
@@ -207,6 +238,12 @@ const filteredDBs = computed(() => {
       return a.dbIndex - b.dbIndex
     })
 })
+
+// 动态类型选项：从当前 DB 列表提取所有 type 去重，前面加「全部」
+const typeOptions = computed(() => [
+  'all',
+  ...Array.from(new Set(databases.value.map(d => d.dataType)))
+])
 
 // 返回上一页
 const goBack = () => {
@@ -239,7 +276,10 @@ const getTypeTagType = (type: string) => {
     RAW: 'primary',
     DECODED: 'success',
     SYSTEM: 'warning',
-    UNKNOWN: 'info'
+    UNKNOWN: 'info',
+    行情: 'success',
+    基础数据: 'primary',
+    未定义: 'info'
   }
   return types[type] || 'info'
 }
@@ -268,16 +308,9 @@ const fetchDBData = async () => {
       const keys = parseInt(item.value[1])
       const dbIndex = parseInt(db.replace('db', ''))
       
-      let dataType: 'RAW' | 'DECODED' | 'SYSTEM' | 'UNKNOWN' = 'UNKNOWN'
-      let messageType = instanceInfo.value?.purpose || ''
-      
-      if (dbIndex === 0) {
-        dataType = 'DECODED'
-      } else if (dbIndex === 1) {
-        dataType = 'RAW'
-      } else if (dbIndex === 2) {
-        dataType = 'SYSTEM'
-      }
+      const dict = lookupDBDict(port.value, dbIndex)
+      const dataType = dict?.type || '未定义'
+      const messageType = dict?.messageType || '未定义'
       
       dbMap.set(db, {
         db,
@@ -319,7 +352,8 @@ const fetchDBData = async () => {
 }
 
 // 启动定时刷新
-const startRefresh = () => {
+const startRefresh = async () => {
+  await fetchDBDict()
   fetchDBData()
   refreshTimer = setInterval(fetchDBData, 10000)
 }
