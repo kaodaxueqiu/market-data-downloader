@@ -284,6 +284,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getPriceTypeOptions: () => ipcRenderer.invoke('backtest:getPriceTypeOptions'),
     getAdmissionConfig: () => ipcRenderer.invoke('backtest:getAdmissionConfig'),
     saveAdmissionConfig: (yaml: string) => ipcRenderer.invoke('backtest:saveAdmissionConfig', yaml),
+    getQuotaConfig: () => ipcRenderer.invoke('backtest:getQuotaConfig'),
+    saveQuotaConfig: (yaml: string) => ipcRenderer.invoke('backtest:saveQuotaConfig', yaml),
     download: (taskId: string, options?: { format?: 'csv' | 'xlsx'; type?: 'summary' | 'daily' | 'all'; period?: number }) =>
       ipcRenderer.invoke('backtest:download', taskId, options),
     report: (taskId: string, options?: { period?: number }) =>
@@ -900,6 +902,8 @@ declare global {
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         getAdmissionConfig: () => Promise<{ success: boolean; data?: { yaml: string }; error?: string }>
         saveAdmissionConfig: (yaml: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getQuotaConfig: () => Promise<{ success: boolean; data?: { yaml: string; updated_at?: string; updated_by?: string }; error?: string }>
+        saveQuotaConfig: (yaml: string) => Promise<{ success: boolean; data?: any; error?: string }>
         download: (taskId: string, options: { format: 'csv' | 'xlsx'; type: 'summary' | 'daily' | 'all'; period?: number }) => Promise<{ success: boolean; filePath?: string; error?: string }>
         report: (taskId: string, options: any) => Promise<{ success: boolean; filePath?: string; error?: string }>
         getFactorValues: (taskId: string, params?: { trade_date?: string; stock_code?: string; sort_by?: string; sort_order?: string; page?: number; page_size?: number }) => Promise<{ success: boolean; data?: any; error?: string }>

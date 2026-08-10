@@ -30,6 +30,15 @@
         <el-icon><Document /></el-icon>
         <span>入库审核配置</span>
       </button>
+      <button
+        v-if="hasPermission('quota_config')"
+        class="nav-tab"
+        :class="{ active: activeTab === 'quota-config' }"
+        @click="switchTab('quota-config')"
+      >
+        <el-icon><Histogram /></el-icon>
+        <span>并发配额</span>
+      </button>
     </div>
     </div>
 
@@ -72,6 +81,21 @@
           <el-alert type="error" :closable="false" :title="admissionError" />
         </div>
       </div>
+
+      <div v-else-if="activeTab === 'quota-config'" class="admission-config-panel">
+        <div class="admission-desc">
+          编辑并发配额 quota.yaml（<code>defaultMaxPods</code> 为默认并发，<code>userQuotas</code> 为各用户中文名对应的并发上限，范围 1~50）。
+          保存后经网关校验，<strong>调度器将在 1 分钟内生效</strong>。
+        </div>
+        <div class="editor-toolbar">
+          <el-button :icon="Refresh" @click="loadQuotaYaml" :loading="quotaLoading">重新加载</el-button>
+          <el-button type="primary" :icon="Check" @click="saveQuotaYaml" :loading="quotaSaving" :disabled="!quotaIsDirty">保存</el-button>
+        </div>
+        <div ref="quotaEditorRef" class="yaml-editor"></div>
+        <div v-if="quotaError" class="admission-error">
+          <el-alert type="error" :closable="false" :title="quotaError" />
+        </div>
+      </div>
         </el-scrollbar>
   </div>
 </template>
@@ -79,7 +103,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, inject, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Coin, Refresh, Document, Check } from '@element-plus/icons-vue'
+import { Coin, Refresh, Document, Check, Histogram } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { EditorView, basicSetup } from 'codemirror'
 import { yaml as yamlLang } from '@codemirror/lang-yaml'
@@ -88,7 +112,7 @@ import CacheManagerMain from '../CacheManager/Main.vue'
 const route = useRoute()
 const router = useRouter()
 
-const activeTab = ref<'cache' | 'dict-sync' | 'admission-config'>('cache')
+const activeTab = ref<'cache' | 'dict-sync' | 'admission-config' | 'quota-config'>('cache')
 
 // 菜单权限（从 App.vue 注入）
 const menuPermissions = inject<{ value: string[] }>('menuPermissions', { value: [] })
@@ -103,6 +127,7 @@ const availableTabs = computed(() => {
   if (hasPermission('cache_management')) tabs.push('cache')
   if (hasPermission('factor_dict_sync')) tabs.push('dict-sync')
   if (hasPermission('admission_config')) tabs.push('admission-config')
+  if (hasPermission('quota_config')) tabs.push('quota-config')
   return tabs
 })
 
@@ -112,18 +137,21 @@ const setTabFromRoute = () => {
     activeTab.value = 'dict-sync'
   } else if (route.path.includes('/engine-config/admission-config') && hasPermission('admission_config')) {
     activeTab.value = 'admission-config'
+  } else if (route.path.includes('/engine-config/quota-config') && hasPermission('quota_config')) {
+    activeTab.value = 'quota-config'
   } else if (route.path.includes('/engine-config/cache') && hasPermission('cache_management')) {
     activeTab.value = 'cache'
   } else if (availableTabs.value.length > 0) {
-    activeTab.value = availableTabs.value[0] as 'cache' | 'dict-sync' | 'admission-config'
+    activeTab.value = availableTabs.value[0] as 'cache' | 'dict-sync' | 'admission-config' | 'quota-config'
   }
 }
 
-const switchTab = (tab: 'cache' | 'dict-sync' | 'admission-config') => {
+const switchTab = (tab: 'cache' | 'dict-sync' | 'admission-config' | 'quota-config') => {
   const routeMap: Record<string, string> = {
     cache: '/factor-library/engine-config/cache',
     'dict-sync': '/factor-library/engine-config/dict-sync',
-    'admission-config': '/factor-library/engine-config/admission-config'
+    'admission-config': '/factor-library/engine-config/admission-config',
+    'quota-config': '/factor-library/engine-config/quota-config'
   }
   if (routeMap[tab]) {
     activeTab.value = tab
@@ -233,6 +261,83 @@ const saveAdmissionYaml = async () => {
   }
 }
 
+// ===== 并发配额配置 =====
+const quotaEditorRef = ref<HTMLElement>()
+let quotaEditor: EditorView | null = null
+const quotaLoading = ref(false)
+const quotaSaving = ref(false)
+const quotaError = ref('')
+// 记录加载时的原始内容，用于判断是否有改动
+const originalQuotaYaml = ref('')
+const quotaIsDirty = ref(false)
+
+const initQuotaEditor = (initialValue = '') => {
+  if (!quotaEditorRef.value || quotaEditor) return
+  quotaEditor = new EditorView({
+    doc: initialValue,
+    extensions: [
+      basicSetup,
+      yamlLang(),
+      // 监听文档变化，实时更新是否有改动
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          quotaIsDirty.value = update.state.doc.toString() !== originalQuotaYaml.value
+        }
+      })
+    ],
+    parent: quotaEditorRef.value
+  })
+}
+
+const setQuotaEditorValue = (value: string) => {
+  if (!quotaEditor) return
+  quotaEditor.dispatch({
+    changes: { from: 0, to: quotaEditor.state.doc.length, insert: value }
+  })
+}
+
+const loadQuotaYaml = async () => {
+  quotaLoading.value = true
+  quotaError.value = ''
+  try {
+    const res = await window.electronAPI.backtest.getQuotaConfig()
+    if (res.success) {
+      const yaml = res.data?.yaml || ''
+      setQuotaEditorValue(yaml)
+      // 记录原始内容，重置改动状态
+      originalQuotaYaml.value = yaml
+      quotaIsDirty.value = false
+    } else {
+      quotaError.value = res.error || '加载失败'
+    }
+  } catch (e: any) {
+    quotaError.value = e.message || '加载失败'
+  } finally {
+    quotaLoading.value = false
+  }
+}
+
+const saveQuotaYaml = async () => {
+  const yaml = quotaEditor?.state.doc.toString() || ''
+  quotaSaving.value = true
+  quotaError.value = ''
+  try {
+    const res = await window.electronAPI.backtest.saveQuotaConfig(yaml)
+    if (res.success) {
+      ElMessage.success('已保存，调度器将在 1 分钟内生效')
+      // 保存成功后，当前内容成为新的原始内容
+      originalQuotaYaml.value = yaml
+      quotaIsDirty.value = false
+    } else {
+      quotaError.value = res.error || '保存失败：yaml 校验未通过'
+    }
+  } catch (e: any) {
+    quotaError.value = e.message || '保存失败'
+  } finally {
+    quotaSaving.value = false
+  }
+}
+
 // 切到该 tab 时初始化编辑器并加载 yaml
 watch(activeTab, (t) => {
   if (t === 'admission-config') {
@@ -240,12 +345,19 @@ watch(activeTab, (t) => {
       initEditor()
       loadAdmissionYaml()
     })
+  } else if (t === 'quota-config') {
+    nextTick(() => {
+      initQuotaEditor()
+      loadQuotaYaml()
+    })
   }
 })
 
 onBeforeUnmount(() => {
   yamlEditor?.destroy()
   yamlEditor = null
+  quotaEditor?.destroy()
+  quotaEditor = null
 })
 </script>
 

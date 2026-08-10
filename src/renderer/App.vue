@@ -484,6 +484,7 @@ const childTitles: Record<string, string[]> = {
   '/factor-library/engine-config/cache': ['因子库', '回测引擎配置'],
   '/factor-library/engine-config/dict-sync': ['因子库', '回测引擎配置'],
   '/factor-library/engine-config/admission-config': ['因子库', '回测引擎配置'],
+  '/factor-library/engine-config/quota-config': ['因子库', '回测引擎配置'],
   '/factor-library/cache-manager': ['因子库', '数据缓存管理'],
   '/factor-library/intermediate-table': ['因子库', '中间统计表'],
   '/fund-management': ['基金管理'],

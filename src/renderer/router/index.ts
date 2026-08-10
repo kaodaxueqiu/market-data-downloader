@@ -98,6 +98,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../views/FactorLibrary/EngineConfig/Main.vue'),
         meta: { menuId: 'admission_config' }
       },
+      {
+        path: 'engine-config/quota-config',
+        name: 'EngineConfigQuota',
+        component: () => import('../views/FactorLibrary/EngineConfig/Main.vue'),
+        meta: { menuId: 'quota_config' }
+      },
       // 兼容旧路径：老书签/外链仍可用
       {
         path: 'cache-manager',
@@ -458,7 +464,8 @@ router.beforeEach((to, _from, next) => {
     const subRoutes = [
       { path: '/factor-library/engine-config/cache', menuId: 'cache_management' },
       { path: '/factor-library/engine-config/dict-sync', menuId: 'factor_dict_sync' },
-      { path: '/factor-library/engine-config/admission-config', menuId: 'admission_config' }
+      { path: '/factor-library/engine-config/admission-config', menuId: 'admission_config' },
+      { path: '/factor-library/engine-config/quota-config', menuId: 'quota_config' }
     ]
     const allowedRoute = subRoutes.find(r => userMenuPermissions.includes(r.menuId))
     if (allowedRoute) {
