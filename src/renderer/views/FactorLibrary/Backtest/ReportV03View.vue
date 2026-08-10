@@ -106,6 +106,16 @@
         :key="spec.id"
         class="rv-chart-block"
       >
+        <div class="rv-ic-controls" v-if="mode === 'research' && spec.id.startsWith('ic-page-') && icPages.length > 1">
+          <span class="rv-ic-label">IC 周期：</span>
+          <el-radio-group v-model="selectedIcIdx" size="small">
+            <el-radio-button
+              v-for="(p, idx) in icPages"
+              :key="idx"
+              :label="idx"
+            >周期 {{ p.period }}</el-radio-button>
+          </el-radio-group>
+        </div>
         <div class="rv-chart-title" v-if="spec.title">{{ spec.title }}</div>
         <div class="rv-chart-canvas" :ref="el => setChartRef(i, el)"></div>
       </div>
@@ -154,6 +164,8 @@ const warnings = computed<string[]>(() => report.value?.warnings ?? [])
 // ---------- research ----------
 const layers = computed<any>(() => report.value?.layers ?? null)
 const icPages = computed<any[]>(() => report.value?.ic_pages ?? [])
+// 当前选中的 IC 周期下标（默认第一个）
+const selectedIcIdx = ref(0)
 const distribution = computed<any>(() => report.value?.factor?.distribution_snapshot ?? null)
 const coverageSeries = computed<any>(() => report.value?.factor?.coverage_series ?? null)
 const assessmentGroup = computed<number | null>(() => layers.value?.assessment_group ?? null)
@@ -254,10 +266,11 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
       })
     }
 
-    // 3. IC 多页
-    icPages.value.forEach((page: any, idx: number) => {
+    // 3. IC 时序（改为按选中下标只渲染一张；兜底到第 0 张）
+    const page = icPages.value[selectedIcIdx.value] ?? icPages.value[0]
+    if (page) {
       specs.push({
-        id: `ic-page-${idx}`,
+        id: `ic-page-${selectedIcIdx.value}`,
         title: `IC 时序（周期 ${page.period}）`,
         option: {
           tooltip: { trigger: 'axis' }, legend: { data: ['IC', 'Rank IC'], type: 'scroll', bottom: 0 }, grid: baseGrid,
@@ -268,7 +281,7 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
           ]
         }
       })
-    })
+    }
 
     // 4. 因子覆盖时序
     if (coverageSeries.value?.dates && coverageSeries.value?.counts) {
@@ -445,6 +458,16 @@ onBeforeUnmount(() => {
 }
 .rv-strip-select {
   min-width: 240px;
+}
+.rv-ic-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.rv-ic-label {
+  font-size: 13px;
+  color: #666;
 }
 .rv-chart-title {
   margin-bottom: 6px;
