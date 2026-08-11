@@ -1273,6 +1273,7 @@ interface CodeCheckField {
 interface CodeCheckInfo {
   tableExists: boolean
   database?: string
+  bareTable?: string   // search 命中的纯表名（不带库名前缀）
   fields: CodeCheckField[]
 }
 const codeCheckResult = ref<Record<string, CodeCheckInfo>>({})
@@ -1719,6 +1720,7 @@ const runCodeCheck = async () => {
         if (foundTable) {
           result[tableName].tableExists = true
           result[tableName].database = foundTable.database
+          result[tableName].bareTable = foundTable.table_name   // 存纯表名，供自动配置使用
 
           // 获取表的字段列表进行比对
           try {
@@ -1750,9 +1752,12 @@ const runCodeCheck = async () => {
 const autoConfigDataSources = () => {
   for (const [tableName, info] of Object.entries(codeCheckResult.value)) {
     if (!info.tableExists) continue
-    
-    // 如果表已经配置过，更新字段
-    const existingIndex = formData.data_sources.findIndex(ds => ds.table === tableName)
+
+    // 纯表名：优先用代码检查存下的 bareTable；兜底从全名取最后一段
+    const bareTable = info.bareTable || (tableName.includes('.') ? tableName.split('.').pop()! : tableName)
+
+    // 如果表已经配置过，更新字段（用纯表名比对，与手动选表一致）
+    const existingIndex = formData.data_sources.findIndex(ds => ds.table === bareTable)
     if (existingIndex >= 0) {
       // 合并字段
       const existingFields = new Set(formData.data_sources[existingIndex].fields)
@@ -1763,9 +1768,9 @@ const autoConfigDataSources = () => {
       const validFields = info.fields.filter(f => f.exists).map(f => f.name)
       formData.data_sources.push({
         mode: 'normal',
-        name: tableName,
-        database: info.database || 'clickhouse',
-        table: tableName,
+        name: bareTable,
+        database: info.database || '',
+        table: bareTable,
         fields: validFields,
         date_field: '',
         code_field: '',
@@ -2431,7 +2436,10 @@ const handleSubmit = async () => {
         }))
       }
 
-      const result = await window.electronAPI.backtest.submit(requestData)
+      const result = await window.electronAPI.backtest.submit(
+        // 兜底深拷贝：清掉后挂字段里可能残留的 reactive/Proxy 引用，避免 IPC "An object could not be cloned."
+        JSON.parse(JSON.stringify(requestData))
+      )
       
       if (result.success && result.data) {
         ElMessage.success('任务提交成功！')
@@ -2440,6 +2448,7 @@ const handleSubmit = async () => {
         ElMessage.error(result.error || '提交失败')
       }
     } catch (error: any) {
+      console.error('提交回测任务失败:', error)
       ElMessage.error('提交失败: ' + error.message)
     } finally {
       submitting.value = false
