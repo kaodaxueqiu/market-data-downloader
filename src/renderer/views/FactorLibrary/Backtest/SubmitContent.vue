@@ -2033,9 +2033,30 @@ const loadFieldList = async (index: number) => {
   
   fieldListLoading.value[index] = true
   try {
-    console.log('🔍 加载字段列表:', ds.table, 'datasource:', ds.database)
-    // 不传 engine/database，让后端按表名自动定位所属库（ds.database 是 "clickhouse" 之类的库类型，不是合法 engine 标识）
-    const result = await window.electronAPI.dbdict.getTableDetail('', '', ds.table)
+    // 先按表名 search 定位真实 engine / database（照抄「代码检查」的做法，已验证可用）
+    let engine = ''
+    let database = ds.database
+    try {
+      const searchResult = await window.electronAPI.dbdict.search(ds.table)
+      const results = searchResult.data || []
+      const hit = results.find((x: any) =>
+        x.type === 'table' &&
+        x.table_name === ds.table &&
+        (!ds.database || x.database === ds.database)
+      )
+      if (hit) {
+        engine = hit.engine || ''
+        database = hit.database || ds.database
+      }
+    } catch (e) {
+      console.warn('search 定位表所属库失败，回退用 ds.database', e)
+    }
+    // 私有工作区库兜底：库名以 factor_workspace 开头的一定是 clickhouse
+    if (!engine && database && database.startsWith('factor_workspace')) {
+      engine = 'clickhouse'
+    }
+    console.log('🔍 加载字段列表:', ds.table, 'engine:', engine, 'database:', database)
+    const result = await window.electronAPI.dbdict.getTableDetail(engine, database, ds.table)
     console.log('✅ 字段列表返回:', result)
     if (result.code === 200 && result.data?.columns) {
       // 使用展开运算符确保 Vue 响应式更新

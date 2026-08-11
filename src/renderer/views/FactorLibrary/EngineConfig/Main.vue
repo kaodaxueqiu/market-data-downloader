@@ -339,7 +339,16 @@ const saveQuotaYaml = async () => {
 }
 
 // 切到该 tab 时初始化编辑器并加载 yaml
-watch(activeTab, (t) => {
+// 注意：面板用 v-if 渲染，切走会销毁 DOM，必须同步销毁对应编辑器实例并置 null，
+// 否则切回来时旧实例仍绑在已销毁的 DOM 上，导致面板空白、按钮失效。
+watch(activeTab, (t, prev) => {
+  if (prev === 'admission-config') {
+    yamlEditor?.destroy()
+    yamlEditor = null
+  } else if (prev === 'quota-config') {
+    quotaEditor?.destroy()
+    quotaEditor = null
+  }
   if (t === 'admission-config') {
     nextTick(() => {
       initEditor()
