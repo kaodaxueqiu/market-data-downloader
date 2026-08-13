@@ -145,10 +145,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, h, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
+import StageErrors from '@/components/StageErrors.vue'
 
 const router = useRouter()
 
@@ -317,13 +318,26 @@ const cancelTask = async (task: any) => {
 const viewError = async (task: any) => {
   try {
     const result = await window.electronAPI.backtest.getTaskDetail(task.task_id)
-    
+
     if (result.success && result.data?.task) {
-      const errorMsg = result.data.task.error_message || '未知错误'
-      ElMessageBox.alert(errorMsg, '错误信息', {
-        confirmButtonText: '确定',
-        type: 'error'
-      })
+      const taskData = result.data.task
+      const stageErrors = taskData.stage_errors
+      if (Array.isArray(stageErrors) && stageErrors.length) {
+        // 结构化错误：用 StageErrors 组件渲染到弹窗
+        ElMessageBox({
+          title: '阶段错误',
+          message: () => h(StageErrors, { errors: stageErrors }),
+          confirmButtonText: '确定',
+          type: 'error',
+          customClass: 'stage-error-msgbox'
+        })
+      } else {
+        const errorMsg = taskData.error_message || '未知错误'
+        ElMessageBox.alert(errorMsg, '错误信息', {
+          confirmButtonText: '确定',
+          type: 'error'
+        })
+      }
     } else {
       ElMessage.error('获取错误信息失败')
     }

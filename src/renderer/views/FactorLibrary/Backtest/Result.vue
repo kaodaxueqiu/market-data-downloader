@@ -72,18 +72,23 @@
           <p class="progress-text">正在执行回测任务，请稍候...</p>
         </div>
         
-        <!-- 错误信息（失败显示） -->
-        <el-alert 
-          v-if="task.status === 'failed'" 
-          type="error" 
-          :closable="false"
-          style="margin-top: 16px;"
-        >
-          <template #title>
-            <strong>任务执行失败</strong>
-          </template>
-          {{ task.error_message || '未知错误' }}
-        </el-alert>
+        <!-- 阶段错误（失败显示，结构化 stage_errors 优先） -->
+        <template v-if="task.status === 'failed'">
+          <div v-if="task.stage_errors?.length" style="margin-top: 16px;">
+            <StageErrors :errors="task.stage_errors" />
+          </div>
+          <el-alert
+            v-else
+            type="error"
+            :closable="false"
+            style="margin-top: 16px;"
+          >
+            <template #title>
+              <strong>任务执行失败</strong>
+            </template>
+            {{ task.error_message || '未知错误' }}
+          </el-alert>
+        </template>
       </el-card>
 
       <!-- 结果展示（仅完成状态） -->
@@ -217,6 +222,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Calendar, Timer, Refresh } from '@element-plus/icons-vue'
+import StageErrors from '@/components/StageErrors.vue'
 
 const route = useRoute()
 const router = useRouter()

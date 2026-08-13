@@ -22,6 +22,16 @@
       <!-- 考核组指标 -->
       <div class="rv-section" v-if="assessmentMetricRows.length">
         <h4 class="rv-title">考核组指标（第 {{ assessmentGroup }} 组）</h4>
+        <div class="rv-ic-controls" v-if="layerList.length > 1">
+          <span class="rv-ic-label">考核周期：</span>
+          <el-radio-group v-model="selectedMetricIdx" size="small">
+            <el-radio-button
+              v-for="(item, idx) in layerList"
+              :key="idx"
+              :label="idx"
+            >周期 {{ item.period }}</el-radio-button>
+          </el-radio-group>
+        </div>
         <el-table :data="assessmentMetricRows" size="small" border stripe>
           <el-table-column prop="label" label="指标" width="160" />
           <el-table-column prop="value" label="数值" />
@@ -106,6 +116,26 @@
         :key="spec.id"
         class="rv-chart-block"
       >
+        <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'layers-nav' && layerList.length > 1">
+          <span class="rv-ic-label">分层周期：</span>
+          <el-radio-group v-model="selectedLayerIdx" size="small">
+            <el-radio-button
+              v-for="(item, idx) in layerList"
+              :key="idx"
+              :label="idx"
+            >周期 {{ item.period }}</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'excess-nav' && layerList.length > 1">
+          <span class="rv-ic-label">超额周期：</span>
+          <el-radio-group v-model="selectedExcessIdx" size="small">
+            <el-radio-button
+              v-for="(item, idx) in layerList"
+              :key="idx"
+              :label="idx"
+            >周期 {{ item.period }}</el-radio-button>
+          </el-radio-group>
+        </div>
         <div class="rv-ic-controls" v-if="mode === 'research' && spec.id.startsWith('ic-page-') && icPages.length > 1">
           <span class="rv-ic-label">IC 周期：</span>
           <el-radio-group v-model="selectedIcIdx" size="small">
@@ -162,13 +192,27 @@ const meta = computed<any>(() => report.value?.meta ?? null)
 const warnings = computed<string[]>(() => report.value?.warnings ?? [])
 
 // ---------- research ----------
-const layers = computed<any>(() => report.value?.layers ?? null)
+// v0.9.0+ layers 由单对象改为数组（每个预测周期一份）；旧报告仍是单对象，包成单元素数组做兼容
+const layerList = computed<any[]>(() => {
+  const l = report.value?.layers
+  if (!l) return []
+  return Array.isArray(l) ? l : [l]
+})
+// 当前选中的分层周期下标（与 IC 切换器 selectedIcIdx 相互独立，不联动）
+const selectedLayerIdx = ref(0)
+const layers = computed<any>(() => layerList.value[selectedLayerIdx.value] ?? null)
+// 超额净值独立周期下标（与分层 selectedLayerIdx、IC selectedIcIdx 均不联动）
+const selectedExcessIdx = ref(0)
+const excessLayer = computed<any>(() => layerList.value[selectedExcessIdx.value] ?? null)
+// 考核组指标独立周期下标（每周期 metrics 不同，与其余切换器均不联动）
+const selectedMetricIdx = ref(0)
+const metricLayer = computed<any>(() => layerList.value[selectedMetricIdx.value] ?? null)
 const icPages = computed<any[]>(() => report.value?.ic_pages ?? [])
 // 当前选中的 IC 周期下标（默认第一个）
 const selectedIcIdx = ref(0)
 const distribution = computed<any>(() => report.value?.factor?.distribution_snapshot ?? null)
 const coverageSeries = computed<any>(() => report.value?.factor?.coverage_series ?? null)
-const assessmentGroup = computed<number | null>(() => layers.value?.assessment_group ?? null)
+const assessmentGroup = computed<number | null>(() => metricLayer.value?.assessment_group ?? null)
 
 const distributionRows = computed(() => {
   const d = distribution.value
@@ -182,7 +226,7 @@ const distributionRows = computed(() => {
 
 const assessmentMetricRows = computed(() => {
   const g = assessmentGroup.value
-  const groups = layers.value?.groups
+  const groups = metricLayer.value?.groups
   if (!g || !Array.isArray(groups)) return []
   const m = groups[g - 1]?.metrics
   if (!m) return []
@@ -252,16 +296,19 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
       })
     }
 
-    // 2. 超额净值曲线（考核组）
-    const g = assessmentGroup.value
-    if (g && groups[g - 1]?.excess_nav_series) {
+    // 2. 超额净值曲线（考核组）—— 用独立的 excessLayer，与分层净值互不联动
+    const exLayer = excessLayer.value
+    const exDates = exLayer?.dates || []
+    const exGroups = exLayer?.groups || []
+    const g = exLayer?.assessment_group ?? null
+    if (g && exGroups[g - 1]?.excess_nav_series) {
       specs.push({
         id: 'excess-nav',
         title: `超额净值曲线（第${g}组）`,
         option: {
           tooltip: { trigger: 'axis' }, grid: baseGrid,
-          xAxis: { type: 'category', data: dates }, yAxis: { type: 'value', scale: true },
-          series: [{ name: '超额净值', type: 'line', showSymbol: false, connectNulls: true, data: nz(groups[g - 1].excess_nav_series) }]
+          xAxis: { type: 'category', data: exDates }, yAxis: { type: 'value', scale: true },
+          series: [{ name: '超额净值', type: 'line', showSymbol: false, connectNulls: true, data: nz(exGroups[g - 1].excess_nav_series) }]
         }
       })
     }

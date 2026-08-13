@@ -131,7 +131,8 @@ export async function downloadUpdateSilently(
     onDownloadProgress: (progressEvent) => {
       const loaded = progressEvent.loaded || 0
       const total = progressEvent.total || fileSize
-      const percentCompleted = Math.round((loaded * 100) / total)
+      // loaded 可能超过 total（gzip 传输 / 清单 size 偏小），钳制到 0~100 避免出现 114% 这类越界值
+      const percentCompleted = Math.min(100, Math.max(0, Math.round((loaded * 100) / total)))
 
       if (onProgress) {
         onProgress(percentCompleted, `已下载 ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`)
@@ -365,7 +366,8 @@ export async function downloadUpdateToPath(
     onDownloadProgress: (progressEvent) => {
       const loaded = progressEvent.loaded || 0
       const total = progressEvent.total || fileSize
-      const percentCompleted = Math.round((loaded * 100) / total)
+      // loaded 可能超过 total（gzip 传输 / 清单 size 偏小），钳制到 0~100 避免出现 114% 这类越界值
+      const percentCompleted = Math.min(100, Math.max(0, Math.round((loaded * 100) / total)))
       
       const downloadedMB = (loaded / 1024 / 1024).toFixed(2)
       const totalMB = (total / 1024 / 1024).toFixed(2)

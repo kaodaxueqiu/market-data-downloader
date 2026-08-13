@@ -273,6 +273,28 @@
             </div>
           </div>
 
+          <!-- 阶段错误（结构化 stage_errors 优先） -->
+          <div class="detail-section" v-if="taskDetail.stage_errors?.length">
+            <div class="section-title">
+              <el-icon><Setting /></el-icon>
+              阶段错误
+            </div>
+            <div class="section-body">
+              <StageErrors :errors="taskDetail.stage_errors" />
+            </div>
+          </div>
+
+          <!-- 错误信息兜底（无 stage_errors 时） -->
+          <div class="detail-section" v-else-if="taskDetail.error_message">
+            <div class="section-title">
+              <el-icon><Setting /></el-icon>
+              错误信息
+            </div>
+            <div class="section-body">
+              <el-alert type="error" :title="taskDetail.error_message" :closable="false" show-icon />
+            </div>
+          </div>
+
           <!-- 回测配置 -->
           <div class="detail-section" v-if="taskDetail.task_config">
             <div class="section-title">
@@ -412,6 +434,7 @@ import { ElMessage } from 'element-plus'
 import {
   Refresh, Document, Setting, DataAnalysis, Connection, Warning
 } from '@element-plus/icons-vue'
+import StageErrors from '@/components/StageErrors.vue'
 
 const router = useRouter()
 
