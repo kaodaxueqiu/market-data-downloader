@@ -6169,6 +6169,52 @@ ipcMain.handle('backtest:getPriceTypeOptions', async () => {
 
 const MIDSTATS_API_BASE = 'http://61.151.241.233:8080/api/v1/midstats'
 
+const TRANSLATE_API_BASE = 'http://61.151.241.233:8080/api/v1/translate'
+
+// 翻译: polars 原生代码（预览/下载共用，返回 JSON，含 source 全文）
+ipcMain.handle('translate:polars', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(`${TRANSLATE_API_BASE}/polars`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ polars 翻译失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 翻译: clickhouse DDL（预览/下载共用，返回 JSON，含 ddl 全文）
+ipcMain.handle('translate:clickhouse', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const response = await axios.post(`${TRANSLATE_API_BASE}/clickhouse`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 15000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    console.error('❌ clickhouse 翻译失败:', error)
+    if (error.response?.data?.error) {
+      return { success: false, error: error.response.data.error }
+    }
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
 // 中间统计表: 检查工作区库状态
 ipcMain.handle('intermediateTable:status', async () => {
   try {

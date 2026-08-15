@@ -39,6 +39,11 @@
             最终表名为 factor_workspace.it_&lt;用户命名&gt;
           </div>
         </el-form-item>
+        <el-form-item label=" ">
+          <el-button size="small" :loading="ddlTranslating" @click="previewDdlTranslate">
+            预览建表 DDL
+          </el-button>
+        </el-form-item>
       </template>
 
       <!-- DDL 模式 -->
@@ -81,6 +86,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
+import { previewClickhouse } from '@/utils/translatePreview'
 import { InfoFilled, CircleClose } from '@element-plus/icons-vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { python as pythonLang } from '@codemirror/lang-python'
@@ -225,6 +231,22 @@ watch(() => form.mode, (mode) => {
 onBeforeUnmount(() => {
   destroyEditors()
 })
+
+// ClickHouse DDL 翻译预览
+const ddlTranslating = ref(false)
+const previewDdlTranslate = async () => {
+  const ttl = ttlMode.value === 'permanent' ? 'permanent' : `${ttlValue.value}${ttlUnit.value}`
+  ddlTranslating.value = true
+  try {
+    await previewClickhouse({
+      code: form.py_code || '',
+      user_name: form.table_name || undefined,
+      ttl
+    })
+  } finally {
+    ddlTranslating.value = false
+  }
+}
 
 const onModeChange = () => {
   // 切换模式时清空表名，避免两种模式表名语义混淆

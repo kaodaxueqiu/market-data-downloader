@@ -154,15 +154,7 @@
     <!-- 警告 -->
     <div class="rv-section" v-if="warnings.length">
       <h4 class="rv-title">提示与警告</h4>
-      <el-alert
-        v-for="(w, i) in warnings"
-        :key="i"
-        :title="w"
-        type="warning"
-        :closable="false"
-        show-icon
-        class="rv-warning"
-      />
+      <StageErrors :errors="warnings" />
     </div>
   </div>
 
@@ -172,6 +164,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
+import StageErrors from '@/components/StageErrors.vue'
 
 const props = defineProps<{
   report: any
@@ -189,7 +182,7 @@ const formatNum = (v: any, digits = 4): string =>
 const report = computed<any>(() => props.report ?? null)
 const mode = computed<string | null>(() => props.mode ?? null)
 const meta = computed<any>(() => report.value?.meta ?? null)
-const warnings = computed<string[]>(() => report.value?.warnings ?? [])
+const warnings = computed<any[]>(() => report.value?.warnings ?? [])
 
 // ---------- research ----------
 // v0.9.0+ layers 由单对象改为数组（每个预测周期一份）；旧报告仍是单对象，包成单元素数组做兼容
@@ -524,8 +517,5 @@ onBeforeUnmount(() => {
 .rv-chart-canvas {
   width: 100%;
   height: 320px;
-}
-.rv-warning {
-  margin-bottom: 8px;
 }
 </style>

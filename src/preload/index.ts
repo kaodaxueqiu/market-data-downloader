@@ -302,6 +302,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:downloadFactorValues', taskId, tradeDate)
   },
 
+  // 翻译代码下载 API
+  translate: {
+    polars: (data: any) => ipcRenderer.invoke('translate:polars', data),
+    clickhouse: (data: any) => ipcRenderer.invoke('translate:clickhouse', data)
+  },
+
   // 中间统计表 API
   intermediateTable: {
     status: () => ipcRenderer.invoke('intermediateTable:status'),
@@ -920,6 +926,10 @@ declare global {
         delete: (tableName: string) => Promise<{ success: boolean; data?: any; error?: string }>
         update: (tableName: string, data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         setTtl: (tableName: string, ttl: string) => Promise<{ success: boolean; data?: any; error?: string }>
+      }
+      translate: {
+        polars: (data: { code: string; context?: any }) => Promise<{ success: boolean; data?: { source: string; fallback: boolean; fallback_reason?: string | null; entry_function?: string; original_mode?: string }; error?: string }>
+        clickhouse: (data: { code: string; user_name?: string; ttl?: string; workspace_db?: string }) => Promise<{ success: boolean; data?: { ddl: string; table_name?: string; source_tables?: string[]; fingerprint?: string; fallback: boolean; fallback_reason?: string | null }; error?: string }>
       }
       marketData: {
         listDefinitions: () => Promise<{ success: boolean; data?: any; error?: string }>

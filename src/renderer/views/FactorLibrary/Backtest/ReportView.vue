@@ -158,15 +158,16 @@ const fmtMetric = (val: any, fmt: string): string => {
   return n.toFixed(3)
 }
 
-// severity 排序：critical > warning > info
-const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 }
+// severity 排序：fatal > error > critical > warning > info
+const severityOrder: Record<string, number> = { fatal: -1, error: 0, critical: 0, warning: 1, info: 2 }
 const sortedWarnings = computed<any[]>(() => {
   const ws = props.report?.warnings ?? []
   return [...ws].sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9))
 })
 
 const severityToType = (sev: string): 'success' | 'warning' | 'info' | 'error' => {
-  if (sev === 'critical') return 'error'
+  if (sev === 'fatal' || sev === 'critical') return 'error'
+  if (sev === 'error') return 'warning'
   if (sev === 'warning') return 'warning'
   return 'info'
 }

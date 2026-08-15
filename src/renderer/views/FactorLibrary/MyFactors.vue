@@ -812,9 +812,14 @@
         <el-form-item label="Python 代码" v-if="factorMode === 'pycode'" required>
           <div style="width: 100%;">
             <div ref="factorPyCodeEditorRef" class="factor-py-code-editor"></div>
-            <div class="form-hint" style="margin-top: 6px;">
-              <el-icon><InfoFilled /></el-icon>
-              需包含 calculate_factor 函数入口；可选定义 build_intermediate_table
+            <div class="form-hint" style="margin-top: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span>
+                <el-icon><InfoFilled /></el-icon>
+                需包含 calculate_factor 函数入口；可选定义 build_intermediate_table
+              </span>
+              <el-button size="small" :loading="polarsTranslating" @click="previewPolarsTranslate">
+                预览 Polars 代码
+              </el-button>
             </div>
           </div>
         </el-form-item>
@@ -1949,6 +1954,7 @@
 import { ref, reactive, onMounted, computed, watch, nextTick, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { previewPolars } from '@/utils/translatePreview'
 import { EditorView, basicSetup } from 'codemirror'
 import { python as pythonLang } from '@codemirror/lang-python'
 import { 
@@ -2112,6 +2118,17 @@ interface PyCodeCheckInfo {
 const pyCodeCheckResult = ref<Record<string, PyCodeCheckInfo>>({})
 const pyCodeChecking = ref(false)
 const pyCodeFuncError = ref('')  // 函数入口检查错误
+
+// Polars 翻译预览
+const polarsTranslating = ref(false)
+const previewPolarsTranslate = async () => {
+  polarsTranslating.value = true
+  try {
+    await previewPolars(factorPyCode.value)
+  } finally {
+    polarsTranslating.value = false
+  }
+}
 
 const hasPyCodeCheckError = computed(() => {
   if (pyCodeFuncError.value) return true
