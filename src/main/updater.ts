@@ -232,8 +232,28 @@ export async function installUpdate(filePath: string): Promise<void> {
   console.log('自动运行安装包:', filePath)
 
   if (platform === 'win32') {
-    // Windows: nsis .exe 安装程序，直接运行
-    spawn('cmd', ['/c', 'start', '', filePath], {
+    // 生成临时 bat：轮询等待主进程 PID 结束后再启动安装器，彻底消除“exe 被占用导致 NSIS 无法关闭”的竞态
+    const pid = process.pid
+    const tempDir = path.join(app.getPath('temp'), 'g-snowball-updates')
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true })
+    }
+    const batPath = path.join(tempDir, 'run-installer.bat')
+    // :wait 循环用 tasklist 检测 PID 是否仍存在，存在则等 1 秒重试；退出后再启动安装器并自删脚本
+    const batContent = [
+      '@echo off',
+      ':wait',
+      `tasklist /FI "PID eq ${pid}" 2>nul | find "${pid}" >nul`,
+      'if not errorlevel 1 (',
+      '  timeout /t 1 /nobreak >nul',
+      '  goto wait',
+      ')',
+      `start "" "${filePath}"`,
+      'del "%~f0"'
+    ].join('\r\n')
+    fs.writeFileSync(batPath, batContent, 'utf-8')
+
+    spawn('cmd', ['/c', batPath], {
       detached: true,
       shell: false,
       stdio: 'ignore'
@@ -250,10 +270,8 @@ export async function installUpdate(filePath: string): Promise<void> {
   // 杀掉 IM 进程
   killIMProcess()
 
-  // 退出当前应用，让安装程序接管
-  setTimeout(() => {
-    app.quit()
-  }, 500)
+  // 立即退出当前应用；bat 会等本进程真正结束后才启动安装器
+  app.quit()
 }
 
 // 启动时清理临时目录中与当前版本号相同的安装包（更新完成后残留的旧文件）
