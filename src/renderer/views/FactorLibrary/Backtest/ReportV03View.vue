@@ -21,7 +21,7 @@
 
       <!-- 考核组指标 -->
       <div class="rv-section" v-if="assessmentMetricRows.length">
-        <h4 class="rv-title">考核组指标（第 {{ assessmentGroup }} 组）</h4>
+        <h4 class="rv-title">考核组指标（第 {{ assessmentGroup }} 组 · 周期 {{ metricLayer?.period }}）</h4>
         <div class="rv-ic-controls" v-if="layerList.length > 1">
           <span class="rv-ic-label">考核周期：</span>
           <el-radio-group v-model="selectedMetricIdx" size="small">
@@ -280,7 +280,7 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
       }
       specs.push({
         id: 'layers-nav',
-        title: '分层净值曲线',
+        title: `分层净值曲线（周期 ${layers.value?.period}）`,
         option: {
           tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
           xAxis: { type: 'category', data: dates }, yAxis: { type: 'value', scale: true },
@@ -297,7 +297,7 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
     if (g && exGroups[g - 1]?.excess_nav_series) {
       specs.push({
         id: 'excess-nav',
-        title: `超额净值曲线（第${g}组）`,
+        title: `超额净值曲线（第${g}组 · 周期 ${exLayer?.period}）`,
         option: {
           tooltip: { trigger: 'axis' }, grid: baseGrid,
           xAxis: { type: 'category', data: exDates }, yAxis: { type: 'value', scale: true },
