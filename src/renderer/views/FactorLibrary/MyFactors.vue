@@ -1708,15 +1708,15 @@
             <el-tabs v-model="benchmarkTab" class="benchmark-tabs-mini">
               <!-- 标准指数 Tab -->
               <el-tab-pane label="标准指数" name="standard">
-                <el-checkbox-group v-model="selectedBenchmarks" class="benchmark-checkbox-group">
-                  <el-checkbox 
+                <el-radio-group v-model="selectedBenchmark" class="benchmark-checkbox-group">
+                  <el-radio 
                     v-for="opt in standardIndexes" 
                     :key="opt.value" 
-                    :label="opt.value"
+                    :value="opt.value"
                   >
                     {{ opt.label }}
-                  </el-checkbox>
-                </el-checkbox-group>
+                  </el-radio>
+                </el-radio-group>
               </el-tab-pane>
               <!-- 指数行业 Tab -->
               <el-tab-pane label="指数行业" name="industry">
@@ -1727,33 +1727,31 @@
                     :label="idx.label" 
                     :name="idx.code"
                   >
-                    <el-checkbox-group v-model="selectedBenchmarks" class="industry-grid-mini">
-                      <el-checkbox 
+                    <el-radio-group v-model="selectedBenchmark" class="industry-grid-mini">
+                      <el-radio 
                         v-for="opt in (indexIndustries[idx.code] || [])" 
                         :key="opt.value" 
-                        :label="opt.value"
+                        :value="opt.value"
                       >
                         {{ opt.industry }}
-                      </el-checkbox>
-                    </el-checkbox-group>
+                      </el-radio>
+                    </el-radio-group>
                   </el-tab-pane>
                 </el-tabs>
               </el-tab-pane>
             </el-tabs>
             <div style="color: #909399; font-size: 12px; margin-top: 4px;">
-              选择基准计算超额收益，可多选
+              仅支持单选；不选则按股票池自动匹配基准
             </div>
-            <div v-if="selectedBenchmarks.length > 0" class="selected-benchmarks-list">
-              <span class="selected-label">已选 ({{ selectedBenchmarks.length }})：</span>
+            <div v-if="selectedBenchmark" class="selected-benchmarks-list">
+              <span class="selected-label">已选：</span>
               <el-tag 
-                v-for="bm in selectedBenchmarks" 
-                :key="bm" 
                 size="small" 
                 closable 
-                @close="removeBenchmark(bm)"
+                @close="removeBenchmark()"
                 style="margin: 2px 4px 2px 0;"
               >
-                {{ getBenchmarkLabel(bm) }}
+                {{ getBenchmarkLabel(selectedBenchmark) }}
               </el-tag>
             </div>
           </el-form-item>
@@ -4275,7 +4273,7 @@ const industryIndexTab = ref('CSI300')
 const standardIndexes = ref<BenchmarkOption[]>([])
 const indexList = ref<IndexItem[]>([])
 const indexIndustries = ref<Record<string, IndexIndustryOption[]>>({})
-const selectedBenchmarks = ref<string[]>([])
+const selectedBenchmark = ref<string>('')
 
 // 获取基准标签名称
 const getBenchmarkLabel = (value: string) => {
@@ -4291,11 +4289,8 @@ const getBenchmarkLabel = (value: string) => {
 }
 
 // 移除基准
-const removeBenchmark = (value: string) => {
-  const idx = selectedBenchmarks.value.indexOf(value)
-  if (idx > -1) {
-    selectedBenchmarks.value.splice(idx, 1)
-  }
+const removeBenchmark = () => {
+  selectedBenchmark.value = ''
 }
 
 // 股票池数据
@@ -4522,7 +4517,7 @@ const openBatchBacktest = async () => {
     await loadStockPools()
   }
   // 重置选择
-  selectedBenchmarks.value = []
+  selectedBenchmark.value = ''
   stockPoolTab.value = 'index'
   riskNeutralization.enabled = false
   riskNeutralization.selected = []
@@ -4549,7 +4544,7 @@ const openBacktest = async (factor: any) => {
     await loadStockPools()
   }
   // 重置选择
-  selectedBenchmarks.value = []
+  selectedBenchmark.value = ''
   stockPoolTab.value = 'index'
   backtestDialogVisible.value = true
 }
@@ -4568,7 +4563,7 @@ const openAdmission = async (factor: any) => {
   if (!stockPoolData.value) {
     await loadStockPools()
   }
-  selectedBenchmarks.value = []
+  selectedBenchmark.value = ''
   stockPoolTab.value = 'index'
   backtestDialogVisible.value = true
 }
@@ -4647,7 +4642,7 @@ const submitBacktest = async () => {
         return_periods: [...backtestForm.return_periods],
         factor_direction: backtestForm.factor_direction,
         rebalance_price_type: backtestForm.rebalance_price_type,
-        benchmarks: [...selectedBenchmarks.value],
+        benchmarks: selectedBenchmark.value ? [selectedBenchmark.value] : [],
         // 费率留空则不提交，交由引擎回退默认模型（admission 模式引擎强制覆盖）
         risk_free_rate: backtestForm.risk_free_rate ?? undefined,
         buy_cost_bps: backtestForm.buy_cost_bps ?? undefined,
@@ -4728,7 +4723,7 @@ const submitBacktest = async () => {
       }
     }
     
-    console.log('📊 selectedBenchmarks:', selectedBenchmarks.value)
+    console.log('📊 selectedBenchmark:', selectedBenchmark.value)
     console.log('📊 提交回测请求数据:', JSON.stringify(data, null, 2))
     
     const result = await window.electronAPI.factor.myBacktest(data)
