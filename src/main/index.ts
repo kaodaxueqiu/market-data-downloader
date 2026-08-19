@@ -402,6 +402,11 @@ app.on('window-all-closed', () => {
 
 // 应用退出前清理订阅任务
 app.on('before-quit', async (event) => {
+  // 安装更新场景：直接放行，不做清理。否则清理（stopAllTasks/ws 断开）一旦卡住，
+  // 主进程退不掉，外部轮询脚本死等，安装器永远不启动（更新流程必须保证进程能退出）
+  if (updater.isInstallingUpdate) {
+    return
+  }
   if (subscriptionTaskManager || wsManager) {
     console.log('🛑 应用退出，清理资源...')
     event.preventDefault()  // 阻止立即退出

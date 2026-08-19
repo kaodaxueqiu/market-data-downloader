@@ -203,6 +203,10 @@ function killIMProcess() {
   }
 }
 
+// 标记是否正在安装更新：安装时主进程应无条件立即退出，跳过 before-quit 的清理拦截
+// 否则若 stopAllTasks/ws 断开卡住，主进程退不掉，轮询脚本会死等，安装器永远不启动
+export let isInstallingUpdate = false
+
 // 安装更新：自动运行安装包并退出当前应用
 export async function installUpdate(filePath: string): Promise<void> {
   const platform = process.platform
@@ -231,32 +235,29 @@ export async function installUpdate(filePath: string): Promise<void> {
 
   console.log('自动运行安装包:', filePath)
 
-  if (platform === 'win32') {
-    // 生成临时 bat：轮询等待主进程 PID 结束后再启动安装器，彻底消除“exe 被占用导致 NSIS 无法关闭”的竞态
-    const pid = process.pid
-    const tempDir = path.join(app.getPath('temp'), 'g-snowball-updates')
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true })
-    }
-    const batPath = path.join(tempDir, 'run-installer.bat')
-    // :wait 循环用 tasklist 检测 PID 是否仍存在，存在则等 1 秒重试；退出后再启动安装器并自删脚本
-    const batContent = [
-      '@echo off',
-      ':wait',
-      `tasklist /FI "PID eq ${pid}" 2>nul | find "${pid}" >nul`,
-      'if not errorlevel 1 (',
-      '  timeout /t 1 /nobreak >nul',
-      '  goto wait',
-      ')',
-      `start "" "${filePath}"`,
-      'del "%~f0"'
-    ].join('\r\n')
-    fs.writeFileSync(batPath, batContent, 'utf-8')
+  // 标记进入安装流程：before-quit 检测到此标志直接放行，不再走订阅清理（避免清理卡住导致主进程退不掉）
+  isInstallingUpdate = true
 
-    spawn('cmd', ['/c', batPath], {
+  if (platform === 'win32') {
+    // 用 Node 子进程轮询等待主进程退出后再启动安装器（全程无窗口），彻底消除“exe 被占用导致 NSIS 无法关闭”的竞态
+    // 注1：此前用 bat 脚本实现，但 cmd 会弹出黑色控制台窗口（标题显示 find "PID"），用户可见，体验差
+    // 注2：轮询必须同时匹配 PID + 进程名，防止主进程退出后 PID 被其他进程复用导致误判“还活着”而死等
+    const pid = process.pid
+    const exeName = path.basename(process.execPath)
+    const nodeCode = [
+      `const {exec,spawn}=require('child_process');`,
+      `const pid=${pid},exe=${JSON.stringify(exeName)},installer=${JSON.stringify(filePath)};`,
+      `function wait(){exec('tasklist /FI "PID eq '+pid+'" /FI "IMAGENAME eq '+exe+'"',(e,out)=>{`,
+      `  if(out&&out.indexOf(exe)!==-1){setTimeout(wait,500);return;}`,
+      `  spawn('cmd',['/c','start','','""',installer],{detached:true,stdio:'ignore',windowsHide:true}).unref();`,
+      `  process.exit(0);`,
+      `});}`,
+      `wait();`
+    ].join('')
+    spawn(process.execPath, ['-e', nodeCode], {
       detached: true,
-      shell: false,
-      stdio: 'ignore'
+      stdio: 'ignore',
+      windowsHide: true
     }).unref()
   } else if (platform === 'darwin') {
     // macOS: .pkg 安装包，用 open 命令打开安装向导
