@@ -63,8 +63,10 @@ win:
     - from: resources/openclaw-win
       to: openclaw
 nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
+  # 一键安装器：双击直接装，无向导页（去掉"所有用户/当前用户"选择和目录选择），
+  # 固定 per-user 安装到 AppData，全程不提权——避免"所有用户"选项导致 UAC 提权后
+  # 关不掉运行中的程序（重试死循环），也保证自动更新永远静默无需管理员
+  oneClick: true
   perMachine: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
