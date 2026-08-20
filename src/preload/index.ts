@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveApiKeyWithCredentials: (apiKey: string, name: string, isDefault: boolean) => 
       ipcRenderer.invoke('config:saveApiKeyWithCredentials', apiKey, name, isDefault),
     deleteApiKey: (id: string) => ipcRenderer.invoke('config:deleteApiKey', id),
+    setDefaultApiKey: (id: string) => ipcRenderer.invoke('config:setDefaultApiKey', id),
     getFullApiKey: (id: string) => ipcRenderer.invoke('config:getFullApiKey', id),
     getDatabaseCredentials: (id: string) => ipcRenderer.invoke('config:getDatabaseCredentials', id),
     // 🆕 菜单权限相关
@@ -711,6 +712,7 @@ declare global {
         saveApiKey: (apiKey: string, name: string, isDefault: boolean) => Promise<string>
         saveApiKeyWithCredentials: (apiKey: string, name: string, isDefault: boolean) => Promise<any>
         deleteApiKey: (id: string) => Promise<boolean>
+        setDefaultApiKey: (id: string) => Promise<boolean>
         getFullApiKey: (id: string) => Promise<string | null>
         getDatabaseCredentials: (id: string) => Promise<any>
         // 🆕 菜单权限相关

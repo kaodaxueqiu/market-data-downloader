@@ -749,10 +749,25 @@ export class ConfigManager {
       }
       
       const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
-      
+
       // 如果设为默认，取消其他的默认状态
       if (isDefault) {
         keys.forEach(k => k.isDefault = false)
+      }
+
+      // 同 Key 去重：已存在则更新凭据/权限/名称，避免重复堆积
+      const existing = keys.find(k => {
+        try { return this.decrypt(k.apiKey) === apiKey } catch { return false }
+      })
+      if (existing) {
+        existing.name = name || credResult.accountName || existing.name
+        existing.isDefault = isDefault
+        existing.databaseCredentials = credResult.credentials
+        existing.menu_permissions = menuPermissions
+        existing.permissions_updated_at = new Date().toISOString()
+        this.store.set('apiKeys', keys)
+        console.log('✅ API Key 已存在，凭证和权限已更新')
+        return { success: true, id: existing.id, accountName: credResult.accountName }
       }
 
       const newKey: ApiKeyInfo = {
@@ -866,6 +881,15 @@ export class ConfigManager {
     }
     
     return this.refreshMenuPermissions(defaultKey.id)
+  }
+
+  // 切换默认API Key（仅改默认标记，凭据/权限保持各自绑定）
+  setDefaultApiKey(id: string): boolean {
+    const keys = this.store.get('apiKeys', []) as ApiKeyInfo[]
+    if (!keys.some(k => k.id === id)) return false
+    keys.forEach(k => k.isDefault = k.id === id)
+    this.store.set('apiKeys', keys)
+    return true
   }
 
   // 删除API Key

@@ -487,6 +487,11 @@ ipcMain.handle('config:deleteApiKey', async (_event, id: string) => {
   return configManager.deleteApiKey(id)
 })
 
+// 切换默认API Key
+ipcMain.handle('config:setDefaultApiKey', async (_event, id: string) => {
+  return configManager.setDefaultApiKey(id)
+})
+
 // 获取完整的API Key（用于下载）
 ipcMain.handle('config:getFullApiKey', async (_event, id: string) => {
   return configManager.getFullApiKey(id)

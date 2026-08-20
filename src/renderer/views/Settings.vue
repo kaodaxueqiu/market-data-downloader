@@ -30,6 +30,27 @@
             Key前缀：{{ apiKeyConfig.apiKey.substring(0, 10) }}...
           </span>
         </el-form-item>
+        <!-- 🆕 已保存的 Key：点选即切换 -->
+        <el-form-item label="已保存的Key" v-if="savedKeys.length">
+          <div style="width: 100%">
+            <div v-for="k in savedKeys" :key="k.id" class="saved-key-item">
+              <el-radio
+                :model-value="activeKeyId"
+                :value="k.id"
+                @change="switchApiKey(k.id)"
+              >
+                <span class="key-name">{{ k.name }}</span>
+                <span class="key-mask">{{ k.apiKey }}</span>
+              </el-radio>
+              <el-button size="small" text type="danger" @click="removeApiKey(k.id)">
+                删除
+              </el-button>
+            </div>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px">
+              点选即可切换当前生效的 Key，无需重新输入
+            </div>
+          </div>
+        </el-form-item>
         <div style="color: #909399; font-size: 12px; margin: 10px 0 0 120px">
           提示：API Key用于身份识别和权限验证，请妥善保管，不要泄露给他人
         </div>
@@ -200,6 +221,10 @@ const appVersion = ref('1.6.1')
 const apiKeyConfig = reactive({
   apiKey: ''
 })
+
+// 🆕 已保存的 Key 列表
+const savedKeys = ref<any[]>([])
+const activeKeyId = ref('')
 
 // 🆕 数据库凭证信息
 const databaseInfo = reactive({
@@ -375,6 +400,64 @@ const loadDatabaseCredentials = async (apiKeyId?: string) => {
   }
 }
 
+// 🆕 加载已保存的 Key 列表
+const loadSavedKeys = async () => {
+  try {
+    const keys = await window.electronAPI.config.getApiKeys()
+    savedKeys.value = keys
+    activeKeyId.value = keys.find((k: any) => k.isDefault)?.id || ''
+  } catch (error) {
+    console.error('加载Key列表失败:', error)
+  }
+}
+
+// 🆕 切换 Key（点选即设为默认，与"保存新Key"同一套生效链路）
+const switchApiKey = async (id: string) => {
+  if (id === activeKeyId.value) return
+  try {
+    const ok = await window.electronAPI.config.setDefaultApiKey(id)
+    if (!ok) {
+      ElMessage.error('切换失败')
+      return
+    }
+    activeKeyId.value = id
+    // 同步刷新输入框和数据库凭证显示
+    const fullKey = await window.electronAPI.config.getFullApiKey(id)
+    if (fullKey) apiKeyConfig.apiKey = fullKey
+    await loadDatabaseCredentials(id)
+    ElMessage.success('已切换 API Key')
+  } catch (error: any) {
+    ElMessage.error(error.message || '切换失败')
+  }
+}
+
+// 🆕 删除已保存的 Key
+const removeApiKey = async (id: string) => {
+  try {
+    await ElMessageBox.confirm('确定删除该 Key 吗？', '提示', { type: 'warning' })
+  } catch {
+    return  // 用户取消
+  }
+  const wasDefault = id === activeKeyId.value
+  const ok = await window.electronAPI.config.deleteApiKey(id)
+  if (!ok) {
+    ElMessage.error('删除失败')
+    return
+  }
+  await loadSavedKeys()
+  if (wasDefault) {
+    if (savedKeys.value.length) {
+      // 删掉的正是当前生效的，自动切到列表第一个
+      await switchApiKey(savedKeys.value[0].id)
+    } else {
+      // 没有 Key 了，清空显示
+      apiKeyConfig.apiKey = ''
+      databaseInfo.hasCredentials = false
+    }
+  }
+  ElMessage.success('已删除')
+}
+
 // 🆕 刷新数据库凭证
 const refreshDatabaseCredentials = async () => {
   if (!apiKeyConfig.apiKey) {
@@ -519,6 +602,7 @@ onMounted(async () => {
   }
   
   loadApiKey()  // 加载单一API Key
+  loadSavedKeys()  // 🆕 加载已保存的Key列表
   loadConfig()
   setupUpdateListeners()
 })
@@ -555,6 +639,24 @@ onUnmounted(() => {
     .api-key-text {
       font-family: monospace;
       color: #909399;
+    }
+
+    .saved-key-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+
+      .key-name {
+        font-weight: 500;
+        margin-right: 8px;
+      }
+
+      .key-mask {
+        font-family: monospace;
+        color: #909399;
+        font-size: 12px;
+      }
     }
   }
 }
