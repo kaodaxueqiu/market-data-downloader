@@ -210,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted, onUnmounted } from 'vue'
+import { reactive, ref, onMounted, onUnmounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { FolderOpened, Refresh, Check } from '@element-plus/icons-vue'
 
@@ -225,6 +225,9 @@ const apiKeyConfig = reactive({
 // 🆕 已保存的 Key 列表
 const savedKeys = ref<any[]>([])
 const activeKeyId = ref('')
+
+// 🆕 App.vue 提供的菜单权限重载（切换/保存 Key 后立即刷新左侧菜单，不等 30 秒定时刷新）
+const reloadMenuPermissions = inject<(() => Promise<void>) | undefined>('reloadMenuPermissions', undefined)
 
 // 🆕 数据库凭证信息
 const databaseInfo = reactive({
@@ -282,8 +285,11 @@ const saveApiKey = async () => {
     loading.close()
     
     if (result.success) {
-      // 🆕 更新数据库凭证显示
+      // 🆕 刷新已保存Key列表和数据库凭证显示
+      await loadSavedKeys()
       await loadDatabaseCredentials()
+      // 🆕 立即刷新菜单权限（新 Key 权限可能不同，不等定时刷新）
+      await reloadMenuPermissions?.()
       
       // 成功获取数据库凭证
       const messages = [

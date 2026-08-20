@@ -703,6 +703,9 @@ const loadMenuPermissions = async () => {
   }
 }
 
+// 🆕 提供给子页面：切换/保存 API Key 后立即重载菜单权限（不等 30 秒定时刷新）
+provide('reloadMenuPermissions', loadMenuPermissions)
+
 // 安装下载好的更新（点击"更新已就绪"按钮触发）
 const installDownloadedUpdate = async () => {
   if (!updateFilePath.value) {
