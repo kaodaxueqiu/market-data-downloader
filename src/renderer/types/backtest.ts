@@ -91,10 +91,11 @@ export interface IntermediateTableMeta {
 // 中间统计表新建请求
 export interface IntermediateTableCreateRequest {
   mode: 'python' | 'ddl'
-  py_code?: string      // Python 模式：prepare_data / build_intermediate_table 函数代码
-  ddl?: string          // DDL 模式：完整 CREATE TABLE 语句
-  table_name?: string   // 用户命名（Python 模式可选，DDL 模式必填）
-  ttl?: string          // "permanent" / "30d" / "24h" 等
+  code?: string           // Python 模式：后端 create 端点期望的字段名
+  py_code?: string        // 兼容旧字段（未使用）
+  ddl?: string            // DDL 模式：完整 CREATE TABLE 语句
+  table_name?: string     // DDL 模式必填（须 it_ 开头），Python 模式不传
+  ttl?: string            // "permanent" / "30d" / "24h" 等
 }
 
 // 因子表达式类型

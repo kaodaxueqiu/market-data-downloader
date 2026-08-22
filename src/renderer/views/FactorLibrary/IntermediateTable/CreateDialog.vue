@@ -289,8 +289,8 @@ const handleSubmit = async () => {
     ttl
   }
   if (form.mode === 'python') {
-    payload.py_code = form.py_code
-    if (form.table_name) payload.table_name = form.table_name
+    payload.code = form.py_code
+    // Python 模式不传 table_name，由 meta-service 自动生成
   } else {
     payload.ddl = form.ddl
     payload.table_name = form.table_name
@@ -305,9 +305,14 @@ const handleSubmit = async () => {
       table_name = props.rebuildRow.full_name || props.rebuildRow.table_name
       result = await window.electronAPI.intermediateTable.update(table_name, payload)
     } else {
-      result = await window.electronAPI.intermediateTable.build(payload)
-      // DDL 模式：用户输入的就是完整表名；Python 模式：拼前缀
-      table_name = form.mode === 'ddl' ? (form.table_name || '生成中...') : (form.table_name ? `factor_workspace.it_${form.table_name}` : '生成中...')
+      // 按模式分流：Python 调 create（同步），DDL 调 build（异步）
+      if (form.mode === 'python') {
+        result = await window.electronAPI.intermediateTable.create(payload)
+      } else {
+        result = await window.electronAPI.intermediateTable.build(payload)
+      }
+      // DDL 模式：用户输入的就是完整表名；Python 模式：后端自动生成，暂用占位
+      table_name = form.mode === 'ddl' ? (form.table_name || '生成中...') : '生成中...'
     }
     if (!result.success) {
       ElMessageBox.alert(result.error || (isRebuild.value ? '重建失败' : '创建失败'), isRebuild.value ? '重建失败' : '创建失败', {
