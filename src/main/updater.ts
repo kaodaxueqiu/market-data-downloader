@@ -257,7 +257,11 @@ export async function installUpdate(filePath: string): Promise<void> {
     spawn(process.execPath, ['-e', nodeCode], {
       detached: true,
       stdio: 'ignore',
-      windowsHide: true
+      windowsHide: true,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1'
+      }
     }).unref()
   } else if (platform === 'darwin') {
     // macOS: .pkg 安装包，用 open 命令打开安装向导
