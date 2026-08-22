@@ -30,6 +30,23 @@ export interface CalcOptions {
   memory_limit_mb?: number | null
 }
 
+// 数据源项
+export interface DataSourceItem {
+  name: string
+  database: string
+  table: string
+  fields?: string[] | null
+  date_field: string
+  code_field: string
+  field_mappings?: Record<string, string>
+  time_field?: string
+  time_start?: string
+  time_end?: string
+  mode?: 'normal' | 'intraday'
+  auto_fields?: boolean
+  role?: 'load' | 'intermediate_only'
+}
+
 // 回测提交请求
 export interface BacktestSubmitRequest {
   task_name: string
@@ -41,7 +58,7 @@ export interface BacktestSubmitRequest {
   intermediate_table_config?: IntermediateTableConfig
   start_date: string
   end_date: string
-  data_sources: any[]
+  data_sources: DataSourceItem[]
   universe: any
   backtest_params: any
   calc_options?: CalcOptions
@@ -82,3 +99,41 @@ export interface IntermediateTableCreateRequest {
 
 // 因子表达式类型
 export type ExpressionType = 'expr' | 'py_file' | 'py_code'
+
+// 回测结果 Summary（补充 v0.20.0 新增字段）
+export interface BacktestSummary {
+  factor_snapshot_test?: {
+    status: 'pass' | 'lookahead_suspected' | 'skipped'
+    method?: string
+    total_jump_cells?: number
+    max_abs_diff?: number
+    cutoffs?: Array<{
+      cutoff_date: string
+      jump_cells: number
+      jump_ratio: number
+      examples: Array<{
+        trade_date: string
+        stock_code: string
+        full_value: number
+        as_of_value: number
+        abs_diff: number
+      }>
+    }>
+  }
+  headline_metric_basis?: {
+    cost_aware?: boolean
+    basis?: string
+    annualization?: string
+  }
+  neutralization?: {
+    risk_factors?: string[]
+    pearson?: any[]
+    neutralized_ic_pages?: any[]
+    original_portfolio?: any[]
+    residual_portfolio?: any[]
+  }
+  generalization?: {
+    status: string
+    findings?: Array<{ code: string; severity: string; message: string }>
+  }
+}

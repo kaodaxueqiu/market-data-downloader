@@ -4,6 +4,16 @@
     <div class="report-section" v-if="admission">
       <h4 class="report-section-title">入库审核看板</h4>
 
+      <el-alert
+        v-if="snapshotStatus === 'lookahead_suspected'"
+        type="error"
+        title="前视风险检测异常"
+        description="快照前视测试未通过，不建议提交入库。请排查 unique() 是否加 maintain_order=True、shift(-N) 负向位移等前视操作。"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px;"
+      />
+
       <!-- 引擎判定结果（R7：直接读 decision/reject_reasons，不再前端预判） -->
       <div v-if="admission.decision" class="admission-decision" :class="`decision-${admission.decision}`">
         <div class="decision-header">
@@ -127,6 +137,7 @@ import * as echarts from 'echarts'
 const props = defineProps<{
   report: any
   admissionReport?: any
+  snapshotStatus?: string
   active?: boolean
 }>()
 

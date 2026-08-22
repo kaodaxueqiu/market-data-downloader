@@ -812,6 +812,7 @@
         <el-form-item label="Python 代码" v-if="factorMode === 'pycode'" required>
           <div style="width: 100%;">
             <div ref="factorPyCodeEditorRef" class="factor-py-code-editor"></div>
+            <el-alert v-for="(warn, i) in pythonValidateWarnings" :key="i" :title="warn" type="warning" :closable="false" show-icon />
             <div class="form-hint" style="margin-top: 6px; display: flex; align-items: center; justify-content: space-between;">
               <span>
                 <el-icon><InfoFilled /></el-icon>
@@ -1786,22 +1787,29 @@
       class="search-dialog"
     >
       <div class="search-dialog-content">
+        <el-tabs v-model="dialogActiveTab" class="search-tabs">
+          <!-- Tab 1: 搜索 -->
+          <el-tab-pane label="搜索数据表" name="search">
+        <!-- 搜索框 -->
         <div class="search-header">
           <el-input
             v-model="dialogSearchKeyword"
-            placeholder="输入表名或描述进行搜索"
+            placeholder="输入表名、注释或字段名搜索..."
             clearable
-            @keyup.enter="doDialogSearch"
+            size="large"
+            @input="handleDialogSearch"
+            @clear="handleDialogSearchClear"
           >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
-            <template #append>
-              <el-button :loading="dialogSearchLoading" @click="doDialogSearch">搜索</el-button>
+            <template #suffix v-if="dialogSearchLoading">
+              <el-icon class="is-loading"><Loading /></el-icon>
             </template>
           </el-input>
         </div>
         
+        <!-- 搜索结果 -->
         <div class="search-results">
           <div v-if="dialogSearchLoading" class="results-loading">
             <el-icon class="is-loading" :size="32"><Loading /></el-icon>
@@ -1813,28 +1821,99 @@
             <span>请输入关键词搜索数据表</span>
           </div>
           
-          <div v-else-if="dialogSearchResults.length === 0" class="results-empty">
+          <div v-else-if="!hasDialogSearchResults" class="results-empty">
             <el-icon :size="48"><Box /></el-icon>
             <span>未找到匹配的数据表</span>
           </div>
           
           <div v-else class="results-content">
-            <div 
-              v-for="item in dialogSearchResults" 
-              :key="item.table_name"
-              class="table-card"
-              @click="selectSearchResult(item)"
+            <!-- 动态分组：按 engine + database 分组渲染 -->
+            <div
+              v-for="engGroup in dialogGroupedResults"
+              :key="engGroup.engine"
+              class="result-section"
             >
-              <div class="card-header">
-                <span class="table-name">{{ item.table_name }}</span>
-                <el-tag size="small" type="info">{{ item.database || 'clickhouse' }}</el-tag>
+              <div class="section-header" :class="engGroup.engine === 'postgresql' ? 'static' : 'processed'">
+                <el-icon><Box v-if="engGroup.engine === 'postgresql'" /><Grid v-else /></el-icon>
+                <span>{{ engGroup.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse' }}</span>
+                <el-tag size="small" :type="engGroup.engine === 'postgresql' ? 'success' : 'warning'">
+                  {{ engGroup.databases.reduce((s: number, g: any) => s + g.results.length, 0) }} 个表
+                </el-tag>
               </div>
-              <div class="card-body">
-                <div class="table-comment">{{ item.table_comment || item.description || '暂无描述' }}</div>
+              <div class="section-body">
+                <div
+                  v-for="dbGroup in engGroup.databases"
+                  :key="dbGroup.database"
+                >
+                  <div v-if="engGroup.databases.length > 1" class="db-sub-header">
+                    <el-tag size="small" type="info">{{ dbGroup.database }}</el-tag>
+                  </div>
+                  <div
+                    v-for="item in dbGroup.results"
+                    :key="item.table_name"
+                    class="table-card"
+                    @click="selectSearchResult(item, dbGroup.database)"
+                  >
+                    <div class="card-header">
+                      <span class="table-name">{{ item.table_name }}</span>
+                      <el-tag size="small" :type="engGroup.engine === 'postgresql' ? 'success' : 'warning'">
+                        {{ dbGroup.database || (engGroup.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse') }}
+                      </el-tag>
+                    </div>
+                    <div class="card-body">
+                      <div class="table-comment">{{ item.table_comment || item.description || '暂无描述' }}</div>
+                      <div class="table-meta">
+                        <span v-if="item.category" class="meta-item">
+                          <el-icon><Folder /></el-icon>
+                          {{ item.category }}
+                        </span>
+                        <span v-if="item.match_score" class="meta-item score">
+                          匹配度: {{ Math.round(item.match_score) }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
+          </el-tab-pane>
+
+          <!-- Tab 2: 中间统计表 -->
+          <el-tab-pane label="中间统计表" name="midstats">
+            <div class="midstats-list-wrap">
+              <div v-if="midstatsLoading" class="results-loading">
+                <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+                <span>加载中...</span>
+              </div>
+              <div v-else-if="midstatsError" class="results-empty">
+                <el-icon :size="48"><Warning /></el-icon>
+                <span>{{ midstatsError }}</span>
+              </div>
+              <div v-else-if="midstatsTables.length === 0" class="results-empty">
+                <el-icon :size="48"><Box /></el-icon>
+                <span>暂无中间统计表，请先在中间统计表页面初始化并创建</span>
+              </div>
+              <div v-else class="results-content">
+                <div
+                  v-for="item in midstatsTables"
+                  :key="item.full_name"
+                  class="table-card"
+                  @click="selectMidstatsTable(item)"
+                >
+                  <div class="card-header">
+                    <span class="table-name">{{ item.full_name }}</span>
+                    <el-tag size="small" type="warning">中间统计表</el-tag>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-comment">{{ item.user_name || item.fingerprint?.slice(0, 16) || '—' }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
     </el-dialog>
 
@@ -2072,6 +2151,7 @@ const submitDisabled = computed(() => {
 const factorPyCodeEditorRef = ref<HTMLElement>()
 let factorPyCodeEditor: EditorView | null = null
 const factorPyCode = ref('')
+const pythonValidateWarnings = ref<string[]>([])
 // pycode 模式：执行元信息（factor_code_meta）
 const factorAggregation = ref<'mean' | 'last' | 'sum'>('mean')
 const factorRequires = ref<string[]>([])
@@ -2448,6 +2528,7 @@ interface DataSourceItem {
   time_end?: string
   availableFields: any[]
   loadingFields: boolean
+  role?: string
 }
 
 // 时段预设选项类型
@@ -2477,68 +2558,159 @@ const timeFilterPresets = ref<TimeFilterPreset[]>([])
 const searchDialogVisible = ref(false)
 const currentSearchIndex = ref(0)
 const dialogSearchKeyword = ref('')
-const dialogSearchResults = ref<any[]>([])
+const dialogSearchResults = ref<any>(null)
 const dialogSearchLoading = ref(false)
+const dialogActiveTab = ref('search')
+
+// 中间统计表
+const midstatsTables = ref<any[]>([])
+const midstatsLoading = ref(false)
+const midstatsError = ref('')
 
 // 打开搜索对话框
 const openSearchDialog = (index: number) => {
   currentSearchIndex.value = index
   dialogSearchKeyword.value = ''
-  dialogSearchResults.value = []
+  dialogSearchResults.value = null
+  dialogActiveTab.value = 'search'
+  midstatsTables.value = []
+  midstatsError.value = ''
   searchDialogVisible.value = true
 }
 
-// 执行搜索
-const doDialogSearch = async () => {
-  if (!dialogSearchKeyword.value.trim()) return
-
-  dialogSearchLoading.value = true
+// 加载中间统计表列表
+const loadMidstatsTables = async () => {
+  midstatsLoading.value = true
+  midstatsError.value = ''
   try {
-    // 使用 search.global（与数据中心/单因子回测同源，覆盖私有数据仓库）
-    const result = await window.electronAPI.search.global(dialogSearchKeyword.value, 30)
-    const data = result.data
-    const flat: any[] = []
-    const seen = new Set<string>()
-    const push = (items: any[]) => {
-      items?.forEach((item: any) => {
-        if (item.match_type === 'field') return
-        if (!item.table_name || seen.has(item.table_name)) return
-        seen.add(item.table_name)
-        flat.push(item)
-      })
+    const result = await window.electronAPI.intermediateTable.list()
+    if (result.success) {
+      const tables = result.data?.tables || []
+      midstatsTables.value = tables.map((t: any) => ({
+        full_name: t.full_name,
+        user_name: t.meta?.user_name,
+        fingerprint: t.meta?.fingerprint
+      }))
+    } else {
+      midstatsError.value = result.error || '加载失败'
     }
-    // 新格式：data.results[]
-    if (Array.isArray(data?.results)) {
-      push(data.results)
-    }
-    // 旧格式兼容
-    push(data?.static?.results?.map((x: any) => ({ ...x, database: x.database || 'finance_db', engine: 'postgresql' })))
-    push(data?.processed?.results?.map((x: any) => ({ ...x, database: x.database || 'market_mart', engine: 'clickhouse' })))
-    push(data?.mirror?.results?.map((x: any) => ({ ...x, database: x.database || 'market_data', engine: 'clickhouse' })))
-    dialogSearchResults.value = flat
-  } catch (error: any) {
-    console.error('搜索失败:', error)
-    dialogSearchResults.value = []
+  } catch (e: any) {
+    midstatsError.value = e.message || '加载失败'
   } finally {
-    dialogSearchLoading.value = false
+    midstatsLoading.value = false
   }
 }
 
-// 选择搜索结果
-const selectSearchResult = async (item: any) => {
+// 从中间统计表选择
+const selectMidstatsTable = async (item: any) => {
   const source = dataSources.value[currentSearchIndex.value]
-  // 全限定表名：库.表。ClickHouse 需要库前缀才能唯一定位；已带前缀则不重复拼
-  const db = item.database || ''
-  const rawTable = item.table_name || ''
-  source.table = (db && !rawTable.includes('.')) ? `${db}.${rawTable}` : rawTable
-  source.engine = item.engine
-  source.database = item.database
+  const fullName = item.full_name
+  const dotIdx = fullName.indexOf('.')
+  if (dotIdx > 0) {
+    source.database = fullName.slice(0, dotIdx)
+    source.table = fullName.slice(dotIdx + 1)
+  } else {
+    source.table = fullName
+    source.database = ''
+  }
   source.fields = []
   source.date_field = ''
   source.code_field = ''
-  
   searchDialogVisible.value = false
-  
+  await handleTableChange(currentSearchIndex.value)
+}
+
+// tab 切换时按需加载中间统计表
+watch(dialogActiveTab, (tab) => {
+  if (tab === 'midstats' && midstatsTables.value.length === 0 && !midstatsError.value) {
+    loadMidstatsTables()
+  }
+})
+
+// 弹窗搜索（debounce 300ms，与 SubmitContent 一致）
+let dialogSearchTimer: any = null
+const handleDialogSearch = () => {
+  const keyword = dialogSearchKeyword.value?.trim()
+  if (!keyword || keyword.length < 2) {
+    dialogSearchResults.value = null
+    return
+  }
+
+  if (dialogSearchTimer) clearTimeout(dialogSearchTimer)
+
+  dialogSearchTimer = setTimeout(async () => {
+    dialogSearchLoading.value = true
+    try {
+      const result = await window.electronAPI.search.global(keyword, 30)
+      dialogSearchResults.value = result.data
+    } catch (error) {
+      console.error('搜索失败:', error)
+    } finally {
+      dialogSearchLoading.value = false
+    }
+  }, 300)
+}
+
+// 清空弹窗搜索
+const handleDialogSearchClear = () => {
+  dialogSearchResults.value = null
+}
+
+// 判断弹窗是否有搜索结果
+const hasDialogSearchResults = computed(() => dialogAllResults.value.length > 0)
+
+// 搜索结果扁平化（新格式 data.results[] + 旧格式 static/processed/mirror 兼容）
+const dialogAllResults = computed<any[]>(() => {
+  const r = dialogSearchResults.value
+  if (!r) return []
+  const seen = new Set<string>()
+  const push = (items: any[]) => {
+    items?.forEach((item: any) => {
+      if (item.match_type === 'field') return
+      if (!item.table_name || seen.has(item.table_name)) return
+      seen.add(item.table_name)
+      flatList.push(item)
+    })
+  }
+  const flatList: any[] = []
+  if (Array.isArray(r.results)) {
+    push(r.results)
+  }
+  push(r.static?.results?.map((x: any) => ({ ...x, database: x.database || 'finance_db', engine: 'postgresql' })))
+  push(r.processed?.results?.map((x: any) => ({ ...x, database: x.database || 'market_mart', engine: 'clickhouse' })))
+  push(r.mirror?.results?.map((x: any) => ({ ...x, database: x.database || 'market_data', engine: 'clickhouse' })))
+  return flatList
+})
+
+// 按 engine + database 动态分组
+const dialogGroupedResults = computed(() => {
+  const map = new Map<string, Map<string, any[]>>()
+  for (const item of dialogAllResults.value) {
+    const eng = item.engine || 'clickhouse'
+    const db = item.database || ''
+    if (!map.has(eng)) map.set(eng, new Map())
+    const dbMap = map.get(eng)!
+    if (!dbMap.has(db)) dbMap.set(db, [])
+    dbMap.get(db)!.push(item)
+  }
+  return Array.from(map.entries()).map(([engine, dbMap]) => ({
+    engine,
+    databases: Array.from(dbMap.entries()).map(([database, results]) => ({ database, results }))
+  }))
+})
+
+// 选择搜索结果
+const selectSearchResult = async (item: any, database: string) => {
+  const source = dataSources.value[currentSearchIndex.value]
+  source.table = item.table_name
+  source.engine = item.engine
+  source.database = database
+  source.fields = []
+  source.date_field = ''
+  source.code_field = ''
+
+  searchDialogVisible.value = false
+
   // 加载字段
   await handleTableChange(currentSearchIndex.value)
 }
@@ -2644,7 +2816,8 @@ const buildDataSources = () => {
       const dsConfig: any = {
         date_field: source.date_field,
         code_field: source.code_field,
-        fields: source.fields
+        fields: source.fields,
+        role: source.role || undefined,
       }
       // 日内时段筛选模式：加入时段字段
       if (source.mode === 'intraday' && source.time_field && source.time_start && source.time_end) {
@@ -3738,9 +3911,31 @@ const handleEdit = async (factor: any) => {
 }
 
 
+const prevalidateCode = async () => {
+  pythonValidateWarnings.value = []
+  const code = factorPyCode.value
+  if (!code) return true
+  const result = await window.electronAPI.validatePython({ code, requires: factorRequires.value || [] })
+  if (!result.success) return true
+  const data = result.data
+  if (data.warnings?.length) {
+    pythonValidateWarnings.value = data.warnings
+  }
+  return data.valid
+}
+
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
+
+  // Python 代码静态校验预检
+  if (factorMode.value === 'pycode') {
+    const valid = await prevalidateCode()
+    if (!valid) {
+      ElMessage.error('代码静态校验未通过，请修复后再提交')
+      return
+    }
+  }
   
   try {
     await formRef.value.validate()
@@ -6267,14 +6462,33 @@ onMounted(async () => {
 // 搜索对话框样式
 .search-dialog-content {
   .search-header {
-    margin-bottom: 16px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+    border-bottom: 1px solid #ebeef5;
+
+    .el-input {
+      :deep(.el-input__wrapper) {
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+    }
   }
-  
+
   .search-results {
-    min-height: 300px;
-    max-height: 400px;
+    height: 500px;
     overflow-y: auto;
-    
+
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #c0c4cc;
+      border-radius: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: #f5f7fa;
+    }
+
     .results-loading,
     .results-hint,
     .results-empty {
@@ -6282,42 +6496,138 @@ onMounted(async () => {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 200px;
+      height: 100%;
       color: #909399;
-      gap: 12px;
+      gap: 16px;
+
+      .el-icon {
+        color: #c0c4cc;
+      }
+
+      span {
+        font-size: 15px;
+      }
     }
-    
+
     .results-content {
-      .table-card {
-        padding: 12px 16px;
-        border: 1px solid #e4e7ed;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        cursor: pointer;
-        transition: all 0.2s;
-        
-        &:hover {
-          border-color: #409eff;
-          background: #f0f7ff;
+      padding: 16px;
+
+      .result-section {
+        margin-bottom: 20px;
+
+        &:last-child {
+          margin-bottom: 0;
         }
-        
-        .card-header {
+
+        .section-header {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          margin-bottom: 6px;
-          
-          .table-name {
-            font-weight: 600;
-            color: #303133;
-            font-family: 'Monaco', 'Menlo', monospace;
+          gap: 10px;
+          padding: 12px 16px;
+          border-radius: 8px 8px 0 0;
+          font-size: 14px;
+          font-weight: 600;
+
+          &.static {
+            background: linear-gradient(135deg, #f0f9eb 0%, #e1f3d8 100%);
+            color: #67c23a;
+          }
+
+          &.processed {
+            background: linear-gradient(135deg, #fdf6ec 0%, #faecd8 100%);
+            color: #e6a23c;
+          }
+
+          &.mirror {
+            background: linear-gradient(135deg, #f4f4f5 0%, #e9e9eb 100%);
+            color: #909399;
+          }
+
+          .el-icon {
+            font-size: 18px;
           }
         }
-        
-        .card-body {
-          .table-comment {
-            font-size: 13px;
-            color: #606266;
+
+        .section-body {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 12px;
+          padding: 16px;
+          background: #fafafa;
+          border-radius: 0 0 8px 8px;
+          border: 1px solid #ebeef5;
+          border-top: none;
+
+          .db-sub-header {
+            grid-column: 1 / -1;
+            padding: 4px 0 2px;
+            margin-bottom: 4px;
+          }
+
+          .table-card {
+            background: white;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+
+            &:hover {
+              border-color: #409eff;
+              box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+              transform: translateY(-2px);
+            }
+
+            .card-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-bottom: 10px;
+
+              .table-name {
+                font-size: 14px;
+                font-weight: 600;
+                color: #303133;
+                font-family: 'SF Mono', 'Consolas', monospace;
+              }
+            }
+
+            .card-body {
+              .table-comment {
+                font-size: 13px;
+                color: #606266;
+                line-height: 1.5;
+                margin-bottom: 10px;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+              }
+
+              .table-meta {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                flex-wrap: wrap;
+
+                .meta-item {
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                  font-size: 12px;
+                  color: #909399;
+
+                  .el-icon {
+                    font-size: 14px;
+                  }
+
+                  &.score {
+                    margin-left: auto;
+                    color: #c0c4cc;
+                  }
+                }
+              }
+            }
           }
         }
       }

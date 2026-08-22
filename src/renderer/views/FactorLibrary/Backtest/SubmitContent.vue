@@ -61,6 +61,7 @@
                 <el-form-item label="Python代码">
                   <div style="width: 100%;">
                     <div ref="pyCodeEditorRef" class="py-code-editor"></div>
+                    <el-alert v-for="(warn, i) in pythonValidateWarnings" :key="i" :title="warn" type="warning" :closable="false" show-icon />
                     <div class="form-hint" style="margin-top: 6px;">
                       <el-icon><InfoFilled /></el-icon>
                       需包含 calculate_factor 函数入口；可选定义 build_intermediate_table
@@ -420,6 +421,12 @@
                     </div>
                   </div>
                 </template>
+                <el-form-item label="数据源角色" label-width="70px">
+                  <el-select v-model="ds.role" placeholder="正常加载" clearable size="small">
+                    <el-option label="正常加载（进回测）" value="load" />
+                    <el-option label="仅中间表聚合源（不加载进内存）" value="intermediate_only" />
+                  </el-select>
+                </el-form-item>
               </div>
             </div>
           </div>
@@ -1041,29 +1048,7 @@
         </div>
           </el-tab-pane>
 
-          <!-- Tab 2: 手动输入表全名 -->
-          <el-tab-pane label="手动输入" name="manual">
-            <div class="manual-input-wrap">
-              <el-input
-                v-model="manualTableName"
-                placeholder="输入表全名，如 factor_mid_yuyang.my_table"
-                clearable
-                size="large"
-              >
-                <template #prefix>
-                  <el-icon><EditPen /></el-icon>
-                </template>
-              </el-input>
-              <el-button type="primary" @click="confirmManualTable" style="margin-top: 16px;">
-                确认选择
-              </el-button>
-              <div class="manual-hint">
-                输入 ClickHouse 中存在的表全名（database.table 格式），后端会自动探测表位置和字段。
-              </div>
-            </div>
-          </el-tab-pane>
-
-          <!-- Tab 3: 从中间统计表选择 -->
+          <!-- Tab 2: 从中间统计表选择 -->
           <el-tab-pane label="中间统计表" name="midstats">
             <div class="midstats-list-wrap">
               <div v-if="midstatsLoading" class="results-loading">
@@ -1110,7 +1095,7 @@ import { python as pythonLang } from '@codemirror/lang-python'
 import { 
   Document, DataAnalysis, Calendar, Grid, Setting, TrendCharts,
   Upload, InfoFilled, Plus, Delete, Connection, Search, Loading, Operation, Check,
-  Warning, CircleCheck, CircleClose, Close, Folder, Clock, EditPen
+  Warning, CircleCheck, CircleClose, Close, Folder, Clock
 } from '@element-plus/icons-vue'
 
 const emit = defineEmits<{
@@ -1119,6 +1104,7 @@ const emit = defineEmits<{
 
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const pythonValidateWarnings = ref<string[]>([])
 const factorSource = ref('expression')
 const dateRange = ref<[string, string] | null>(null)
 // 分离式开始/结束日期：底层仍读写 dateRange，保证提交/校验逻辑不变
@@ -1253,8 +1239,6 @@ const fieldListLoading = ref<Record<number, boolean>>({})
 
 // 弹窗 tab 切换
 const dialogActiveTab = ref('search')
-// 手动输入表全名
-const manualTableName = ref('')
 // 中间统计表列表
 const midstatsTables = ref<any[]>([])
 const midstatsLoading = ref(false)
@@ -1793,40 +1777,12 @@ const openSearchDialog = (index: number) => {
   dialogSearchKeyword.value = ''
   dialogSearchResults.value = null
   dialogActiveTab.value = 'search'
-  manualTableName.value = ''
   midstatsTables.value = []
   midstatsError.value = ''
   searchDialogVisible.value = true
 }
 
 // 手动输入表全名：确认选择
-const confirmManualTable = () => {
-  const input = manualTableName.value.trim()
-  if (!input) {
-    ElMessage.warning('请输入表全名')
-    return
-  }
-  const dotIdx = input.indexOf('.')
-  if (dotIdx < 0) {
-    ElMessage.warning('请输入 database.table 格式的表全名')
-    return
-  }
-  const database = input.slice(0, dotIdx)
-  const table = input.slice(dotIdx + 1)
-  const index = currentSearchIndex.value
-  const ds = formData.data_sources[index]
-  ds.table = table
-  ds.database = database
-  ds.name = table
-  ds.fields = []
-  ds.date_field = ''
-  ds.code_field = ''
-  ds.auto_fields = false
-  ds.field_mappings = {}
-  searchDialogVisible.value = false
-  loadFieldList(index)
-}
-
 // 加载中间统计表列表
 const loadMidstatsTables = async () => {
   midstatsLoading.value = true
@@ -2190,9 +2146,28 @@ const minuteVwapLongRangeWarning = computed(() => {
 })
 
 
+const prevalidateCode = async () => {
+  pythonValidateWarnings.value = []
+  const code = formData.factor_code
+  if (!code) return true
+  const result = await window.electronAPI.validatePython({ code, requires: factorRequires.value })
+  if (!result.success) return true
+  const data = result.data
+  if (data.warnings?.length) {
+    pythonValidateWarnings.value = data.warnings
+  }
+  return data.valid
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
-  
+
+  const valid = await prevalidateCode()
+  if (!valid) {
+    ElMessage.error('代码静态校验未通过，请修复后再提交')
+    return
+  }
+
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     
@@ -2298,7 +2273,8 @@ const handleSubmit = async () => {
           table: ds.table,
           fields: ds.auto_fields ? null : ds.fields,
           date_field: ds.date_field,
-          code_field: ds.code_field
+          code_field: ds.code_field,
+          role: ds.role || undefined,
         }
         // field_mappings: 只提交有值的映射
         const mappings: Record<string, string> = {}

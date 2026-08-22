@@ -317,8 +317,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     create: (data: any) => ipcRenderer.invoke('intermediateTable:create', data),
     delete: (tableName: string) => ipcRenderer.invoke('intermediateTable:delete', tableName),
     update: (tableName: string, data: any) => ipcRenderer.invoke('intermediateTable:update', tableName, data),
-    setTtl: (tableName: string, ttl: string) => ipcRenderer.invoke('intermediateTable:setTtl', tableName, ttl)
+    setTtl: (tableName: string, ttl: string) => ipcRenderer.invoke('intermediateTable:setTtl', tableName, ttl),
+    build: (data: any) => ipcRenderer.invoke('intermediateTable:build', data),
+    buildStatus: (buildId: string) => ipcRenderer.invoke('intermediateTable:buildStatus', buildId),
+    dedup: () => ipcRenderer.invoke('intermediateTable:dedup'),
+    createFromDDL: (data: any) => ipcRenderer.invoke('intermediateTable:createFromDDL', data)
   },
+
+  // Python 代码静态校验
+  validatePython: (data: { code: string; requires?: string[] }) => ipcRenderer.invoke('validate:python', data),
 
   // 数据缓存管理 API
   marketData: {
@@ -928,7 +935,12 @@ declare global {
         delete: (tableName: string) => Promise<{ success: boolean; data?: any; error?: string }>
         update: (tableName: string, data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         setTtl: (tableName: string, ttl: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        build: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        buildStatus: (buildId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        dedup: () => Promise<{ success: boolean; data?: any; error?: string }>
+        createFromDDL: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
       }
+      validatePython: (data: { code: string; requires?: string[] }) => Promise<{ success: boolean; data?: any; error?: string }>
       translate: {
         polars: (data: { code: string; context?: any }) => Promise<{ success: boolean; data?: { source: string; fallback: boolean; fallback_reason?: string | null; entry_function?: string; original_mode?: string }; error?: string }>
         clickhouse: (data: { code: string; user_name?: string; ttl?: string; workspace_db?: string }) => Promise<{ success: boolean; data?: { ddl: string; table_name?: string; source_tables?: string[]; fingerprint?: string; fallback: boolean; fallback_reason?: string | null }; error?: string }>

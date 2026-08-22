@@ -6409,6 +6409,100 @@ ipcMain.handle('intermediateTable:setTtl', async (_event, tableName: string, ttl
   }
 })
 
+// 中间统计表: 异步建表（大表，返回 build_id 后轮询）
+ipcMain.handle('intermediateTable:build', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/build`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 30000
+    })
+    // 后端可能返回 { success, data: { build_id, ... } } 或直接返回 { build_id, ... }
+    if (response.data.success !== undefined) {
+      if (!response.data.success) {
+        return { success: false, error: response.data.error || '创建中间统计表失败' }
+      }
+      return { success: true, data: response.data.data }
+    }
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: 查询建表进度
+ipcMain.handle('intermediateTable:buildStatus', async (_event, buildId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.get(`${MIDSTATS_API_BASE}/build/${encodeURIComponent(buildId)}`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 10000
+    })
+    // 后端可能返回 { success, data: { status, progress, ... } } 或直接返回 { status, progress, ... }
+    if (response.data.success !== undefined) {
+      if (!response.data.success) {
+        return { success: false, error: response.data.error || '查询建表进度失败' }
+      }
+      return { success: true, data: response.data.data }
+    }
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: 元数据去重
+ipcMain.handle('intermediateTable:dedup', async (_event) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/dedup`, {}, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 30000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+  }
+})
+
+// 中间统计表: DDL 直接建表（同步、幂等，适合小表）
+ipcMain.handle('intermediateTable:createFromDDL', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/ddl`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 60000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+  }
+})
+
+// Python 代码静态校验（提交前预检）
+ipcMain.handle('validate:python', async (_event, data: { code: string; requires?: string[] }) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${BACKTEST_API_BASE.replace('/backtest', '')}/validate/python`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 10000
+    })
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+  }
+})
+
 // ============================================
 // 数据缓存管理（market-data-cache-manager）IPC Handlers
 // ============================================

@@ -49,7 +49,7 @@
 
     <div class="content-card">
       <el-scrollbar>
-        <el-table :data="tableData" v-loading="loading" border>
+        <el-table :data="tableData" v-loading="loading" border :row-class-name="rowClassName">
       <el-table-column prop="full_name" label="表名" min-width="220" show-overflow-tooltip />
       <el-table-column label="指纹" width="130">
         <template #default="{ row }">
@@ -104,11 +104,45 @@
           {{ formatTime(row.updated_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
+      <!-- 建表进度列 -->
+      <el-table-column label="建表进度" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openTtlDialog(row)">修改 TTL</el-button>
-          <el-button size="small" @click="handleRebuild(row)">重建</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <div v-if="row._building" class="cell-building">
+            <el-progress
+              :percentage="row._building.progress"
+              :status="row._building.status === 'failed' ? 'exception' : row._building.status === 'completed' ? 'success' : undefined"
+              :stroke-width="8"
+              :indeterminate="row._building.stage === 'queued'"
+              :show-text="row._building.stage !== 'queued'"
+            />
+            <div class="cell-building-detail">
+              <span class="cell-stage">{{ stageLabel(row._building.stage) }}</span>
+              <span class="cell-detail-text">{{ row._building.detail }}</span>
+            </div>
+            <div v-if="row._building.read_rows || row._building.read_bytes || row._building.elapsed_secs" class="cell-stats">
+              <span v-if="row._building.elapsed_secs">耗时 {{ row._building.elapsed_secs.toFixed(1) }}s</span>
+              <span v-if="row._building.read_rows">已读 {{ formatRows(row._building.read_rows) }} 行</span>
+              <span v-if="row._building.read_bytes">已读 {{ formatBytes(row._building.read_bytes) }}</span>
+            </div>
+          </div>
+          <span v-else style="color: #c0c4cc;">—</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="100" fixed="right">
+        <template #default="{ row }">
+          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
+            <el-button size="small" :disabled="!!row._building">
+              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="dedup">去重元数据</el-dropdown-item>
+                <el-dropdown-item command="ttl" :disabled="!!row._building">修改 TTL</el-dropdown-item>
+                <el-dropdown-item command="rebuild" :disabled="!!row._building">重建</el-dropdown-item>
+                <el-dropdown-item command="delete" :disabled="!!row._building" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
       <template #empty>
@@ -118,21 +152,46 @@
       </el-scrollbar>
     </div>
 
-    <CreateDialog v-model="createVisible" :rebuild-row="rebuildRow" @created="onCreated" />
+    <CreateDialog v-model="createVisible" :rebuild-row="rebuildRow" @created="onCreated" @building="onBuilding" />
     <TTLDialog v-model="ttlVisible" :row="ttlRow" @updated="loadList" />
     </template>
   </div>
 </template>
 
+<!-- 模块级 script：定义类型 + 跨实例存活的变量 -->
+<script lang="ts">
+export interface BuildingState {
+  build_id: string
+  status: string
+  stage: string
+  progress: number
+  detail: string
+  elapsed_secs: number | null
+  read_rows: number | null
+  read_bytes: number | null
+}
+
+interface BuildingEntry {
+  build_id: string
+  table_name: string
+  is_rebuild: boolean
+  state: BuildingState
+  timer: ReturnType<typeof setInterval> | null
+}
+
+// 模块级 Map：组件卸载/重挂不丢失
+const activeBuilds = new Map<string, BuildingEntry>()
+</script>
+
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Plus, Loading, Coin } from '@element-plus/icons-vue'
+import { Refresh, Plus, Loading, Coin, ArrowDown } from '@element-plus/icons-vue'
 import CreateDialog from './CreateDialog.vue'
 import TTLDialog from './TTLDialog.vue'
 import type { IntermediateTableMeta } from '@/types/backtest'
 
-const tableData = ref<IntermediateTableMeta[]>([])
+const tableData = ref<(IntermediateTableMeta & { _building?: BuildingState })[]>([])
 const loading = ref(false)
 const createVisible = ref(false)
 const rebuildRow = ref<IntermediateTableMeta | null>(null)
@@ -145,6 +204,196 @@ const initLoading = ref(false)
 const isInitialized = ref(false)
 const initError = ref(false)
 const dbStatus = ref<{ initialized: boolean; database: string; factor_user?: string } | null>(null)
+
+const stageLabels: Record<string, string> = {
+  queued: '已排队',
+  validating: '校验中',
+  checking_existing: '检查表',
+  executing_ddl: '执行 DDL',
+  writing_metadata: '写入元数据',
+  completed: '已完成'
+}
+const stageLabel = (stage: string) => stageLabels[stage] ?? stage
+
+const formatRows = (n: number) => {
+  if (n >= 1e8) return (n / 1e8).toFixed(2) + ' 亿'
+  if (n >= 1e4) return (n / 1e4).toFixed(1) + ' 万'
+  return n.toString()
+}
+const formatBytes = (n: number) => {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB'
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + ' MB'
+  if (n >= 1e3) return (n / 1e3).toFixed(0) + ' KB'
+  return n + ' B'
+}
+
+const rowClassName = ({ row }: { row: any }) => {
+  if (row._building) return 'building-row'
+  return ''
+}
+
+/** 启动轮询（通过 table_name 查找行，不依赖 rowIndex） */
+const startPolling = (build_id: string) => {
+  const entry = activeBuilds.get(build_id)
+  if (!entry) return
+  if (entry.timer) clearInterval(entry.timer)
+
+  const timer = setInterval(async () => {
+    const status = await window.electronAPI.intermediateTable.buildStatus(build_id)
+    if (!status.success) return
+    const s = status.data
+    entry.state = {
+      build_id,
+      status: s.status,
+      stage: s.stage,
+      progress: s.progress ?? 0,
+      detail: s.detail ?? '',
+      elapsed_secs: s.elapsed_secs ?? null,
+      read_rows: s.read_rows ?? null,
+      read_bytes: s.read_bytes ?? null
+    }
+    // 同步到表格行
+    const idx = tableData.value.findIndex(r =>
+      r.full_name === entry.table_name || r.table_name === entry.table_name
+    )
+    if (idx >= 0) {
+      tableData.value[idx]._building = { ...entry.state }
+    }
+    if (s.status === 'completed') {
+      clearInterval(timer)
+      entry.timer = null
+      // 不立即刷新，保留已完成状态在临时行上让用户看到
+      ElMessage.success('建表完成')
+      // 延迟 3 秒再刷新列表，用户能看到绿色已完成
+      setTimeout(() => loadList(), 3000)
+    } else if (s.status === 'failed') {
+      clearInterval(timer)
+      entry.timer = null
+      // 保留 failed 状态在临时行上，不刷新
+      ElMessageBox.alert(s.error || s.detail || '建表失败', '建表失败', {
+        confirmButtonText: '关闭',
+        type: 'error'
+      })
+    }
+  }, 1500)
+  entry.timer = timer
+}
+
+const onBuilding = (payload: { build_id: string; table_name: string; is_rebuild: boolean }) => {
+  createVisible.value = false
+  rebuildRow.value = null
+
+  const { build_id, table_name, is_rebuild } = payload
+  const state: BuildingState = {
+    build_id,
+    status: 'queued',
+    stage: 'queued',
+    progress: 0,
+    detail: '已排队，等待开始',
+    elapsed_secs: null,
+    read_rows: null,
+    read_bytes: null
+  }
+
+  const entry: BuildingEntry = { build_id, table_name, is_rebuild, state, timer: null }
+  activeBuilds.set(build_id, entry)
+
+  if (is_rebuild) {
+    const idx = tableData.value.findIndex(r =>
+      r.full_name === table_name || r.table_name === table_name
+    )
+    if (idx >= 0) {
+      tableData.value[idx]._building = state
+    }
+  } else {
+    const tempRow: any = {
+      full_name: table_name,
+      table_name: table_name,
+      user_name: '',
+      fingerprint: '',
+      source_tables: [],
+      ttl_strategy: 'permanent',
+      ttl_raw: '',
+      ttl_deadline: '',
+      total_rows: null,
+      size: null,
+      updated_at: '',
+      _building: state
+    }
+    tableData.value.unshift(tempRow)
+  }
+  startPolling(build_id)
+}
+
+/** 组件卸载时只停定时器，保留 activeBuilds 数据 */
+const stopAllTimers = () => {
+  activeBuilds.forEach((entry) => {
+    if (entry.timer) {
+      clearInterval(entry.timer)
+      entry.timer = null
+    }
+  })
+}
+
+/** 按表名查找行：先精确匹配，再按后缀匹配（库名前缀可能不同） */
+const findRowIdx = (tableName: string) => {
+  let idx = tableData.value.findIndex(r =>
+    r.full_name === tableName || r.table_name === tableName
+  )
+  if (idx >= 0) return idx
+  const suffix = tableName.split('.').pop()
+  if (suffix && suffix !== '生成中...') {
+    idx = tableData.value.findIndex(r => {
+      const rSuffix = (r.full_name || r.table_name || '').split('.').pop()
+      return rSuffix === suffix && rSuffix
+    })
+  }
+  return idx
+}
+
+/** 恢复建表状态到表格（loadList 后调用） */
+const resumeBuilds = () => {
+  const toDelete: string[] = []
+  activeBuilds.forEach((entry) => {
+    if (entry.state.status === 'completed' || entry.state.status === 'failed') {
+      // 已完成/失败：标记真实行后删除
+      const idx = findRowIdx(entry.table_name)
+      if (idx >= 0) {
+        tableData.value[idx]._building = { ...entry.state }
+      }
+      toDelete.push(entry.build_id)
+      return
+    }
+    // 进行中：同步状态到表格 + 重启轮询
+    const idx = findRowIdx(entry.table_name)
+    if (idx >= 0) {
+      tableData.value[idx]._building = { ...entry.state }
+    } else {
+      // 临时行被 loadList 覆盖了，重新插入
+      const tempRow: any = {
+        full_name: entry.table_name,
+        table_name: entry.table_name,
+        user_name: '',
+        fingerprint: '',
+        source_tables: [],
+        ttl_strategy: 'permanent',
+        ttl_raw: '',
+        ttl_deadline: '',
+        total_rows: null,
+        size: null,
+        updated_at: '',
+        _building: { ...entry.state }
+      }
+      tableData.value.unshift(tempRow)
+    }
+    startPolling(entry.build_id)
+  })
+  toDelete.forEach(id => activeBuilds.delete(id))
+}
+
+onBeforeUnmount(() => {
+  stopAllTimers()
+})
 
 const checkStatus = async () => {
   pageLoading.value = true
@@ -191,7 +440,6 @@ const loadList = async () => {
   try {
     const result = await window.electronAPI.intermediateTable.list()
     if (result.success) {
-      // 后端响应：{ database, tables: [{ name, full_name, engine, size, total_rows, meta }] }
       const tables = result.data?.tables || []
       tableData.value = tables.map((t: any) => ({
         ...t.meta,
@@ -200,6 +448,8 @@ const loadList = async () => {
         size: t.size,
         total_rows: t.total_rows
       })) as IntermediateTableMeta[]
+      // 刷新后恢复建表状态
+      resumeBuilds()
     } else {
       ElMessage.error(result.error || '加载列表失败')
     }
@@ -224,6 +474,25 @@ const onCreated = () => {
 const openTtlDialog = (row: IntermediateTableMeta) => {
   ttlRow.value = row
   ttlVisible.value = true
+}
+
+const handleAction = (cmd: string, row: IntermediateTableMeta) => {
+  switch (cmd) {
+    case 'dedup': handleDedup(); break
+    case 'ttl': openTtlDialog(row); break
+    case 'rebuild': handleRebuild(row); break
+    case 'delete': handleDelete(row); break
+  }
+}
+
+const handleDedup = async () => {
+  const result = await window.electronAPI.intermediateTable.dedup()
+  if (result.success) {
+    ElMessage.success(result.data?.message || `已去重 ${result.data?.deduped?.length || 0} 个表名`)
+    loadList()
+  } else {
+    ElMessage.error(result.error || '去重失败')
+  }
 }
 
 const handleRebuild = (row: IntermediateTableMeta) => {
@@ -266,7 +535,6 @@ const ttlStrategyLabel = (strategy: string): string => {
 
 const formatTime = (raw: string): string => {
   if (!raw) return '—'
-  // 后端返回 "2026-07-31 10:00:00" 或 ISO，统一替换 T 为空格
   return raw.replace('T', ' ').slice(0, 19)
 }
 
@@ -357,5 +625,49 @@ onMounted(() => {
   gap: 8px;
   justify-content: center;
   margin-bottom: 24px;
+}
+
+/* 建表进度列样式 */
+.cell-building {
+  padding: 4px 0;
+}
+.cell-building-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.cell-stage {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  background: #e6f0ff;
+  color: #409eff;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.cell-detail-text {
+  color: #606266;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cell-stats {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #909399;
+}
+</style>
+
+<style>
+/* 建表中的行高亮 */
+.el-table .building-row {
+  background-color: #f0f9ff !important;
+}
+.el-table .building-row:hover > td {
+  background-color: #e6f4ff !important;
 }
 </style>

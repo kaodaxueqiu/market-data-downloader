@@ -1,5 +1,21 @@
 <template>
-  <div class="report-v03" v-if="report">
+  <div class="report-v03" v-if="activeReport">
+    <!-- 风险剥离全局选择器（tab 形式） -->
+    <div class="rv-neut-tabs">
+      <div
+        class="rv-neut-tab"
+        :class="{ active: selectedRiskFactor === '' }"
+        @click="selectedRiskFactor = ''"
+      >原始因子</div>
+      <div
+        v-for="opt in riskFactorOptions"
+        :key="opt.variant"
+        class="rv-neut-tab"
+        :class="{ active: selectedRiskFactor === opt.variant }"
+        @click="selectedRiskFactor = opt.variant"
+      >{{ opt.label }}</div>
+    </div>
+
     <!-- ============ research 模式 ============ -->
     <template v-if="mode === 'research'">
       <!-- meta -->
@@ -13,29 +29,45 @@
       <!-- 因子分布快照 -->
       <div class="rv-section" v-if="distribution">
         <h4 class="rv-title">因子分布快照</h4>
-        <el-table :data="distributionRows" size="small" border>
-          <el-table-column prop="label" label="统计量" width="120" />
-          <el-table-column prop="value" label="数值" />
-        </el-table>
+        <div class="rv-section-body">
+          <el-table :data="distributionRows" size="small" border>
+            <el-table-column prop="label" label="统计量" width="120" />
+            <el-table-column prop="value" label="数值" />
+          </el-table>
+        </div>
       </div>
 
       <!-- 考核组指标 -->
       <div class="rv-section" v-if="assessmentMetricRows.length">
         <h4 class="rv-title">考核组指标（第 {{ assessmentGroup }} 组 · 周期 {{ metricLayer?.period }}）</h4>
-        <div class="rv-ic-controls" v-if="layerList.length > 1">
-          <span class="rv-ic-label">考核周期：</span>
-          <el-radio-group v-model="selectedMetricIdx" size="small">
-            <el-radio-button
-              v-for="(item, idx) in layerList"
-              :key="idx"
-              :label="idx"
-            >周期 {{ item.period }}</el-radio-button>
-          </el-radio-group>
+        <div class="rv-section-body">
+          <div class="rv-metric-controls">
+            <div class="rv-control-row" v-if="layerList.length > 1">
+              <span class="rv-ic-label">预测周期：</span>
+              <el-radio-group v-model="selectedMetricIdx" size="small">
+                <el-radio-button
+                  v-for="(item, idx) in layerList"
+                  :key="idx"
+                  :label="idx"
+                >周期 {{ item.period }}</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="rv-control-row" v-if="metricLayer?.groups?.length">
+              <span class="rv-ic-label">分组选择：</span>
+              <el-radio-group v-model="selectedGroupIdx" size="small">
+                <el-radio-button
+                  v-for="(g, idx) in metricLayer.groups"
+                  :key="idx"
+                  :label="g.group"
+                >第 {{ g.group }} 组</el-radio-button>
+              </el-radio-group>
+            </div>
+          </div>
+          <el-table :data="assessmentMetricRows" size="small" border stripe>
+            <el-table-column prop="label" label="指标" width="260" />
+            <el-table-column prop="value" label="数值" />
+          </el-table>
         </div>
-        <el-table :data="assessmentMetricRows" size="small" border stripe>
-          <el-table-column prop="label" label="指标" width="160" />
-          <el-table-column prop="value" label="数值" />
-        </el-table>
       </div>
     </template>
 
@@ -111,43 +143,45 @@
           <el-option v-for="f in allStripFactors" :key="f" :label="f" :value="f" />
         </el-select>
       </div>
-      <div
-        v-for="(spec, i) in chartSpecs"
-        :key="spec.id"
-        class="rv-chart-block"
-      >
-        <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'layers-nav' && layerList.length > 1">
-          <span class="rv-ic-label">分层周期：</span>
-          <el-radio-group v-model="selectedLayerIdx" size="small">
-            <el-radio-button
-              v-for="(item, idx) in layerList"
-              :key="idx"
-              :label="idx"
-            >周期 {{ item.period }}</el-radio-button>
-          </el-radio-group>
+      <div class="rv-chart-list">
+        <div
+          v-for="(spec, i) in chartSpecs"
+          :key="spec.id"
+          class="rv-chart-block"
+        >
+          <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'layers-nav' && layerList.length > 1">
+            <span class="rv-ic-label">分层周期：</span>
+            <el-radio-group v-model="selectedLayerIdx" size="small">
+              <el-radio-button
+                v-for="(item, idx) in layerList"
+                :key="idx"
+                :label="idx"
+              >周期 {{ item.period }}</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'excess-nav' && layerList.length > 1">
+            <span class="rv-ic-label">超额周期：</span>
+            <el-radio-group v-model="selectedExcessIdx" size="small">
+              <el-radio-button
+                v-for="(item, idx) in layerList"
+                :key="idx"
+                :label="idx"
+              >周期 {{ item.period }}</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rv-ic-controls" v-if="mode === 'research' && spec.id.startsWith('ic-page-') && icPages.length > 1">
+            <span class="rv-ic-label">IC 周期：</span>
+            <el-radio-group v-model="selectedIcIdx" size="small">
+              <el-radio-button
+                v-for="(p, idx) in icPages"
+                :key="idx"
+                :label="idx"
+              >周期 {{ p.period }}</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="rv-chart-title" v-if="spec.title">{{ spec.title }}</div>
+          <div class="rv-chart-canvas" :ref="el => setChartRef(i, el)"></div>
         </div>
-        <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'excess-nav' && layerList.length > 1">
-          <span class="rv-ic-label">超额周期：</span>
-          <el-radio-group v-model="selectedExcessIdx" size="small">
-            <el-radio-button
-              v-for="(item, idx) in layerList"
-              :key="idx"
-              :label="idx"
-            >周期 {{ item.period }}</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="rv-ic-controls" v-if="mode === 'research' && spec.id.startsWith('ic-page-') && icPages.length > 1">
-          <span class="rv-ic-label">IC 周期：</span>
-          <el-radio-group v-model="selectedIcIdx" size="small">
-            <el-radio-button
-              v-for="(p, idx) in icPages"
-              :key="idx"
-              :label="idx"
-            >周期 {{ p.period }}</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="rv-chart-title" v-if="spec.title">{{ spec.title }}</div>
-        <div class="rv-chart-canvas" :ref="el => setChartRef(i, el)"></div>
       </div>
     </div>
 
@@ -170,6 +204,8 @@ const props = defineProps<{
   report: any
   mode: string | null // 'research' | 'admission'
   active?: boolean
+  variants?: any[]  // factor_results 数组，用于提取风险剥离 variant 列表
+  variantReports?: Record<string, any>  // summary.variant_reports，key=variant名
 }>()
 
 // NaN / 非有限值 → null，供 ECharts connectNulls
@@ -181,13 +217,13 @@ const formatNum = (v: any, digits = 4): string =>
 
 const report = computed<any>(() => props.report ?? null)
 const mode = computed<string | null>(() => props.mode ?? null)
-const meta = computed<any>(() => report.value?.meta ?? null)
-const warnings = computed<any[]>(() => report.value?.warnings ?? [])
+const meta = computed<any>(() => activeReport.value?.meta ?? null)
+const warnings = computed<any[]>(() => activeReport.value?.warnings ?? [])
 
 // ---------- research ----------
 // v0.9.0+ layers 由单对象改为数组（每个预测周期一份）；旧报告仍是单对象，包成单元素数组做兼容
 const layerList = computed<any[]>(() => {
-  const l = report.value?.layers
+  const l = activeReport.value?.layers
   if (!l) return []
   return Array.isArray(l) ? l : [l]
 })
@@ -200,12 +236,51 @@ const excessLayer = computed<any>(() => layerList.value[selectedExcessIdx.value]
 // 考核组指标独立周期下标（每周期 metrics 不同，与其余切换器均不联动）
 const selectedMetricIdx = ref(0)
 const metricLayer = computed<any>(() => layerList.value[selectedMetricIdx.value] ?? null)
-const icPages = computed<any[]>(() => report.value?.ic_pages ?? [])
+const selectedGroupIdx = ref(1)
+const assessmentGroup = computed<number | null>(() => {
+  return selectedGroupIdx.value
+})
+const icPages = computed<any[]>(() => activeReport.value?.ic_pages ?? [])
 // 当前选中的 IC 周期下标（默认第一个）
 const selectedIcIdx = ref(0)
-const distribution = computed<any>(() => report.value?.factor?.distribution_snapshot ?? null)
-const coverageSeries = computed<any>(() => report.value?.factor?.coverage_series ?? null)
-const assessmentGroup = computed<number | null>(() => metricLayer.value?.assessment_group ?? null)
+const selectedNeutIcIdx = ref(0)
+const distribution = computed<any>(() => activeReport.value?.factor?.distribution_snapshot ?? null)
+const coverageSeries = computed<any>(() => activeReport.value?.factor?.coverage_series ?? null)
+
+// 风险剥离全局选择器
+const selectedRiskFactor = ref('')  // '' = 原始因子（raw），否则为 variant 字符串
+const CNE6_STYLE_LABELS: Record<string, string> = {
+  beta: 'Beta', momentum: '动量', size: '市值', earnyild: '盈利收益',
+  resvol: '残差波动', growth: '成长', btop: '账面市值比', leverage: '杠杆',
+  liquidty: '流动性', midcap: '中市值', divyild: '股息收益', earnqlty: '盈利质量',
+  earnvar: '盈利波动', invsqlty: '投资质量', ltrevrsl: '长期反转', profit: '盈利能力',
+  analsenti: '分析师情绪', indmom: '行业动量', season: '季节性', strevrsl: '短期反转'
+}
+// variant → 显示标签
+const variantLabel = (v: string): string => {
+  if (!v || v === 'raw') return '原始因子'
+  if (v.startsWith('neutral_each_')) {
+    const key = v.replace('neutral_each_', '')
+    return CNE6_STYLE_LABELS[key] ? `剥离${CNE6_STYLE_LABELS[key]}` : `剥离${key}`
+  }
+  if (v === 'neutral_selected') return '剥离所选'
+  if (v === 'neutral_all') return '剥离全部'
+  return v
+}
+// 选项列表：{ label, variant } — 从 factor_results 动态提取
+const riskFactorOptions = computed<Array<{ label: string; variant: string }>>(() => {
+  const vrs = props.variants ?? []
+  return vrs
+    .filter((vr: any) => vr?.variant && vr.variant !== 'raw')
+    .map((vr: any) => ({ label: variantLabel(vr.variant), variant: vr.variant }))
+})
+// 当前 report：选中 variant 时用 variantReports[variant].report，否则用原始 report
+const activeReport = computed<any>(() => {
+  if (selectedRiskFactor.value && props.variantReports?.[selectedRiskFactor.value]?.report) {
+    return props.variantReports[selectedRiskFactor.value].report
+  }
+  return report.value
+})
 
 const distributionRows = computed(() => {
   const d = distribution.value
@@ -234,7 +309,7 @@ const assessmentMetricRows = computed(() => {
 })
 
 // ---------- admission ----------
-const conclusion = computed<any>(() => report.value?.conclusion ?? null)
+const conclusion = computed<any>(() => activeReport.value?.conclusion ?? null)
 const checks = computed<any[]>(() => conclusion.value?.checks ?? [])
 const conclusionClass = computed(() => {
   const r: string = conclusion.value?.result || ''
@@ -242,10 +317,10 @@ const conclusionClass = computed(() => {
   if (r.includes('通过')) return 'rv-conclusion-pass'
   return 'rv-conclusion-na'
 })
-const mainResult = computed<any>(() => report.value?.main_result ?? null)
-const cne6Rows = computed<any[]>(() => report.value?.cne6_correlation_page?.rows ?? [])
-const cne6Threshold = computed<any>(() => report.value?.cne6_correlation_page?.threshold ?? null)
-const cne6StripPages = computed<any[]>(() => report.value?.cne6_strip_pages ?? [])
+const mainResult = computed<any>(() => activeReport.value?.main_result ?? null)
+const cne6Rows = computed<any[]>(() => activeReport.value?.cne6_correlation_page?.rows ?? [])
+const cne6Threshold = computed<any>(() => activeReport.value?.cne6_correlation_page?.threshold ?? null)
+const cne6StripPages = computed<any[]>(() => activeReport.value?.cne6_strip_pages ?? [])
 
 // CNE6 剥离图展示控制：样本切换 + 因子过滤
 const allStripFactors = computed<string[]>(() =>
@@ -278,9 +353,10 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
           lineStyle: { type: 'dashed' }, data: nz(layers.value.benchmark_nav)
         })
       }
+      const suffix = selectedRiskFactor.value ? ` - ${variantLabel(selectedRiskFactor.value)}` : ''
       specs.push({
         id: 'layers-nav',
-        title: `分层净值曲线（周期 ${layers.value?.period}）`,
+        title: `分层净值曲线${suffix}（周期 ${layers.value?.period}）`,
         option: {
           tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
           xAxis: { type: 'category', data: dates }, yAxis: { type: 'value', scale: true },
@@ -293,25 +369,33 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
     const exLayer = excessLayer.value
     const exDates = exLayer?.dates || []
     const exGroups = exLayer?.groups || []
-    const g = exLayer?.assessment_group ?? null
-    if (g && exGroups[g - 1]?.excess_nav_series) {
+    if (exGroups.length && exGroups.some((g: any) => Array.isArray(g.excess_nav_series))) {
+      const excessSeries = exGroups
+        .filter((g: any) => Array.isArray(g.excess_nav_series))
+        .map((g: any) => ({
+          name: `第${g.group}组超额`, type: 'line', showSymbol: false,
+          connectNulls: true, data: nz(g.excess_nav_series)
+        }))
+      const suffix = selectedRiskFactor.value ? ` - ${variantLabel(selectedRiskFactor.value)}` : ''
       specs.push({
         id: 'excess-nav',
-        title: `超额净值曲线（第${g}组 · 周期 ${exLayer?.period}）`,
+        title: `分层超额净值曲线${suffix}（周期 ${exLayer?.period}）`,
         option: {
-          tooltip: { trigger: 'axis' }, grid: baseGrid,
+          tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 },
+          grid: baseGrid,
           xAxis: { type: 'category', data: exDates }, yAxis: { type: 'value', scale: true },
-          series: [{ name: '超额净值', type: 'line', showSymbol: false, connectNulls: true, data: nz(exGroups[g - 1].excess_nav_series) }]
+          series: excessSeries
         }
       })
     }
 
-    // 3. IC 时序（改为按选中下标只渲染一张；兜底到第 0 张）
+    // 3. IC 时序
     const page = icPages.value[selectedIcIdx.value] ?? icPages.value[0]
     if (page) {
+      const suffix = selectedRiskFactor.value ? ` - ${variantLabel(selectedRiskFactor.value)}` : ''
       specs.push({
         id: `ic-page-${selectedIcIdx.value}`,
-        title: `IC 时序（周期 ${page.period}）`,
+        title: `IC 时序${suffix}（周期 ${page.period}）`,
         option: {
           tooltip: { trigger: 'axis' }, legend: { data: ['IC', 'Rank IC'], type: 'scroll', bottom: 0 }, grid: baseGrid,
           xAxis: { type: 'category', data: page.dates || [] }, yAxis: { type: 'value' },
@@ -323,7 +407,49 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
       })
     }
 
-    // 4. 因子覆盖时序
+    // 4. 残差分层净值曲线
+    const neutr = activeReport.value?.neutralization
+    if (neutr?.residual_portfolio) {
+      const resLayers = neutr.residual_portfolio[selectedLayerIdx.value]
+      if (resLayers?.groups?.length) {
+        const resSeries = resLayers.groups.map((g: any) => ({
+          name: `残差·第${g.group}组`, type: 'line', showSymbol: false,
+          connectNulls: true, data: nz(g.nav)
+        }))
+        specs.push({
+          id: 'residual-nav',
+          title: `残差分层净值曲线（周期 ${resLayers.period}）`,
+          option: {
+            tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 },
+            grid: baseGrid,
+            xAxis: { type: 'category', data: resLayers.dates || [] }, yAxis: { type: 'value', scale: true },
+            series: resSeries
+          }
+        })
+      }
+    }
+
+    // 5. 残差 IC 时序
+    if (neutr?.neutralized_ic_pages?.length) {
+      const neutPage = neutr.neutralized_ic_pages[selectedNeutIcIdx.value] ?? neutr.neutralized_ic_pages[0]
+      if (neutPage) {
+        specs.push({
+          id: `neut-ic-page-${selectedNeutIcIdx.value}`,
+          title: `残差 IC 时序（周期 ${neutPage.period}）`,
+          option: {
+            tooltip: { trigger: 'axis' }, legend: { data: ['IC', 'Rank IC'], type: 'scroll', bottom: 0 },
+            grid: baseGrid,
+            xAxis: { type: 'category', data: neutPage.dates || [] }, yAxis: { type: 'value' },
+            series: [
+              { name: 'IC', type: 'line', showSymbol: false, connectNulls: true, data: nz(neutPage.ic_series) },
+              { name: 'Rank IC', type: 'line', showSymbol: false, connectNulls: true, data: nz(neutPage.rank_ic_series) }
+            ]
+          }
+        })
+      }
+    }
+
+    // 5. 因子覆盖时序
     if (coverageSeries.value?.dates && coverageSeries.value?.counts) {
       specs.push({
         id: 'coverage',
@@ -424,7 +550,7 @@ const disposeCharts = () => {
   Object.keys(chartInstances).forEach(k => delete chartInstances[Number(k)])
 }
 
-watch([() => props.report, () => props.mode, () => props.active], ([, , active], [oldReport]) => {
+watch([() => props.report, () => props.mode, () => props.active, selectedRiskFactor], ([, , active], [oldReport]) => {
   if (props.report !== oldReport) disposeCharts()
   if (active !== false) renderCharts()
 }, { immediate: true })
@@ -451,14 +577,39 @@ onBeforeUnmount(() => {
 <style scoped>
 .report-v03 {
   padding: 8px 4px;
+  overflow: visible;
 }
 .rv-section {
   margin-bottom: 20px;
+  padding-bottom: 20px;
+
+  &:not(:last-child) {
+    border-bottom: 1px dashed #dcdfe6;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 8px;
+      height: 8px;
+      background: #dcdfe6;
+      border-radius: 50%;
+    }
+  }
 }
 .rv-title {
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
+}
+/* section 内容缩进 */
+.rv-section-body {
+  margin-left: 24px;
+  padding-left: 16px;
+  border-left: 2px solid #ebeef5 !important;
 }
 .rv-meta {
   display: flex;
@@ -486,8 +637,31 @@ onBeforeUnmount(() => {
   background: #f4f4f5;
   color: #909399;
 }
+.rv-chart-list {
+  margin-left: 24px;
+  padding-left: 16px;
+  border-left: 2px solid #ebeef5;
+}
 .rv-chart-block {
   margin-bottom: 16px;
+  padding-bottom: 16px;
+
+  &:not(:last-child) {
+    border-bottom: 1px dashed #dcdfe6;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 8px;
+      height: 8px;
+      background: #dcdfe6;
+      border-radius: 50%;
+    }
+  }
 }
 .rv-strip-controls {
   display: flex;
@@ -499,11 +673,59 @@ onBeforeUnmount(() => {
 .rv-strip-select {
   min-width: 240px;
 }
+.rv-neut-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--el-bg-color);
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.rv-neut-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+  cursor: pointer;
+  background: #f4f5f7;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.rv-neut-tab:hover {
+  color: #409eff;
+  background: #ecf5ff;
+}
+.rv-neut-tab.active {
+  color: #fff;
+  background: #409eff;
+  font-weight: 600;
+}
 .rv-ic-controls {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+}
+.rv-metric-controls {
+  margin-bottom: 12px;
+}
+.rv-control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 }
 .rv-ic-label {
   font-size: 13px;

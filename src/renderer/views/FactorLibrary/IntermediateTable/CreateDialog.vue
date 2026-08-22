@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { previewClickhouse } from '@/utils/translatePreview'
 import { InfoFilled, CircleClose } from '@element-plus/icons-vue'
 import { EditorView, basicSetup } from 'codemirror'
@@ -100,6 +100,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   created: []
+  /** 异步建表开始，把 build_id 和表名交给父组件轮询 */
+  building: [payload: { build_id: string; table_name: string; is_rebuild: boolean }]
 }>()
 
 const isRebuild = computed(() => !!props.rebuildRow)
@@ -269,6 +271,10 @@ const handleSubmit = async () => {
       ElMessage.warning('请输入完整表名')
       return
     }
+    if (!form.table_name.startsWith('it_')) {
+      ElMessage.warning('表名必须以 it_ 开头')
+      return
+    }
     if (!form.ddl || !form.ddl.trim()) {
       ElMessage.warning('请输入 DDL 语句')
       return
@@ -293,18 +299,34 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     let result
+    let table_name = ''
     if (isRebuild.value && props.rebuildRow) {
       // 重建：调 update，用完整表名
-      result = await window.electronAPI.intermediateTable.update(props.rebuildRow.full_name || props.rebuildRow.table_name, payload)
+      table_name = props.rebuildRow.full_name || props.rebuildRow.table_name
+      result = await window.electronAPI.intermediateTable.update(table_name, payload)
     } else {
-      result = await window.electronAPI.intermediateTable.create(payload)
+      result = await window.electronAPI.intermediateTable.build(payload)
+      // DDL 模式：用户输入的就是完整表名；Python 模式：拼前缀
+      table_name = form.mode === 'ddl' ? (form.table_name || '生成中...') : (form.table_name ? `factor_workspace.it_${form.table_name}` : '生成中...')
     }
-    if (result.success) {
+    if (!result.success) {
+      ElMessageBox.alert(result.error || (isRebuild.value ? '重建失败' : '创建失败'), isRebuild.value ? '重建失败' : '创建失败', {
+        confirmButtonText: '关闭',
+        customClass: 'error-detail-dialog',
+        type: 'error'
+      })
+      return
+    }
+    // 异步建表：拿到 build_id 后交给父组件轮询
+    const build_id = result.data?.build_id
+    if (!build_id) {
+      // 同步返回，无 build_id（小表 / rebuild）
       ElMessage.success(isRebuild.value ? '重建成功' : '创建成功')
       emit('created')
-    } else {
-      ElMessage.error(result.error || (isRebuild.value ? '重建失败' : '创建失败'))
+      return
     }
+    // 通知父组件开始轮询，关闭对话框
+    emit('building', { build_id, table_name, is_rebuild: isRebuild.value })
   } catch (e: any) {
     ElMessage.error((isRebuild.value ? '重建失败' : '创建失败') + ': ' + e.message)
   } finally {
@@ -324,13 +346,26 @@ const handleSubmit = async () => {
 }
 .code-editor {
   height: 280px;
+  width: 100%;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   overflow: hidden;
 }
 .code-editor :deep(.cm-editor) {
   height: 100%;
+  width: 100%;
   font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+}
+.code-editor :deep(.cm-scroller) {
+  overflow: auto;
+}
+.error-detail-dialog .el-message-box__message {
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: monospace;
   font-size: 13px;
 }
 </style>

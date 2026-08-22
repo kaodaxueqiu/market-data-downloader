@@ -348,7 +348,10 @@
             />
 
             <!-- 顶部状态区：mode_budget -->
-            <div v-if="modeBudget" class="analysis-card">
+            <div v-if="modeBudget" class="analysis-card" :class="{ 'lookahead-risk': summary?.factor_snapshot_test?.status === 'lookahead_suspected' }">
+              <div v-if="summary?.factor_snapshot_test?.status === 'lookahead_suspected'" class="lookahead-badge" @click="showLookaheadDetail = !showLookaheadDetail">
+                ⚠ 前视风险
+              </div>
               <div class="analysis-card-header">
                 <span>研究模式</span>
                 <el-tag :type="getStatusTagType(currentResearchMode)" effect="dark" size="small">
@@ -362,6 +365,14 @@
                 <el-tag size="small" :type="modeBudget.runs_snapshot_test ? 'success' : 'info'" effect="plain">
                   快照前视 {{ modeBudget.runs_snapshot_test ? '✓' : '—' }}
                 </el-tag>
+                <el-tag
+                  v-if="summary.factor_snapshot_test?.status"
+                  size="small"
+                  :type="getStatusTagType(summary.factor_snapshot_test.status)"
+                  effect="plain"
+                >
+                  前视: {{ summary.factor_snapshot_test.status }}
+                </el-tag>
                 <el-tag size="small" :type="modeBudget.runs_library_diagnostics ? 'success' : 'info'" effect="plain">
                   库级诊断 {{ modeBudget.runs_library_diagnostics ? '✓' : '—' }}
                 </el-tag>
@@ -373,6 +384,23 @@
                 </el-tag>
               </div>
             </div>
+
+            <!-- 前视风险跳变示例 -->
+            <el-collapse-transition>
+              <div v-if="showLookaheadDetail && summary?.factor_snapshot_test?.cutoffs" class="analysis-card">
+                <div class="analysis-card-header">
+                  <span>前视跳变示例</span>
+                </div>
+                <el-table :data="lookaheadExamples" size="small" border>
+                  <el-table-column prop="trade_date" label="日期" width="120" />
+                  <el-table-column prop="stock_code" label="股票" width="100" />
+                  <el-table-column prop="full_value" label="完整值" />
+                  <el-table-column prop="as_of_value" label="截断值" />
+                  <el-table-column prop="abs_diff" label="偏差" />
+                </el-table>
+                <p class="lookahead-hint">请排查 unique() 是否加 maintain_order=True、shift(-N) 负向位移等前视操作</p>
+              </div>
+            </el-collapse-transition>
 
             <!-- 入库审核结论（admission） -->
             <div v-if="currentResearchMode === 'admission'" class="analysis-card">
@@ -425,8 +453,11 @@
                   </el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="泛化性">
-                  <el-tag size="small" :type="getStatusTagType(generalization?.status)">
+                  <el-tag size="small" :type="generalization?.status === 'needs_strong_review' ? 'danger' : getStatusTagType(generalization?.status)">
                     {{ generalization?.status || '缺失' }}
+                  </el-tag>
+                  <el-tag v-if="generalization?.status === 'needs_strong_review'" type="danger" effect="dark" size="small" style="margin-left: 4px;">
+                    需强制人工复核
                   </el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="治理结论" v-if="summary.governance">
@@ -668,10 +699,14 @@
             <div v-if="generalization" class="analysis-card">
               <div class="analysis-card-header">
                 <span>泛化性诊断</span>
-                <el-tag :type="getStatusTagType(generalization.status)" size="small">
+                <el-tag :type="generalization.status === 'needs_strong_review' ? 'danger' : getStatusTagType(generalization.status)" size="small">
                   {{ generalization.status || '-' }}
                 </el-tag>
               </div>
+              <el-alert v-if="generalization.status === 'needs_strong_review'"
+                title="需强制人工复核" type="error" :closable="false"
+                description="本因子结果必须经人工确认后方可采信"
+                style="margin-bottom: 8px;" />
               <div v-if="generalization.findings?.length" class="findings-list">
                 <div v-for="(f, i) in generalization.findings" :key="i" class="finding-item">
                   <el-tag size="small" :type="getSeverityTagType(f.severity)">{{ f.severity || 'info' }}</el-tag>
@@ -1315,8 +1350,10 @@
               :report="reportV03.report"
               :mode="reportV03Mode"
               :active="activeReportTab === 'report'"
+              :variants="result?.factor_results ?? []"
+              :variant-reports="summary?.variant_reports ?? {}"
             />
-            <ReportView v-else :report="reportData" :admission-report="admissionReport" :active="activeReportTab === 'report'" />
+            <ReportView v-else :report="reportData" :admission-report="admissionReport" :snapshot-status="summary?.factor_snapshot_test?.status" :active="activeReportTab === 'report'" />
           </el-tab-pane>
           </el-tabs>
         </template>
@@ -1729,6 +1766,13 @@ const isQuickScreeningOnly = computed<boolean>(() =>
 )
 const holdoutValidation = computed<any>(() => summary.value?.holdout_validation ?? null)
 
+// 前视风险跳变示例
+const showLookaheadDetail = ref(false)
+const lookaheadExamples = computed(() => {
+  const cutoffs = summary.value?.factor_snapshot_test?.cutoffs || []
+  return cutoffs.flatMap((c: any) => c.examples || [])
+})
+
 // R8: 样本外天数计算（holdoutValidation 无现成天数字段，从日期算）
 const holdoutDays = computed<number | null>(() => {
   const hv = holdoutValidation.value
@@ -1803,7 +1847,7 @@ const getStatusTagType = (status: string) => {
   if (!status) return 'info'
   if (['ok', 'pass', 'initial_pass', 'passed'].includes(status)) return 'success'
   if (['warning', 'review', 'pending'].includes(status)) return 'warning'
-  if (['fail', 'failed', 'error', 'reject', 'rejected'].includes(status)) return 'danger'
+  if (['fail', 'failed', 'error', 'reject', 'rejected', 'lookahead_suspected'].includes(status)) return 'danger'
   return 'info'
 }
 
@@ -2168,24 +2212,6 @@ const benchmarkCompareData = (factor: any, index: number) => {
     row3[bm.benchmark_code] = formatPercent(bm.benchmark_max_drawdown)
   })
   rows.push(row3)
-  
-  // 超额收益 (分组年化 - 基准年化)
-  const row4: any = { metric_name: '超额收益', strategy: '-', strategy_raw: null }
-  result.value?.benchmark_metrics?.forEach((bm: any) => {
-    const excess = (groupAnnualReturn || 0) - (bm.benchmark_annual_return || 0)
-    row4[bm.benchmark_code + '_raw'] = excess
-    row4[bm.benchmark_code] = formatPercent(excess)
-  })
-  rows.push(row4)
-  
-  // 超额夏普
-  const row5: any = { metric_name: '超额夏普', strategy: '-', strategy_raw: null }
-  result.value?.benchmark_metrics?.forEach((bm: any) => {
-    const excess = (groupSharpe || 0) - (bm.benchmark_sharpe || 0)
-    row5[bm.benchmark_code + '_raw'] = excess
-    row5[bm.benchmark_code] = formatNumber(excess, 2)
-  })
-  rows.push(row5)
   
   return rows
 }
@@ -2777,6 +2803,29 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+// 前视风险标红
+.analysis-card.lookahead-risk {
+  border-color: var(--el-color-danger) !important;
+  position: relative;
+}
+.lookahead-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--el-color-danger);
+  color: #fff;
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 0 0 0 4px;
+  cursor: pointer;
+  z-index: 1;
+}
+.lookahead-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 // v0.3.2 方案D：因子共线性详情区块
 .collinearity-detail {
   margin-top: 12px;
@@ -2881,6 +2930,10 @@ onUnmounted(() => {
   }
   :deep(.el-tabs__content) {
     padding: 0 4px;
+    overflow: visible;
+  }
+  :deep(.el-tab-pane) {
+    overflow: visible;
   }
 }
 
