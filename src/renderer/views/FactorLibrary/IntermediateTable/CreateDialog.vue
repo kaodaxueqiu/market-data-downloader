@@ -36,7 +36,7 @@
           />
           <div class="form-hint">
             <el-icon><InfoFilled /></el-icon>
-            最终表名为 factor_workspace.it_&lt;用户命名&gt;
+            最终表名为 factor_workspace.用户命名（引擎自动加 it_ 前缀）
           </div>
         </el-form-item>
         <el-form-item label=" ">
@@ -51,7 +51,7 @@
         <el-form-item label="表名" required>
           <el-input
             v-model="form.table_name"
-            placeholder="完整表名，如 factor_workspace.it_my_zscore"
+            placeholder="完整表名，如 factor_workspace.my_zscore"
           />
         </el-form-item>
         <el-form-item label="DDL 语句" required>
@@ -269,10 +269,6 @@ const handleSubmit = async () => {
   } else {
     if (!form.table_name || !form.table_name.trim()) {
       ElMessage.warning('请输入完整表名')
-      return
-    }
-    if (!form.table_name.startsWith('it_')) {
-      ElMessage.warning('表名必须以 it_ 开头')
       return
     }
     if (!form.ddl || !form.ddl.trim()) {

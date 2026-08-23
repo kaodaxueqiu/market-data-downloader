@@ -94,7 +94,7 @@ export interface IntermediateTableCreateRequest {
   code?: string           // Python 模式：后端 create 端点期望的字段名
   py_code?: string        // 兼容旧字段（未使用）
   ddl?: string            // DDL 模式：完整 CREATE TABLE 语句
-  table_name?: string     // DDL 模式必填（须 it_ 开头），Python 模式不传
+  table_name?: string     // DDL 模式必填，Python 模式不传
   ttl?: string            // "permanent" / "30d" / "24h" 等
 }
 
