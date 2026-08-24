@@ -1972,9 +1972,7 @@ const getFieldList = (index: number) => {
 // 加载字段列表（使用 getTableDetail 获取完整信息）
 const loadFieldList = async (index: number) => {
   const ds = formData.data_sources[index]
-  console.log('loadFieldList called, ds:', ds)
   if (!ds.table || !ds.database) {
-    console.log('loadFieldList: table or database is empty')
     return
   }
   
@@ -1982,7 +1980,6 @@ const loadFieldList = async (index: number) => {
   
   // 如果已经加载过，直接自动填充
   if (fieldListMap.value[key]) {
-    console.log('loadFieldList: already cached', key)
     autoFillDateCodeField(index)
     return
   }
@@ -2011,13 +2008,10 @@ const loadFieldList = async (index: number) => {
     if (!engine && database && database.startsWith('factor_workspace')) {
       engine = 'clickhouse'
     }
-    console.log('🔍 加载字段列表:', ds.table, 'engine:', engine, 'database:', database)
     const result = await window.electronAPI.dbdict.getTableDetail(engine, database, ds.table)
-    console.log('✅ 字段列表返回:', result)
     if (result.code === 200 && result.data?.columns) {
       // 使用展开运算符确保 Vue 响应式更新
       fieldListMap.value = { ...fieldListMap.value, [key]: result.data.columns }
-      console.log('✅ 字段已缓存:', key, result.data.columns.length, '个字段')
       autoFillDateCodeField(index)
     } else {
       console.error('❌ 加载字段失败:', result)
@@ -2150,17 +2144,26 @@ const prevalidateCode = async () => {
   pythonValidateWarnings.value = []
   const code = formData.factor_code
   if (!code) return true
-  const result = await window.electronAPI.validatePython({ code, requires: factorRequires.value })
-  if (!result.success) return true
-  const data = result.data
-  if (data.warnings?.length) {
-    pythonValidateWarnings.value = data.warnings
+  // 校验为可选增强：接口缺失或异常时不阻塞提交
+  if (typeof window.electronAPI.validatePython !== 'function') return true
+  try {
+    const result = await window.electronAPI.validatePython({ code, requires: factorRequires.value })
+    if (!result.success) return true
+    const data = result.data
+    if (data.warnings?.length) {
+      pythonValidateWarnings.value = data.warnings
+    }
+    return data.valid
+  } catch {
+    return true
   }
-  return data.valid
 }
 
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {
+    ElMessage.error('表单未就绪，请刷新页面重试')
+    return
+  }
 
   const valid = await prevalidateCode()
   if (!valid) {
@@ -2168,9 +2171,14 @@ const handleSubmit = async () => {
     return
   }
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    
+  try {
+    await formRef.value.validate()
+  } catch {
+    ElMessage.warning('请检查表单必填项')
+    return
+  }
+
+  try {
     if (!dateRange.value || dateRange.value.length !== 2) {
       ElMessage.error('请选择回测时间范围')
       return
@@ -2424,7 +2432,11 @@ const handleSubmit = async () => {
     } finally {
       submitting.value = false
     }
-  })
+  } catch (error: any) {
+    console.error('提交回测任务失败:', error)
+    ElMessage.error('提交失败: ' + error.message)
+    submitting.value = false
+  }
 }
 
 // 加载股票池列表
@@ -2493,7 +2505,6 @@ const handleStockPoolTabChange = (tab: string) => {
 const loadPriceTypeOptions = async () => {
   try {
     const result = await window.electronAPI.backtest.getPriceTypeOptions()
-    console.log('📊 价格类型选项接口返回:', result)
     if (result.success && result.data) {
       // 优先用网关新字段 rebalance_price_types；过渡期网关未返回时回退到 buy_price_types
       rebalancePriceTypes.value = result.data.rebalance_price_types || result.data.buy_price_types || []
@@ -2507,7 +2518,6 @@ const loadPriceTypeOptions = async () => {
           time_start: preset.start,
           time_end: preset.end
         }))
-        console.log('📊 时段筛选预设:', timeFilterPresets.value)
       }
       
       // 解析基准指数新格式
@@ -2524,10 +2534,6 @@ const loadPriceTypeOptions = async () => {
         if (indexList.value.length > 0 && !indexList.value.find(i => i.code === industryIndexTab.value)) {
           industryIndexTab.value = indexList.value[0].code
         }
-        
-        console.log('📊 标准指数:', standardIndexes.value)
-        console.log('📊 指数列表:', indexList.value)
-        console.log('📊 指数行业:', indexIndustries.value)
       } else if (Array.isArray(result.data.benchmarks)) {
         // 兼容旧格式
         standardIndexes.value = result.data.benchmarks
@@ -2562,7 +2568,6 @@ const initApiKey = async () => {
         // 设置数据字典 API Key（用于表搜索）
         await window.electronAPI.dictionary.setApiKey(fullKey)
         await window.electronAPI.dbdict.setApiKey(fullKey)
-        console.log('✅ 因子回测页面 API Key 已设置')
       }
     }
   } catch (error) {
