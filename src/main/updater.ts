@@ -249,7 +249,7 @@ export async function installUpdate(filePath: string): Promise<void> {
       `const pid=${pid},exe=${JSON.stringify(exeName)},installer=${JSON.stringify(filePath)};`,
       `function wait(){exec('tasklist /FI "PID eq '+pid+'" /FI "IMAGENAME eq '+exe+'"',(e,out)=>{`,
       `  if(out&&out.indexOf(exe)!==-1){setTimeout(wait,500);return;}`,
-      `  spawn('cmd',['/c','start','','""',installer],{detached:true,stdio:'ignore',windowsHide:true}).unref();`,
+      `  spawn(installer,[],{detached:true,stdio:'ignore',windowsHide:true}).unref();`,
       `  process.exit(0);`,
       `});}`,
       `wait();`
