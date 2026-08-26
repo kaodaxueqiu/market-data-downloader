@@ -6005,14 +6005,9 @@ ipcMain.handle('backtest:cancelTask', async (_event, taskId: string) => {
     }
 
     const axios = require('axios')
-    const response = await axios.put(
-      `${BACKTEST_API_BASE}/task/${taskId}/status`,
-      {
-        status: 'cancelled',
-        progress: null,
-        error_message: '用户手动取消',
-        progress_detail: null
-      },
+    const response = await axios.post(
+      `${BACKTEST_API_BASE}/task/${taskId}/cancel`,
+      {},
       {
         headers: { 'X-API-Key': apiKey },
         timeout: 15000
@@ -6030,6 +6025,112 @@ ipcMain.handle('backtest:cancelTask', async (_event, taskId: string) => {
       return { success: false, error: error.response.data.error }
     }
     return { success: false, error: error.message || '网络错误' }
+  }
+})
+
+// 回测: 删除任务（软删）
+ipcMain.handle('backtest:deleteTask', async (_event, taskId: string) => {
+  const apiKey = getDefaultApiKeyForBacktest()
+  if (!apiKey) {
+    return { success: false, error: '未找到API Key' }
+  }
+  try {
+    const axios = require('axios')
+    const response = await axios.delete(
+      `${BACKTEST_API_BASE}/task/${taskId}`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 15000
+      }
+    )
+    return response.data.success
+      ? { success: true, message: response.data.message }
+      : { success: false, error: response.data.error || '删除失败' }
+  } catch (error: any) {
+    console.error('❌ 删除回测任务失败:', error)
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+  }
+})
+
+// 回测: Rank IC 明细下载CSV
+ipcMain.handle('backtest:downloadRankIC', async (_event, taskId: string, period: number) => {
+  const apiKey = getDefaultApiKeyForBacktest()
+  if (!apiKey) {
+    return { success: false, error: '未找到API Key' }
+  }
+
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+    title: '导出 Rank IC 明细',
+    defaultPath: `RankIC_${taskId}_${period}日.csv`,
+    filters: [{ name: 'CSV 文件', extensions: ['csv'] }]
+  })
+
+  if (canceled || !filePath) {
+    return { success: false, error: '用户取消' }
+  }
+
+  try {
+    const axios = require('axios')
+    const fs = require('fs')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/rank-ic/download`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        params: { period },
+        responseType: 'arraybuffer',
+        timeout: 120000
+      }
+    )
+    fs.writeFileSync(filePath, Buffer.from(response.data))
+    console.log('✅ Rank IC 明细导出成功:', filePath)
+    return { success: true, filePath }
+  } catch (error: any) {
+    console.error('❌ 导出 Rank IC 失败:', error)
+    if (error.response?.status === 404) {
+      return { success: false, error: '该周期无 IC 数据' }
+    }
+    return { success: false, error: error.message || '导出失败' }
+  }
+})
+
+// 回测: 账本审计明细下载CSV
+ipcMain.handle('backtest:downloadLedgerAudit', async (_event, taskId: string, period: number, group: number) => {
+  const apiKey = getDefaultApiKeyForBacktest()
+  if (!apiKey) {
+    return { success: false, error: '未找到API Key' }
+  }
+
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+    title: '导出账本审计明细',
+    defaultPath: `账本审计_${taskId}_${period}日_第${group}组.csv`,
+    filters: [{ name: 'CSV 文件', extensions: ['csv'] }]
+  })
+
+  if (canceled || !filePath) {
+    return { success: false, error: '用户取消' }
+  }
+
+  try {
+    const axios = require('axios')
+    const fs = require('fs')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/task/${taskId}/ledger-audit/download`,
+      {
+        headers: { 'X-API-Key': apiKey },
+        params: { period, group },
+        responseType: 'arraybuffer',
+        timeout: 180000
+      }
+    )
+    fs.writeFileSync(filePath, Buffer.from(response.data))
+    console.log('✅ 账本审计明细导出成功:', filePath)
+    return { success: true, filePath }
+  } catch (error: any) {
+    console.error('❌ 导出账本审计失败:', error)
+    if (error.response?.status === 404) {
+      return { success: false, error: '该周期/分组无审计数据' }
+    }
+    return { success: false, error: error.response?.data?.error || error.message || '导出失败' }
   }
 })
 

@@ -272,7 +272,7 @@
         </template>
       </el-table-column>
       
-      <el-table-column label="操作" min-width="150" align="center">
+      <el-table-column label="操作" min-width="190" align="center">
         <template #default="{ row }">
           <div class="action-cell">
             <button class="action-btn primary" @click="viewTaskDetail(row)">详情</button>
@@ -291,6 +291,11 @@
               class="action-btn warning"
               @click="viewError(row)"
             >错误</button>
+            <button
+              v-if="row.status === 'completed' || row.status === 'failed' || row.status === 'cancelled'"
+              class="action-btn danger"
+              @click="deleteTask(row)"
+            >删除</button>
           </div>
         </template>
       </el-table-column>
@@ -845,6 +850,25 @@ const cancelTask = async (task: any) => {
       loadTasks()
     } else {
       ElMessage.error(result.error || '取消失败')
+    }
+  } catch (e) {}
+}
+
+const deleteTask = async (task: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除任务「${task.task_name}」吗？删除后不在列表显示（记录保留可追溯）。`,
+      '确认删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+
+    const result = await window.electronAPI.backtest.deleteTask(task.task_id)
+
+    if (result.success) {
+      ElMessage.success('任务已删除')
+      loadTasks()
+    } else {
+      ElMessage.error(result.error || '删除失败')
     }
   } catch (e) {}
 }

@@ -111,6 +111,14 @@
                   <el-icon><Download /></el-icon>
                   全部数据 - {{ selectedPeriods[0] || 1 }}日周期 (Excel)
                 </el-dropdown-item>
+                <el-dropdown-item
+                  v-for="(p, pIdx) in displayIcPeriods" :key="'rankic-' + p"
+                  :command="'rankic-' + p"
+                  :divided="pIdx === 0"
+                >
+                  <el-icon><TrendCharts /></el-icon>
+                  Rank IC 明细 - {{ p }}日周期 (CSV)
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -124,8 +132,39 @@
             <el-icon><Tickets /></el-icon>
             <span>生成报告</span>
           </el-button>
+          <!-- 账本审计下载按钮 -->
+          <el-button
+            v-if="task?.status === 'completed'"
+            @click="openAuditDialog"
+          >
+            <el-icon><Tickets /></el-icon>
+            <span>账本审计</span>
+          </el-button>
         </div>
       </div>
+
+      <!-- 账本审计下载对话框 -->
+      <el-dialog v-model="auditDialogVisible" title="下载账本审计明细" width="420px">
+        <el-form label-width="80px">
+          <el-form-item label="周期">
+            <el-select v-model="auditPeriod" style="width: 100%">
+              <el-option v-for="p in displayIcPeriods" :key="p" :label="`${p}日`" :value="p" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="分组">
+            <el-select v-model="auditGroup" style="width: 100%">
+              <el-option
+                v-for="g in (task?.task_config?.backtest_params?.num_groups || 10)"
+                :key="g" :label="`第${g}组`" :value="g"
+              />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="auditDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="downloading" @click="doDownloadAudit">下载</el-button>
+        </template>
+      </el-dialog>
 
       <!-- 加载中 -->
       <div v-if="detailLoading && !task" class="loading-wrapper">
@@ -1855,6 +1894,31 @@ const getStatusTagType = (status: string) => {
 const downloading = ref(false)
 const generatingReport = ref(false)
 
+// 账本审计下载对话框
+const auditDialogVisible = ref(false)
+const auditPeriod = ref<number>(1)
+const auditGroup = ref<number>(1)
+const openAuditDialog = () => {
+  auditPeriod.value = displayIcPeriods.value[0] || 1
+  auditGroup.value = 1
+  auditDialogVisible.value = true
+}
+const doDownloadAudit = async () => {
+  if (!props.taskId) return
+  downloading.value = true
+  try {
+    const r = await window.electronAPI.backtest.downloadLedgerAudit(props.taskId, auditPeriod.value, auditGroup.value)
+    if (r.success) {
+      ElMessage.success(`已保存: ${r.filePath}`)
+      auditDialogVisible.value = false
+    } else if (r.error !== '用户取消') {
+      ElMessage.error(r.error || '下载失败')
+    }
+  } finally {
+    downloading.value = false
+  }
+}
+
 // 每日明细数据（独立加载）
 const dailyMetrics = ref<any[]>([])
 const dailyMetricsLoading = ref(false)
@@ -2631,7 +2695,21 @@ const handleBack = () => {
 // 处理下载
 const handleDownload = async (command: string) => {
   if (!props.taskId) return
-  
+
+  // Rank IC 明细下载（command 形如 rankic-5，周期来自 displayIcPeriods，天然自洽不会 404）
+  if (command.startsWith('rankic-')) {
+    const period = Number(command.split('-')[1])
+    downloading.value = true
+    try {
+      const r = await window.electronAPI.backtest.downloadRankIC(props.taskId, period)
+      if (r.success) ElMessage.success(`已保存: ${r.filePath}`)
+      else if (r.error !== '用户取消') ElMessage.error(r.error || '下载失败')
+    } finally {
+      downloading.value = false
+    }
+    return
+  }
+
   const [format, type] = command.split('-') as ['csv' | 'xlsx', 'summary' | 'daily' | 'all']
   
   // 获取当前选中的周期
