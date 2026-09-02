@@ -265,6 +265,24 @@
               </div>
             </div>
 
+            <!-- 因子表达式 / Python 代码（折叠，默认收起，只显示一次）-->
+            <el-collapse
+              v-if="task.task_config && (task.task_config.factor_expression || task.task_config.factor_code)"
+              class="load-diag-collapse"
+              style="margin: 8px 16px; border-radius: 6px; overflow: hidden;"
+            >
+              <el-collapse-item title="因子表达式 / Python 代码" name="factor-expr">
+                <div class="factor-expr-block" v-if="task.task_config.factor_expression">
+                  <span class="factor-expr-label">因子表达式</span>
+                  <code class="expr-highlight" v-html="highlightExpression(task.task_config.factor_expression)"></code>
+                </div>
+                <div class="factor-expr-block" v-if="task.task_config.factor_code">
+                  <span class="factor-expr-label">Python 代码</span>
+                  <pre class="factor-code-pre">{{ task.task_config.factor_code }}</pre>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+
             <!-- 数据加载诊断（2.4） -->
             <el-collapse v-if="loadSummaryList.length" class="load-diag-collapse" style="margin: 8px 16px; border-radius: 6px; overflow: hidden;">
               <el-collapse-item title="数据加载诊断" name="load-summary">
@@ -826,46 +844,52 @@
             </div>
           </div>
 
-          <!-- variant 切换 Tab -->
-          <div v-if="result.factor_results?.length > 1" class="variant-tabs">
-            <div 
-              v-for="(vr, vi) in result.factor_results" 
-              :key="vi" 
-              class="variant-tab" 
-              :class="{ active: activeVariant === vi }" 
-              @click="activeVariant = vi"
-            >
-              {{ getVariantLabel(vr.variant, vi) }}
-            </div>
-          </div>
-
           <!-- 遍历因子结果 -->
           <div v-show="activeVariant === index" v-for="(factor, index) in result.factor_results" :key="index" class="factor-result-section">
-            <!-- 因子标题 -->
-            <div class="factor-header">
-              <div class="factor-title-row">
-                <h3>{{ factor.factor_name || `因子 ${index + 1}` }}</h3>
-                <!-- 周期选择器 -->
-                <div class="period-selector" v-if="factor.period_ic_stats?.length">
-                  <span class="period-label">预测周期</span>
-                  <div class="period-tabs">
-                    <div 
-                      v-for="p in factor.period_ic_stats" 
-                      :key="p.period"
-                      class="period-tab"
-                      :class="{ active: selectedPeriods[index] === p.period }"
-                      @click="selectedPeriods[index] = p.period"
-                    >
-                      {{ p.period }}日
-                    </div>
-                  </div>
+            <!-- 三组联合选择器卡片：风险 / 周期 / 年度（纵向排布，每组一行，可换行）-->
+            <div class="selector-card">
+              <div class="selector-row" v-if="result.factor_results?.length > 1">
+                <span class="selector-label">风险</span>
+                <div class="selector-tabs">
+                  <div
+                    v-for="(vr, vi) in result.factor_results"
+                    :key="vi"
+                    class="selector-tab"
+                    :class="{ active: activeVariant === vi }"
+                    @click="activeVariant = vi"
+                  >{{ getVariantLabel(vr.variant, vi) }}</div>
                 </div>
               </div>
-              <div class="factor-code" v-if="factor.factor_code">
-                <code class="expr-highlight" v-html="highlightExpression(factor.factor_code)"></code>
+              <div class="selector-row" v-if="factor.period_ic_stats?.length">
+                <span class="selector-label">周期</span>
+                <div class="selector-tabs">
+                  <div
+                    v-for="p in factor.period_ic_stats"
+                    :key="p.period"
+                    class="selector-tab"
+                    :class="{ active: selectedPeriods[index] === p.period }"
+                    @click="selectedPeriods[index] = p.period"
+                  >{{ p.period }}日</div>
+                </div>
+              </div>
+              <div class="selector-row" v-if="variantYearlyYears(factor, index).length">
+                <span class="selector-label">年度</span>
+                <div class="selector-tabs">
+                  <div
+                    class="selector-tab"
+                    :class="{ active: (yearlyYearByVariant[index] ?? '') === '' }"
+                    @click="yearlyYearByVariant[index] = ''"
+                  >整体</div>
+                  <div
+                    v-for="y in variantYearlyYears(factor, index)"
+                    :key="y"
+                    class="selector-tab"
+                    :class="{ active: yearlyYearByVariant[index] === y }"
+                    @click="yearlyYearByVariant[index] = y"
+                  >{{ y }}</div>
+                </div>
               </div>
             </div>
-
             <!-- 短样本提示：有效样本 < 60 时年化/夏普可能为空或不稳健 -->
             <el-alert
               v-if="isShortSample"
@@ -961,8 +985,6 @@
                     size="small" 
                     stripe
                     :row-class-name="(data: any) => data.row.period === selectedPeriods[index] ? 'selected-row' : ''"
-                    @row-click="(row: any) => selectedPeriods[index] = row.period"
-                    style="cursor: pointer;"
                   >
                     <el-table-column prop="period" label="周期" width="70" fixed>
                       <template #default="{ row }">
@@ -1000,7 +1022,6 @@
                       </template>
                     </el-table-column>
                   </el-table>
-                  <div class="table-hint">点击行可切换周期，上方指标卡片和分层收益将联动更新</div>
                   <div class="table-hint">
                     <el-icon><InfoFilled /></el-icon>
                     周期 > 1 时仅计算分层累计收益与 IC 类指标，日频年化/夏普/最大回撤需切换到 1 日周期查看
@@ -1163,6 +1184,27 @@
                   </el-button>
                   <span class="chart-hint">展示因子、基准、超额收益的累计走势对比</span>
                 </div>
+              </div>
+            </div>
+
+            <!-- ============ 分年度统计（走法1骨架：数据源待后端确认，见 variantYearlyTables）============ -->
+            <!-- 风险(activeVariant) + 周期(selectedPeriods) + 年度(yearlyYearByVariant) 三组控制器均在上方因子标题行，联合控制本卡片 -->
+            <div class="yearly-section" v-if="variantYearlyTables(factor).length">
+              <div class="yearly-header">分年度统计</div>
+              <div
+                v-for="tb in variantYearlyTablesByPeriod(factor, index)"
+                :key="tb.key"
+                class="yearly-block"
+              >
+                <div class="yearly-block-title" v-if="tb.title">{{ tb.title }}</div>
+                <el-table :data="yearlyToRows(tb, index)" size="small" border stripe>
+                  <el-table-column
+                    v-for="(col, ci) in (tb.columns || [])"
+                    :key="ci"
+                    :prop="String(ci)"
+                    :label="col"
+                  />
+                </el-table>
               </div>
             </div>
 
@@ -1459,6 +1501,69 @@ const result = ref<any>(null)
 const activeVariant = ref(0)
 // v0.2.6 详细报告 Tab
 const activeReportTab = ref('overview')
+
+// ============ 分年度统计（走法1骨架）============
+// 当前档位的分年度表：统一从 summary.variant_reports[key].report.tables 取（key = variant || 'raw'，raw 也在其中，见 v0.26.13 方案 §3）
+const variantYearlyTables = (factor: any): any[] => {
+  const key = factor?.variant || 'raw'
+  const tables = summary.value?.variant_reports?.[key]?.report?.tables
+  const list = Array.isArray(tables) ? tables : []
+  return list.filter((t: any) => String(t?.key ?? '').startsWith('yearly_'))
+}
+
+// 从 key（yearly_core_p1 / yearly_layer_excess_p10_b0）解析预测周期
+const yearlyPeriodOf = (key: any): number | null => {
+  const m = String(key ?? '').match(/_p(\d+)/)
+  return m ? Number(m[1]) : null
+}
+
+// 该 variant 在当前选中周期下的分年度表（周期取概览已有的 selectedPeriods[index]）
+const variantYearlyTablesByPeriod = (factor: any, index: number): any[] => {
+  const period = selectedPeriods.value[index] ?? null
+  return variantYearlyTables(factor).filter((t: any) => yearlyPeriodOf(t?.key) === period)
+}
+
+// 年度 tab 选中值：'' = 整体（全部年份），否则为具体年份字符串。key = variant index
+const yearlyYearByVariant = ref<Record<number, string>>({})
+
+// 三组选择器（风险/周期/年度）相互独立：切换风险时，周期与年度保持不变（沿用上一档位的选择），
+// 避免因“按 variant 下标分别存储”导致切风险时读到另一下标的默认值、看起来像被联动重置。
+watch(activeVariant, (newIdx, oldIdx) => {
+  if (newIdx === oldIdx) return
+  // 周期：沿用旧档位选中的周期；若新档位不含该周期，回退到其第一个周期
+  const prevPeriod = selectedPeriods.value[oldIdx]
+  if (prevPeriod != null) {
+    const periods = result.value?.factor_results?.[newIdx]?.period_ic_stats ?? []
+    const has = periods.some((p: any) => p.period === prevPeriod)
+    selectedPeriods.value[newIdx] = has ? prevPeriod : (periods[0]?.period ?? prevPeriod)
+  }
+  // 年度：直接沿用（年度是展示过滤值，与档位无关）
+  yearlyYearByVariant.value[newIdx] = yearlyYearByVariant.value[oldIdx] ?? ''
+})
+
+// 当前周期下涉及的所有年份（取各表第一列「年度」，升序去重）
+const variantYearlyYears = (factor: any, index: number): string[] => {
+  const set = new Set<string>()
+  variantYearlyTablesByPeriod(factor, index).forEach((t: any) => {
+    (t?.rows ?? []).forEach((row: any[]) => {
+      const y = row?.[0]
+      if (y != null && String(y).trim()) set.add(String(y))
+    })
+  })
+  return Array.from(set).sort()
+}
+
+// TableData.rows（string[][]）转 el-table 行对象，并按选中年度过滤（整体则不过滤）
+const yearlyToRows = (tb: any, index: number): any[] => {
+  const year = yearlyYearByVariant.value[index] ?? ''
+  return (tb?.rows ?? [])
+    .filter((row: any[]) => !year || String(row?.[0]) === year)
+    .map((row: any[]) => {
+      const obj: Record<string, any> = {}
+      row.forEach((cell, ci) => { obj[String(ci)] = cell })
+      return obj
+    })
+}
 
 // CNE6 SW21 风格因子中文名映射（与后端 CNE6_STYLE_FACTORS_SW21 对应）
 const CNE6_STYLE_LABELS: Record<string, string> = {
@@ -3533,6 +3638,39 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
         }
       }
 
+      .factor-expr-block {
+        & + .factor-expr-block {
+          margin-top: 12px;
+        }
+        .factor-expr-label {
+          display: block;
+          font-size: 13px;
+          color: $text-muted;
+          margin-bottom: 6px;
+        }
+        .expr-highlight {
+          display: block;
+          font-size: 13px;
+          line-height: 1.6;
+          padding: 10px 12px;
+          background: $bg-muted;
+          border-radius: $radius-sm;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }
+        .factor-code-pre {
+          margin: 0;
+          font-size: 12px;
+          line-height: 1.6;
+          padding: 10px 12px;
+          background: $bg-muted;
+          border-radius: $radius-sm;
+          white-space: pre-wrap;
+          word-break: break-all;
+          overflow-x: auto;
+        }
+      }
+
       .banner-config {
         display: flex;
         flex-wrap: wrap;
@@ -3687,11 +3825,87 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 .factor-result-section {
     background: $bg-card;
     border: 1px solid $border;
+
+    // 三组联合选择器卡片（风险/周期/年度，纵向每组一行）
+    .selector-card {
+      border: 1px solid $border;
+      border-radius: $radius-md;
+      background: $bg-muted;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+
+      .selector-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 6px 0;
+
+        & + .selector-row {
+          border-top: 1px dashed $border;
+        }
+        .selector-label {
+          flex: 0 0 auto;
+          width: 40px;
+          font-size: 13px;
+          color: $text-secondary;
+          line-height: 28px;
+        }
+        .selector-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          flex: 1;
+        }
+        .selector-tab {
+          padding: 4px 14px;
+          font-size: 13px;
+          line-height: 20px;
+          border: 1px solid $border;
+          border-radius: $radius-sm;
+          background: $bg-card;
+          color: $text-secondary;
+          cursor: pointer;
+          transition: all $transition-fast;
+
+          &:hover {
+            color: $primary;
+            border-color: $primary;
+          }
+          &.active {
+            color: #fff;
+            background: $primary;
+            border-color: $primary;
+          }
+        }
+      }
+    }
     border-radius: $radius-lg;
     padding: 28px;
     margin-bottom: 28px;
     box-shadow: $shadow-sm;
     transition: box-shadow $transition-normal;
+
+    // 分年度统计
+    .yearly-section {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid $border;
+
+      .yearly-header {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .yearly-block {
+        margin-bottom: 16px;
+
+        .yearly-block-title {
+          font-size: 13px;
+          color: #606266;
+          margin: 8px 0 6px;
+        }
+      }
+    }
     
     &:hover {
       box-shadow: $shadow-md;

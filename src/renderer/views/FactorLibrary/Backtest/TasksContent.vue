@@ -142,7 +142,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="引擎版本" align="center" width="70">
+      <el-table-column label="引擎版本" align="center" width="90">
         <template #default="{ row }">
           <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
           <span v-else style="color: #cbd5e1;">-</span>

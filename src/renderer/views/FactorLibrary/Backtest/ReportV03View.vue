@@ -1,19 +1,53 @@
 <template>
   <div class="report-v03" v-if="activeReport">
-    <!-- 风险剥离全局选择器（tab 形式） -->
+    <!-- 风险 / 周期 / 年度 三组联合选择器（纵向每组一行，排内可换行）-->
     <div class="rv-neut-tabs">
-      <div
-        class="rv-neut-tab"
-        :class="{ active: selectedRiskFactor === '' }"
-        @click="selectedRiskFactor = ''"
-      >原始因子</div>
-      <div
-        v-for="opt in riskFactorOptions"
-        :key="opt.variant"
-        class="rv-neut-tab"
-        :class="{ active: selectedRiskFactor === opt.variant }"
-        @click="selectedRiskFactor = opt.variant"
-      >{{ opt.label }}</div>
+      <div class="rv-selector-row">
+        <span class="rv-selector-label">风险</span>
+        <div class="rv-selector-tabs">
+          <div
+            class="rv-neut-tab"
+            :class="{ active: selectedRiskFactor === '' }"
+            @click="selectedRiskFactor = ''"
+          >原始因子</div>
+          <div
+            v-for="opt in riskFactorOptions"
+            :key="opt.variant"
+            class="rv-neut-tab"
+            :class="{ active: selectedRiskFactor === opt.variant }"
+            @click="selectedRiskFactor = opt.variant"
+          >{{ opt.label }}</div>
+        </div>
+      </div>
+      <div class="rv-selector-row" v-if="yearlyPeriods.length">
+        <span class="rv-selector-label">周期</span>
+        <div class="rv-selector-tabs">
+          <div
+            v-for="p in yearlyPeriods"
+            :key="p"
+            class="rv-neut-tab"
+            :class="{ active: selectedYearlyPeriod === p }"
+            @click="selectedYearlyPeriod = p"
+          >周期 {{ p }}</div>
+        </div>
+      </div>
+      <div class="rv-selector-row" v-if="yearlyYears.length">
+        <span class="rv-selector-label">年度</span>
+        <div class="rv-selector-tabs">
+          <div
+            class="rv-neut-tab"
+            :class="{ active: selectedYearlyYear === '' }"
+            @click="selectedYearlyYear = ''"
+          >整体</div>
+          <div
+            v-for="y in yearlyYears"
+            :key="y"
+            class="rv-neut-tab"
+            :class="{ active: selectedYearlyYear === y }"
+            @click="selectedYearlyYear = y"
+          >{{ y }}</div>
+        </div>
+      </div>
     </div>
 
     <!-- ============ research 模式 ============ -->
@@ -42,16 +76,6 @@
         <h4 class="rv-title">考核组指标（第 {{ assessmentGroup }} 组 · 周期 {{ metricLayer?.period }}）</h4>
         <div class="rv-section-body">
           <div class="rv-metric-controls">
-            <div class="rv-control-row" v-if="layerList.length > 1">
-              <span class="rv-ic-label">预测周期：</span>
-              <el-radio-group v-model="selectedMetricIdx" size="small">
-                <el-radio-button
-                  v-for="(item, idx) in layerList"
-                  :key="idx"
-                  :label="idx"
-                >周期 {{ item.period }}</el-radio-button>
-              </el-radio-group>
-            </div>
             <div class="rv-control-row" v-if="metricLayer?.groups?.length">
               <span class="rv-ic-label">分组选择：</span>
               <el-radio-group v-model="selectedGroupIdx" size="small">
@@ -149,39 +173,26 @@
           :key="spec.id"
           class="rv-chart-block"
         >
-          <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'layers-nav' && layerList.length > 1">
-            <span class="rv-ic-label">分层周期：</span>
-            <el-radio-group v-model="selectedLayerIdx" size="small">
-              <el-radio-button
-                v-for="(item, idx) in layerList"
-                :key="idx"
-                :label="idx"
-              >周期 {{ item.period }}</el-radio-button>
-            </el-radio-group>
-          </div>
-          <div class="rv-ic-controls" v-if="mode === 'research' && spec.id === 'excess-nav' && layerList.length > 1">
-            <span class="rv-ic-label">超额周期：</span>
-            <el-radio-group v-model="selectedExcessIdx" size="small">
-              <el-radio-button
-                v-for="(item, idx) in layerList"
-                :key="idx"
-                :label="idx"
-              >周期 {{ item.period }}</el-radio-button>
-            </el-radio-group>
-          </div>
-          <div class="rv-ic-controls" v-if="mode === 'research' && spec.id.startsWith('ic-page-') && icPages.length > 1">
-            <span class="rv-ic-label">IC 周期：</span>
-            <el-radio-group v-model="selectedIcIdx" size="small">
-              <el-radio-button
-                v-for="(p, idx) in icPages"
-                :key="idx"
-                :label="idx"
-              >周期 {{ p.period }}</el-radio-button>
-            </el-radio-group>
-          </div>
           <div class="rv-chart-title" v-if="spec.title">{{ spec.title }}</div>
           <div class="rv-chart-canvas" :ref="el => setChartRef(i, el)"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- ============ 分年度统计（v0.26.12，来自 summary.report.tables 的 yearly_*）============ -->
+    <!-- 风险/周期/年度三组选择器已上移至顶部联合选择器区，本区仅渲染表格 -->
+    <div class="rv-section" v-if="yearlyTables.length">
+      <h4 class="rv-title">分年度统计（{{ variantLabel(activeVariantKey) }}）</h4>
+      <div v-for="tb in filteredYearlyTables" :key="tb.key" class="rv-yearly-block">
+        <div class="rv-yearly-title" v-if="tb.title">{{ tb.title }}</div>
+        <el-table :data="toTableRows(tb)" size="small" border stripe>
+          <el-table-column
+            v-for="(col, ci) in (tb.columns || [])"
+            :key="ci"
+            :prop="String(ci)"
+            :label="col"
+          />
+        </el-table>
       </div>
     </div>
 
@@ -208,6 +219,74 @@ const props = defineProps<{
   variantReports?: Record<string, any>  // summary.variant_reports，key=variant名
 }>()
 
+// 风险剥离全局选择器（提前定义：yearlyTables computed 依赖它，且 watch immediate 会立即触发，避免 TDZ）
+const selectedRiskFactor = ref('')  // '' = 原始因子（raw），否则为 variant 字符串
+
+// 归一化当前档位：'' → 'raw'，与引擎 variant_reports 的键对齐（v0.26.13）
+const activeVariantKey = computed<string>(() => selectedRiskFactor.value || 'raw')
+
+// 当前档位的分年度表：统一从 variant_reports[key].report.tables 取（raw 也在其中，见方案 §3）
+// 注意：引擎未往主 report_v03 注入 tables，不能用 activeReport.tables，否则原始因子档取空
+const yearlyTables = computed<any[]>(() => {
+  const tables = props.variantReports?.[activeVariantKey.value]?.report?.tables
+  const list = Array.isArray(tables) ? tables : []
+  return list.filter((t: any) => String(t?.key ?? '').startsWith('yearly_'))
+})
+
+// 从 key（如 yearly_core_p1 / yearly_layer_excess_p10_b0）解析预测周期数字
+const yearlyPeriodOf = (key: any): number | null => {
+  const m = String(key ?? '').match(/_p(\d+)/)
+  return m ? Number(m[1]) : null
+}
+
+// 分年度表涉及的所有预测周期（升序、去重），用于渲染切换按钮组
+const yearlyPeriods = computed<number[]>(() => {
+  const set = new Set<number>()
+  yearlyTables.value.forEach((t: any) => {
+    const p = yearlyPeriodOf(t?.key)
+    if (p != null) set.add(p)
+  })
+  return Array.from(set).sort((a, b) => a - b)
+})
+
+// 当前选中的分年度周期（默认第一个周期）
+const selectedYearlyPeriod = ref<number | null>(null)
+watch(yearlyPeriods, (periods) => {
+  if (!periods.includes(selectedYearlyPeriod.value as number)) {
+    selectedYearlyPeriod.value = periods[0] ?? null
+  }
+}, { immediate: true })
+
+// 仅显示当前选中周期的分年度表
+const filteredYearlyTables = computed<any[]>(() =>
+  yearlyTables.value.filter((t: any) => yearlyPeriodOf(t?.key) === selectedYearlyPeriod.value)
+)
+
+// 当前周期下涉及的所有年份（取各表第一列「年度」，升序去重）
+const yearlyYears = computed<string[]>(() => {
+  const set = new Set<string>()
+  filteredYearlyTables.value.forEach((t: any) => {
+    (t?.rows ?? []).forEach((row: any[]) => {
+      const y = row?.[0]
+      if (y != null && String(y).trim()) set.add(String(y))
+    })
+  })
+  return Array.from(set).sort()
+})
+
+// 当前选中年度：'' = 整体（全部年份），否则为具体年份字符串
+const selectedYearlyYear = ref<string>('')
+
+// TableData.rows（string[][]）转 el-table 行对象，并按选中年度过滤（整体则不过滤）
+const toTableRows = (tb: any): any[] =>
+  (tb?.rows ?? [])
+    .filter((row: any[]) => !selectedYearlyYear.value || String(row?.[0]) === selectedYearlyYear.value)
+    .map((row: any[]) => {
+      const obj: Record<string, any> = {}
+      row.forEach((cell, ci) => { obj[String(ci)] = cell })
+      return obj
+    })
+
 // NaN / 非有限值 → null，供 ECharts connectNulls
 const nz = (arr: any): (number | null)[] =>
   Array.isArray(arr) ? arr.map(v => (typeof v === 'number' && Number.isFinite(v) ? v : null)) : []
@@ -227,28 +306,33 @@ const layerList = computed<any[]>(() => {
   if (!l) return []
   return Array.isArray(l) ? l : [l]
 })
-// 当前选中的分层周期下标（与 IC 切换器 selectedIcIdx 相互独立，不联动）
-const selectedLayerIdx = ref(0)
+// 全局周期 → 在指定数组里按 period 匹配下标（找不到回退 0）。统一 4 处周期切换到顶部全局选择器
+const idxByGlobalPeriod = (list: any[]): number => {
+  if (selectedYearlyPeriod.value == null) return 0
+  const i = list.findIndex((x: any) => Number(x?.period) === Number(selectedYearlyPeriod.value))
+  return i >= 0 ? i : 0
+}
+// 分层周期下标：跟随顶部全局周期
+const selectedLayerIdx = computed<number>(() => idxByGlobalPeriod(layerList.value))
 const layers = computed<any>(() => layerList.value[selectedLayerIdx.value] ?? null)
-// 超额净值独立周期下标（与分层 selectedLayerIdx、IC selectedIcIdx 均不联动）
-const selectedExcessIdx = ref(0)
+// 超额净值周期下标：跟随顶部全局周期
+const selectedExcessIdx = computed<number>(() => idxByGlobalPeriod(layerList.value))
 const excessLayer = computed<any>(() => layerList.value[selectedExcessIdx.value] ?? null)
-// 考核组指标独立周期下标（每周期 metrics 不同，与其余切换器均不联动）
-const selectedMetricIdx = ref(0)
+// 考核组指标周期下标：跟随顶部全局周期
+const selectedMetricIdx = computed<number>(() => idxByGlobalPeriod(layerList.value))
 const metricLayer = computed<any>(() => layerList.value[selectedMetricIdx.value] ?? null)
 const selectedGroupIdx = ref(1)
 const assessmentGroup = computed<number | null>(() => {
   return selectedGroupIdx.value
 })
 const icPages = computed<any[]>(() => activeReport.value?.ic_pages ?? [])
-// 当前选中的 IC 周期下标（默认第一个）
-const selectedIcIdx = ref(0)
+// IC 周期下标：跟随顶部全局周期
+const selectedIcIdx = computed<number>(() => idxByGlobalPeriod(icPages.value))
 const selectedNeutIcIdx = ref(0)
 const distribution = computed<any>(() => activeReport.value?.factor?.distribution_snapshot ?? null)
 const coverageSeries = computed<any>(() => activeReport.value?.factor?.coverage_series ?? null)
 
 // 风险剥离全局选择器
-const selectedRiskFactor = ref('')  // '' = 原始因子（raw），否则为 variant 字符串
 const CNE6_STYLE_LABELS: Record<string, string> = {
   beta: 'Beta', momentum: '动量', size: '市值', earnyild: '盈利收益',
   resvol: '残差波动', growth: '成长', btop: '账面市值比', leverage: '杠杆',
@@ -611,6 +695,14 @@ onBeforeUnmount(() => {
   padding-left: 16px;
   border-left: 2px solid #ebeef5 !important;
 }
+.rv-yearly-block {
+  margin-bottom: 16px;
+}
+.rv-yearly-title {
+  font-size: 13px;
+  color: #606266;
+  margin: 8px 0 6px;
+}
 .rv-meta {
   display: flex;
   gap: 8px;
@@ -678,7 +770,7 @@ onBeforeUnmount(() => {
   top: 0;
   z-index: 10;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
   margin-bottom: 16px;
   padding: 12px 16px;
@@ -686,6 +778,24 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   border: 1px solid var(--el-border-color-lighter);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.rv-selector-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.rv-selector-label {
+  flex: 0 0 auto;
+  width: 40px;
+  font-size: 13px;
+  color: #909399;
+  line-height: 30px;
+}
+.rv-selector-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
 }
 .rv-neut-tab {
   padding: 6px 14px;
