@@ -196,6 +196,22 @@
       </div>
     </div>
 
+    <!-- ============ 分年度因子分布（v0.26.14 §3）============ -->
+    <div class="rv-section" v-if="yearlyDistribution.length">
+      <h4 class="rv-title">分年度因子分布（{{ variantLabel(activeVariantKey) }}）</h4>
+      <el-table :data="yearlyDistributionRows" size="small" border stripe>
+        <el-table-column prop="year" label="年度" width="80" />
+        <el-table-column prop="n" label="样本数" />
+        <el-table-column prop="mean" label="均值" />
+        <el-table-column prop="std" label="标准差" />
+        <el-table-column prop="min" label="最小值" />
+        <el-table-column prop="p25" label="P25" />
+        <el-table-column prop="median" label="中位数" />
+        <el-table-column prop="p75" label="P75" />
+        <el-table-column prop="max" label="最大值" />
+      </el-table>
+    </div>
+
     <!-- 警告 -->
     <div class="rv-section" v-if="warnings.length">
       <h4 class="rv-title">提示与警告</h4>
@@ -261,6 +277,39 @@ watch(yearlyPeriods, (periods) => {
 const filteredYearlyTables = computed<any[]>(() =>
   yearlyTables.value.filter((t: any) => yearlyPeriodOf(t?.key) === selectedYearlyPeriod.value)
 )
+
+// ============ 分年度图表（v0.26.14 §2，按 period × year 组织）============
+// 当前档位的 yearly_charts
+const yearlyCharts = computed<any[]>(() => {
+  const list = props.variantReports?.[activeVariantKey.value]?.report?.yearly_charts
+  return Array.isArray(list) ? list : []
+})
+
+// 当前 period 的块
+const yearlyChartBlock = computed<any>(() =>
+  yearlyCharts.value.find((b: any) => Number(b?.period) === Number(selectedYearlyPeriod.value)) ?? null
+)
+
+// 当前选中年度那一年数据（year 是 number，与选择器 string 值比较前统一转 string，见 §4.2）
+const yearlyChartOfYear = computed<any>(() => {
+  if (!selectedYearlyYear.value) return null   // 整体档：不显示分年度图，沿用现有全量曲线
+  const years = yearlyChartBlock.value?.years ?? []
+  return years.find((y: any) => String(y?.year) === selectedYearlyYear.value) ?? null
+})
+
+// ============ 分年度因子分布（v0.26.14 §3，每 variant 一份，与 period 无关）============
+// year 为字符串，直接比较；priced_frame 缺失时引擎不输出 → 空数组，区块隐藏
+const yearlyDistribution = computed<any[]>(() => {
+  const list = props.variantReports?.[activeVariantKey.value]?.report?.yearly_distribution
+  return Array.isArray(list) ? list : []
+})
+
+// 当前展示的分布行：整体档→全部年份；选中年度→仅该年
+const yearlyDistributionRows = computed<any[]>(() => {
+  if (!selectedYearlyYear.value) return yearlyDistribution.value
+  const one = yearlyDistribution.value.find((d: any) => String(d?.year) === selectedYearlyYear.value)
+  return one ? [one] : []
+})
 
 // 当前周期下涉及的所有年份（取各表第一列「年度」，升序去重）
 const yearlyYears = computed<string[]>(() => {
@@ -545,6 +594,74 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
           series: [{ name: '覆盖数', type: 'line', showSymbol: false, connectNulls: true, data: nz(coverageSeries.value.counts) }]
         }
       })
+    }
+
+    // 6. 分年度图表（仅选中具体年度时显示，v0.26.14 §2）
+    const yc = yearlyChartOfYear.value
+    if (yc) {
+      const ycDates = yc.dates || []
+      const ycSuffix = `${selectedYearlyYear.value}年`
+      // 6.1 分年度净值曲线（各组 + 基准，NAV 按原值，空数组隐藏对应线）
+      const navSeries: any[] = (yc.groups_nav ?? []).map((navArr: any, gi: number) => ({
+        name: `第${gi + 1}组`, type: 'line', showSymbol: false, connectNulls: true, data: nz(navArr)
+      }))
+      if (Array.isArray(yc.benchmark_nav) && yc.benchmark_nav.length) {
+        navSeries.push({
+          name: '基准', type: 'line', showSymbol: false, connectNulls: true,
+          lineStyle: { type: 'dashed' }, data: nz(yc.benchmark_nav)
+        })
+      }
+      if (navSeries.length) {
+        specs.push({
+          id: 'yearly-nav',
+          title: `分年度净值曲线（${ycSuffix} · 周期 ${yc.period}）`,
+          option: {
+            tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
+            xAxis: { type: 'category', data: ycDates }, yAxis: { type: 'value', scale: true },
+            series: navSeries
+          }
+        })
+      }
+      // 6.2 分年度超额净值曲线
+      const exSeries: any[] = (yc.excess_nav_series ?? [])
+        .filter((s: any) => Array.isArray(s) && s.length)
+        .map((s: any, gi: number) => ({
+          name: `第${gi + 1}组超额`, type: 'line', showSymbol: false, connectNulls: true, data: nz(s)
+        }))
+      if (exSeries.length) {
+        specs.push({
+          id: 'yearly-excess',
+          title: `分年度超额净值曲线（${ycSuffix} · 周期 ${yc.period}）`,
+          option: {
+            tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
+            xAxis: { type: 'category', data: ycDates }, yAxis: { type: 'value', scale: true },
+            series: exSeries
+          }
+        })
+      }
+      // 6.3 分年度 IC 图（IC/Rank IC 柱 + 累计 IC 线，年内从 0 累计可直接画）
+      const icSeries: any[] = []
+      if (Array.isArray(yc.ic_series) && yc.ic_series.length) {
+        icSeries.push({ name: 'IC', type: 'bar', data: nz(yc.ic_series) })
+      }
+      if (Array.isArray(yc.rank_ic_series) && yc.rank_ic_series.length) {
+        icSeries.push({ name: 'Rank IC', type: 'bar', data: nz(yc.rank_ic_series) })
+      }
+      if (Array.isArray(yc.cum_ic_series) && yc.cum_ic_series.length) {
+        icSeries.push({ name: '累计IC', type: 'line', showSymbol: false, connectNulls: true, yAxisIndex: 1, data: nz(yc.cum_ic_series) })
+      }
+      if (icSeries.length) {
+        specs.push({
+          id: 'yearly-ic',
+          title: `分年度 IC 图（${ycSuffix} · 周期 ${yc.period}）`,
+          option: {
+            tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
+            xAxis: { type: 'category', data: ycDates },
+            yAxis: [{ type: 'value' }, { type: 'value', name: '累计IC' }],
+            series: icSeries
+          }
+        })
+      }
     }
   }
 

@@ -904,8 +904,8 @@
             <!-- R2: 加 period-watermark 显示当前周期，避免研究员切几次后忘记在看哪个周期 -->
             <div class="metrics-cards" :data-period="selectedPeriods[index] ? selectedPeriods[index] + '日' : ''">
               <div class="metric-card ic-metric">
-                <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_mean)">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_mean, 4) }}
+                <div class="metric-value" :class="cardClass(factor, index, 'RankIC均值', getCurrentPeriodData(factor, index)?.rank_ic_mean)">
+                  {{ cardMetric(factor, index, 'RankIC均值', getCurrentPeriodData(factor, index)?.rank_ic_mean, 'num', 4) }}
                 </div>
                 <el-tooltip content="Spearman 秩相关系数均值。衡量因子预测能力，范围 [-1,1]，绝对值越大越强，>0.05 为有效" placement="top">
                   <div class="metric-label">Rank IC</div>
@@ -913,39 +913,39 @@
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_std, 4) }}
+                  {{ cardMetric(factor, index, 'RankIC标准差', getCurrentPeriodData(factor, index)?.rank_ic_std, 'num', 4) }}
                 </div>
                 <el-tooltip content="Rank IC 的标准差，衡量因子预测稳定性，越小越稳定" placement="top">
                   <div class="metric-label">Rank IC标准差</div>
                 </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
-                <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_ir)">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_ir, 3) }}
+                <div class="metric-value" :class="cardClass(factor, index, 'RankIC_IR', getCurrentPeriodData(factor, index)?.rank_ic_ir)">
+                  {{ cardMetric(factor, index, 'RankIC_IR', getCurrentPeriodData(factor, index)?.rank_ic_ir, 'num', 3) }}
                 </div>
                 <el-tooltip content="Rank IC 信息比 = IC 均值 / IC 标准差。>0.5 为优秀，<0.3 为弱" placement="top">
                   <div class="metric-label">Rank IC_IR</div>
                 </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
-                <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.annual_return)">
-                  {{ formatPercent(getCurrentPeriodData(factor, index)?.annual_return) }}
+                <div class="metric-value" :class="cardClass(factor, index, '考核组收益', getCurrentPeriodData(factor, index)?.annual_return)">
+                  {{ cardMetric(factor, index, '考核组收益', getCurrentPeriodData(factor, index)?.annual_return, 'pct') }}
                 </div>
-                <el-tooltip content="回测区间年化收益率（因子最大组纯多头几何年化，252 交易日）。>0 为正收益" placement="top">
-                  <div class="metric-label">年化收益</div>
+                <el-tooltip :content="isYearSelected(index) ? '该年度区间收益（因子最大组纯多头几何收益，不年化）' : '回测区间年化收益率（因子最大组纯多头几何年化，252 交易日）。>0 为正收益'" placement="top">
+                  <div class="metric-label">{{ isYearSelected(index) ? '区间收益' : '年化收益' }}</div>
                 </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
-                <div class="metric-value" :class="getValueClass(getCurrentPeriodData(factor, index)?.sharpe_ratio)">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.sharpe_ratio, 2) }}
+                <div class="metric-value" :class="cardClass(factor, index, '年度夏普', getCurrentPeriodData(factor, index)?.sharpe_ratio)">
+                  {{ cardMetric(factor, index, '年度夏普', getCurrentPeriodData(factor, index)?.sharpe_ratio, 'num', 2) }}
                 </div>
                 <el-tooltip content="风险调整后收益 = (年化收益 - 无风险利率) / 年化波动率（纯多头口径）。>1 为良好，>2 为优秀" placement="top">
                   <div class="metric-label">夏普比率</div>
                 </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
-                <div class="metric-value negative">
-                  {{ formatPercent(getCurrentPeriodData(factor, index)?.max_drawdown) }}
+                <div class="metric-value" :class="isYearSelected(index) ? '' : 'negative'">
+                  {{ cardMetric(factor, index, '最大回撤', getCurrentPeriodData(factor, index)?.max_drawdown, 'pct') }}
                 </div>
                 <el-tooltip content="回测区间内从历史最高点到最低点的最大跌幅（纯多头口径），越小越好" placement="top">
                   <div class="metric-label">最大回撤</div>
@@ -953,15 +953,15 @@
               </div>
               <div class="metric-card ic-metric">
                 <div class="metric-value">
-                  {{ formatPercent(getCurrentPeriodData(factor, index)?.win_rate) }}
+                  {{ cardMetric(factor, index, '胜率', getCurrentPeriodData(factor, index)?.win_rate, 'pct') }}
                 </div>
                 <el-tooltip content="IC > 0 的交易日占比。>50% 表示因子方向多数时间正确" placement="top">
                   <div class="metric-label">胜率</div>
                 </el-tooltip>
               </div>
               <div class="metric-card ic-metric">
-                <div class="metric-value" :class="getMonotonicityClass(getCurrentPeriodData(factor, index)?.monotonicity)">
-                  {{ formatNumber(getCurrentPeriodData(factor, index)?.monotonicity, 4) }}
+                <div class="metric-value" :class="cardClass(factor, index, '单调性', getCurrentPeriodData(factor, index)?.monotonicity, 'mono')">
+                  {{ cardMetric(factor, index, '单调性', getCurrentPeriodData(factor, index)?.monotonicity, 'num', 4) }}
                 </div>
                 <el-tooltip content="10 分组收益对组号的 Spearman 相关系数。范围 [-1,1]，绝对值越接近 1 分层越严格单调；>0.4 为优秀，<0.2 为弱" placement="top">
                   <div class="metric-label">单调性</div>
@@ -972,7 +972,7 @@
             <!-- 详细指标面板 -->
             <div class="detail-panels">
               <!-- 多周期完整指标对比 -->
-              <div class="detail-panel" v-if="factor.period_ic_stats?.length">
+              <div class="detail-panel" v-if="periodComparisonRows(factor, index).length">
                 <div class="panel-title">
                   <el-icon><TrendCharts /></el-icon>
                   <el-tooltip content="年化收益为因子最大组纯多头几何年化口径" placement="top">
@@ -981,7 +981,7 @@
                 </div>
                 <div class="panel-body">
                   <el-table 
-                    :data="factor.period_ic_stats" 
+                    :data="periodComparisonRows(factor, index)" 
                     size="small" 
                     stripe
                     :row-class-name="(data: any) => data.row.period === selectedPeriods[index] ? 'selected-row' : ''"
@@ -998,7 +998,7 @@
                         <span :class="getValueClass(row.rank_ic_mean)">{{ formatNumber(row.rank_ic_mean, 4) }}</span>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="annual_return" label="多头年化" width="90">
+                    <el-table-column prop="annual_return" :label="isYearSelected(index) ? '区间收益' : '多头年化'" width="90">
                       <template #default="{ row }">
                         <span :class="getValueClass(row.annual_return)">{{ formatPercent(row.annual_return) }}</span>
                       </template>
@@ -1024,32 +1024,36 @@
                   </el-table>
                   <div class="table-hint">
                     <el-icon><InfoFilled /></el-icon>
-                    周期 > 1 时仅计算分层累计收益与 IC 类指标，日频年化/夏普/最大回撤需切换到 1 日周期查看
+                    <template v-if="isYearSelected(index)">
+                      当前为 {{ yearlyYearByVariant[index] }} 年分周期指标：「区间收益」为该年考核组区间几何收益（不年化）；夏普/回撤为该年年化口径。
+                    </template>
+                    <template v-else>
+                      周期 > 1 时仅计算分层累计收益与 IC 类指标，日频年化/夏普/最大回撤需切换到 1 日周期查看
+                    </template>
                   </div>
                 </div>
               </div>
 
               <!-- 分层收益 -->
-              <div class="detail-panel" v-if="getCurrentPeriodData(factor, index)?.layer_returns?.length">
+              <div class="detail-panel" v-if="hasLayerData(factor, index)">
                 <div class="panel-title">
                   <el-icon><Histogram /></el-icon>
-                  分层收益 ({{ getCurrentPeriodData(factor, index)?.layer_returns?.length }}组) - {{ layerReturnType === 'annual' ? '年化收益率（各组单边几何年化）' : '区间累计收益' }}
+                  分层收益 ({{ layerBarValues(factor, index).length }}组) - {{ layerReturnLabel(index) }}
                   <span class="period-tag">({{ selectedPeriods[index] }}日)</span>
                 </div>
-                <!-- 年化/累计切换：独占一行 -->
+                <!-- 口径切换：独占一行。选中年度时年化档无数据→隐藏，仅「当年收益/累计」两档 -->
                 <div class="return-type-switch-row">
                   <el-radio-group v-model="layerReturnType" size="small">
-                    <el-radio-button label="annual">年化</el-radio-button>
+                    <el-radio-button v-if="!isYearSelected(index)" label="annual">年化</el-radio-button>
+                    <el-radio-button v-else label="annual">当年收益</el-radio-button>
                     <el-radio-button label="total">累计</el-radio-button>
                   </el-radio-group>
                 </div>
                 <div class="panel-body">
                   <!-- 添加 key 强制响应式更新 -->
-                  <div class="layer-returns-chart" :key="'layer-chart-' + layerReturnType">
+                  <div class="layer-returns-chart" :key="'layer-chart-' + layerReturnType + '-' + (yearlyYearByVariant[index] || '')">
                     <div 
-                      v-for="(ret, idx) in (layerReturnType === 'total' 
-                        ? (getCurrentPeriodData(factor, index)?.layer_total_returns || getCurrentPeriodData(factor, index)?.layer_returns || [])
-                        : (getCurrentPeriodData(factor, index)?.layer_returns || []))" 
+                      v-for="(ret, idx) in layerBarValues(factor, index)" 
                       :key="idx"
                       class="layer-bar-wrapper"
                     >
@@ -1058,9 +1062,7 @@
                         <div 
                           class="layer-bar"
                           :class="ret >= 0 ? 'positive' : 'negative'"
-                          :style="getBarStyle(ret, layerReturnType === 'total' 
-                            ? (getCurrentPeriodData(factor, index)?.layer_total_returns || getCurrentPeriodData(factor, index)?.layer_returns || [])
-                            : (getCurrentPeriodData(factor, index)?.layer_returns || []))"
+                          :style="getBarStyle(ret, layerBarValues(factor, index))"
                         ></div>
                       </div>
                       <div class="layer-value" :class="ret >= 0 ? 'positive' : 'negative'">
@@ -1070,7 +1072,12 @@
                   </div>
                   <div class="table-hint">
                     <el-icon><InfoFilled /></el-icon>
-                    年化收益率 = 回测区间累计收益按 252 日年化折算（几何年化、因子最大组纯多头口径）；累计收益 = 回测区间内的总累计收益。两者数值差异源于回测天数。
+                    <template v-if="isYearSelected(index)">
+                      当年收益率 = 该年当年几何收益（各组单边、不年化）；累计收益 = 该组 NAV 跨年累积到该年末的累计收益。分年度不提供年化口径。
+                    </template>
+                    <template v-else>
+                      年化收益率 = 回测区间累计收益按 252 日年化折算（几何年化、因子最大组纯多头口径）；累计收益 = 回测区间内的总累计收益。两者数值差异源于回测天数。
+                    </template>
                   </div>
                 </div>
               </div>
@@ -1083,35 +1090,35 @@
                 </div>
                 <div class="panel-body">
                   <div class="other-metrics">
-                    <!-- Rank IC 详细统计 -->
+                    <!-- Rank IC 详细统计（选中年度→yearly_metrics 该年值，整体档→全区间值） -->
                     <div class="other-metric-item">
                       <span class="label">Rank IC 最大值</span>
-                      <span class="value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_max)">
-                        {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_max, 4) }}
+                      <span class="value" :class="cardClass(factor, index, 'RankIC_max', getCurrentPeriodData(factor, index)?.rank_ic_max)">
+                        {{ cardMetric(factor, index, 'RankIC_max', getCurrentPeriodData(factor, index)?.rank_ic_max, 'num', 4) }}
                       </span>
                     </div>
                     <div class="other-metric-item">
                       <span class="label">Rank IC 最小值</span>
-                      <span class="value" :class="getValueClass(getCurrentPeriodData(factor, index)?.rank_ic_min)">
-                        {{ formatNumber(getCurrentPeriodData(factor, index)?.rank_ic_min, 4) }}
+                      <span class="value" :class="cardClass(factor, index, 'RankIC_min', getCurrentPeriodData(factor, index)?.rank_ic_min)">
+                        {{ cardMetric(factor, index, 'RankIC_min', getCurrentPeriodData(factor, index)?.rank_ic_min, 'num', 4) }}
                       </span>
                     </div>
                     <div class="other-metric-item">
                       <span class="label">Rank IC 胜率(>0)</span>
-                      <span class="value">{{ formatPercent(getCurrentPeriodData(factor, index)?.rank_ic_positive_ratio) }}</span>
+                      <span class="value">{{ cardMetric(factor, index, 'RankIC正占比', getCurrentPeriodData(factor, index)?.rank_ic_positive_ratio, 'pct') }}</span>
                     </div>
                     <!-- 原有指标 -->
                     <div class="other-metric-item">
                       <span class="label">年化波动率</span>
-                      <span class="value">{{ formatPercent(factor.annual_volatility) }}</span>
+                      <span class="value">{{ cardMetric(factor, index, '年化波动', factor.annual_volatility, 'pct') }}</span>
                     </div>
                     <div class="other-metric-item">
                       <span class="label">平均换手率</span>
-                      <span class="value">{{ formatPercent(factor.turnover_mean) }}</span>
+                      <span class="value">{{ cardMetric(factor, index, '平均换手', factor.turnover_mean, 'pct') }}</span>
                     </div>
-                    <div class="other-metric-item" v-if="dailyMetricsTotal > 0">
+                    <div class="other-metric-item" v-if="isYearSelected(index) ? yearlyCell(factor, index, '样本天数') !== '—' : dailyMetricsTotal > 0">
                       <span class="label">回测天数</span>
-                      <span class="value">{{ dailyMetricsTotal }}天</span>
+                      <span class="value">{{ isYearSelected(index) ? yearlyCell(factor, index, '样本天数') : dailyMetricsTotal }}天</span>
                     </div>
                   </div>
                 </div>
@@ -1205,6 +1212,34 @@
                     :label="col"
                   />
                 </el-table>
+              </div>
+            </div>
+
+            <!-- ============ 分年度因子分布（v0.26.14 §3）============ -->
+            <div class="yearly-section" v-if="variantYearlyDistribution(factor).length">
+              <div class="yearly-header">分年度因子分布</div>
+              <el-table :data="yearlyDistributionRows(factor, index)" size="small" border stripe>
+                <el-table-column prop="year" label="年度" width="80" />
+                <el-table-column prop="n" label="样本数" />
+                <el-table-column prop="mean" label="均值" />
+                <el-table-column prop="std" label="标准差" />
+                <el-table-column prop="min" label="最小值" />
+                <el-table-column prop="p25" label="P25" />
+                <el-table-column prop="median" label="中位数" />
+                <el-table-column prop="p75" label="P75" />
+                <el-table-column prop="max" label="最大值" />
+              </el-table>
+            </div>
+
+            <!-- ============ 分年度图表入口（v0.26.14 §2，弹窗）============ -->
+            <div class="yearly-section" v-if="hasYearlyChart(factor, index)">
+              <div class="yearly-header">分年度图表</div>
+              <div class="yearly-chart-entry">
+                <el-button type="primary" @click="openYearlyChart(factor, index)">
+                  <el-icon><TrendCharts /></el-icon>
+                  查看 {{ yearlyYearByVariant[index] }} 年净值 / 超额 / IC 图
+                </el-button>
+                <span class="chart-hint">展示选中年度的分层净值、超额净值与 IC 走势</span>
               </div>
             </div>
 
@@ -1458,6 +1493,24 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 分年度图表对话框（v0.26.14）-->
+    <el-dialog
+      v-model="yearlyChartDialogVisible"
+      :title="`分年度图表 - ${yearlyChartCtx?.year || ''}年`"
+      width="90%"
+      top="5vh"
+      destroy-on-close
+    >
+      <div class="yearly-chart-dialog-body">
+        <div class="yearly-chart-title">分年度净值曲线</div>
+        <div ref="yearlyNavChartRef" class="yearly-chart-canvas"></div>
+        <div class="yearly-chart-title">分年度超额净值曲线</div>
+        <div ref="yearlyExcessChartRef" class="yearly-chart-canvas"></div>
+        <div class="yearly-chart-title">分年度 IC 图</div>
+        <div ref="yearlyIcChartRef" class="yearly-chart-canvas"></div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1540,6 +1593,149 @@ watch(activeVariant, (newIdx, oldIdx) => {
   // 年度：直接沿用（年度是展示过滤值，与档位无关）
   yearlyYearByVariant.value[newIdx] = yearlyYearByVariant.value[oldIdx] ?? ''
 })
+
+// ============ A方案：核心指标卡随年度联动（v0.26.14 §4.5）============
+// 是否选中了具体年度（'' = 整体档，维持全区间口径）
+const isYearSelected = (index: number): boolean => !!yearlyYearByVariant.value[index]
+
+// 当前 variant+period 的 yearly_metrics 表
+const yearlyMetricsTable = (factor: any, index: number): any => {
+  const period = selectedPeriods.value[index] ?? null
+  return variantYearlyTables(factor).find((t: any) =>
+    String(t?.key ?? '').startsWith('yearly_metrics_p') && yearlyPeriodOf(t?.key) === period) ?? null
+}
+
+// 选中年度那一行 rows
+const yearlyMetricsRow = (factor: any, index: number): any[] | null => {
+  const year = yearlyYearByVariant.value[index]
+  if (!year) return null
+  const tb = yearlyMetricsTable(factor, index)
+  if (!tb) return null
+  return (tb.rows ?? []).find((r: any[]) => String(r?.[0]) === year) ?? null
+}
+
+// 按列名取选中年度单元格（rows 已是格式化字符串，直接返回；无则 em dash）；禁止硬编码下标
+const yearlyCell = (factor: any, index: number, colName: string): string => {
+  const tb = yearlyMetricsTable(factor, index)
+  const row = yearlyMetricsRow(factor, index)
+  if (!tb || !row) return '—'
+  const i = (tb.columns ?? []).indexOf(colName)
+  return i >= 0 ? String(row[i] ?? '—') : '—'
+}
+
+// 把 yearly 格式化字符串（"12.34%" / "0.052" / "—"）解析为数值，用于颜色判断
+const parseYearlyNum = (s: string): number => {
+  if (!s || s === '—') return NaN
+  const n = parseFloat(String(s).replace('%', ''))
+  return Number.isFinite(n) ? n : NaN
+}
+
+// 卡片数值：选中年度→yearly_metrics 字符串原值（不再二次格式化）；整体档→全区间格式化值
+const cardMetric = (factor: any, index: number, yearlyCol: string, whole: any, fmt: 'num' | 'pct', digits = 2): string => {
+  if (isYearSelected(index)) return yearlyCell(factor, index, yearlyCol)
+  return fmt === 'pct' ? formatPercent(whole) : formatNumber(whole, digits)
+}
+
+// 卡片颜色 class：选中年度时解析 yearly 字符串判正负；整体档用全区间数值
+const cardClass = (factor: any, index: number, yearlyCol: string, whole: any, type: 'value' | 'mono' = 'value'): string => {
+  const num = isYearSelected(index) ? parseYearlyNum(yearlyCell(factor, index, yearlyCol)) : Number(whole)
+  return type === 'mono' ? getMonotonicityClass(num) : getValueClass(num)
+}
+
+// ============ 分年度因子分布（v0.26.14 §3，每 variant 一份，与 period 无关）============
+// year 为字符串，直接比较；priced_frame 缺失时引擎不输出 → 空数组，区块隐藏
+const variantYearlyDistribution = (factor: any): any[] => {
+  const key = factor?.variant || 'raw'
+  const list = summary.value?.variant_reports?.[key]?.report?.yearly_distribution
+  return Array.isArray(list) ? list : []
+}
+
+// 当前展示的分布行：整体档→全部年份；选中年度→仅该年（用数组统一模板渲染）
+const yearlyDistributionRows = (factor: any, index: number): any[] => {
+  const all = variantYearlyDistribution(factor)
+  const year = yearlyYearByVariant.value[index]
+  if (!year) return all
+  const one = all.find((d: any) => String(d?.year) === year)
+  return one ? [one] : []
+}
+
+// ============ 分层收益卡年度联动（方案A：当年收益=yearly_layers / 累计=yearly_layer_cum）============
+// 取当前 variant+period 下、指定 key 前缀的分年度分层表
+const yearlyLayerTable = (factor: any, index: number, keyPrefix: string): any => {
+  const period = selectedPeriods.value[index] ?? null
+  return variantYearlyTables(factor).find((t: any) =>
+    String(t?.key ?? '').startsWith(keyPrefix) && yearlyPeriodOf(t?.key) === period) ?? null
+}
+
+// 选中年度时该年各组分层收益（小数，与全区间 layer_returns 口径一致，供柱状图渲染）；
+// mode='current'→yearly_layers（当年收益）；mode='total'→yearly_layer_cum（跨年累计）
+const yearlyLayerReturns = (factor: any, index: number, mode: 'current' | 'total'): number[] => {
+  const prefix = mode === 'total' ? 'yearly_layer_cum_p' : 'yearly_layers_p'
+  const tb = yearlyLayerTable(factor, index, prefix)
+  const year = yearlyYearByVariant.value[index]
+  if (!tb || !year) return []
+  const row = (tb.rows ?? []).find((r: any[]) => String(r?.[0]) === year)
+  if (!row) return []
+  // 首列为「年度」，其余各组为百分比字符串；parseYearlyNum 得百分数，/100 还原小数
+  return (row.slice(1) as any[]).map((s: any) => parseYearlyNum(String(s)) / 100)
+}
+
+// 分层收益卡当前展示的各组数值：选中年度→分年度表；整体档→原全区间 layer_returns/layer_total_returns
+const layerBarValues = (factor: any, index: number): number[] => {
+  if (isYearSelected(index)) {
+    // 选中年度：年化档已隐藏，仅 current(当年收益)/total(累计) 两态
+    return yearlyLayerReturns(factor, index, layerReturnType.value === 'total' ? 'total' : 'current')
+  }
+  const pd = getCurrentPeriodData(factor, index)
+  return layerReturnType.value === 'total'
+    ? (pd?.layer_total_returns || pd?.layer_returns || [])
+    : (pd?.layer_returns || [])
+}
+
+// 分层收益卡是否有可展示数据（选中年度看分年度表，整体档看全区间）
+const hasLayerData = (factor: any, index: number): boolean => {
+  if (isYearSelected(index)) return yearlyLayerReturns(factor, index, 'current').length > 0
+  return !!getCurrentPeriodData(factor, index)?.layer_returns?.length
+}
+
+// 分层收益卡标题右侧口径说明文案（选中年度：当年收益/累计；整体档：年化/累计）
+const layerReturnLabel = (index: number): string => {
+  const total = layerReturnType.value === 'total'
+  if (isYearSelected(index)) return total ? '区间累计收益（跨年累积到年末）' : '当年收益率（各组单边几何、不年化）'
+  return total ? '区间累计收益' : '年化收益率（各组单边几何年化）'
+}
+
+// ============ 多周期完整指标对比表年度联动（逐周期取 yearly_metrics 该年行拼表）============
+// 选中年度时：遍历该 variant 全部 yearly_metrics_p{period} 表，各取该年行，拼成跨周期对比（与 period_ic_stats 行结构兼容）
+// 值从格式化字符串还原为数值（百分比 /100），交给模板原有 formatNumber/formatPercent 展示，不改变口径
+const periodComparisonRows = (factor: any, index: number): any[] => {
+  if (!isYearSelected(index)) return factor?.period_ic_stats ?? []
+  const year = yearlyYearByVariant.value[index]
+  const rows = variantYearlyTables(factor)
+    .filter((t: any) => String(t?.key ?? '').startsWith('yearly_metrics_p'))
+    .map((tb: any) => {
+      const period = yearlyPeriodOf(tb?.key)
+      const row = (tb.rows ?? []).find((r: any[]) => String(r?.[0]) === year)
+      if (period == null || !row) return null
+      const cols: string[] = tb.columns ?? []
+      const num = (name: string): number => {
+        const i = cols.indexOf(name)
+        return i >= 0 ? parseYearlyNum(String(row[i])) : NaN
+      }
+      const pct = (name: string): number => { const v = num(name); return Number.isFinite(v) ? v / 100 : NaN }
+      return {
+        period,
+        rank_ic_mean: num('RankIC均值'),
+        annual_return: pct('考核组收益'),   // 分年度为区间收益（不年化）→ 表头改「区间收益」
+        sharpe_ratio: num('年度夏普'),
+        max_drawdown: pct('最大回撤'),
+        win_rate: pct('胜率'),
+        monotonicity: num('单调性'),
+      }
+    })
+    .filter((r: any) => r != null)
+  return rows.sort((a: any, b: any) => a.period - b.period)
+}
 
 // 当前周期下涉及的所有年份（取各表第一列「年度」，升序去重）
 const variantYearlyYears = (factor: any, index: number): string[] => {
@@ -2035,6 +2231,102 @@ const dailyMetricsPageSize = ref(100)
 const excessReturnChartRef = ref<HTMLElement | null>(null)
 let excessReturnChart: echarts.ECharts | null = null
 const excessReturnDialogVisible = ref(false)
+
+// ============ 分年度图表弹窗（v0.26.14 §2，概览页用弹窗，仿收益曲线弹窗）============
+const yearlyChartDialogVisible = ref(false)
+const yearlyNavChartRef = ref<HTMLElement | null>(null)
+const yearlyExcessChartRef = ref<HTMLElement | null>(null)
+const yearlyIcChartRef = ref<HTMLElement | null>(null)
+let yearlyNavChart: echarts.ECharts | null = null
+let yearlyExcessChart: echarts.ECharts | null = null
+let yearlyIcChart: echarts.ECharts | null = null
+// 弹窗当前上下文（打开时锁定当前 variant/period/year）
+const yearlyChartCtx = ref<{ factor: any; index: number; year: string } | null>(null)
+
+// 当前 variant+period 的 yearly_charts 中，选中年度那一年的数据
+const yearlyChartOfContext = (): any => {
+  const ctx = yearlyChartCtx.value
+  if (!ctx) return null
+  const key = ctx.factor?.variant || 'raw'
+  const charts = summary.value?.variant_reports?.[key]?.report?.yearly_charts
+  if (!Array.isArray(charts)) return null
+  const period = selectedPeriods.value[ctx.index] ?? null
+  const block = charts.find((b: any) => Number(b?.period) === Number(period))
+  const years = block?.years ?? []
+  return years.find((y: any) => String(y?.year) === ctx.year) ?? null
+}
+
+// 该 variant+period 是否存在选中年度的分年度图数据（控制按钮显示）
+const hasYearlyChart = (factor: any, index: number): boolean => {
+  const year = yearlyYearByVariant.value[index]
+  if (!year) return false
+  const key = factor?.variant || 'raw'
+  const charts = summary.value?.variant_reports?.[key]?.report?.yearly_charts
+  if (!Array.isArray(charts)) return false
+  const period = selectedPeriods.value[index] ?? null
+  const block = charts.find((b: any) => Number(b?.period) === Number(period))
+  return (block?.years ?? []).some((y: any) => String(y?.year) === year)
+}
+
+const openYearlyChart = (factor: any, index: number) => {
+  yearlyChartCtx.value = { factor, index, year: yearlyYearByVariant.value[index] }
+  yearlyChartDialogVisible.value = true
+  nextTick(() => setTimeout(renderYearlyCharts, 100))
+}
+
+const nzArr = (arr: any): (number | null)[] =>
+  Array.isArray(arr) ? arr.map((v: any) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v))) : []
+
+const renderYearlyCharts = () => {
+  const yc = yearlyChartOfContext()
+  if (!yc) return
+  const dates = yc.dates || []
+  // 净值
+  if (yearlyNavChartRef.value) {
+    const navSeries: any[] = (yc.groups_nav ?? []).map((navArr: any, gi: number) => ({
+      name: `第${gi + 1}组`, type: 'line', showSymbol: false, connectNulls: true, data: nzArr(navArr)
+    }))
+    if (Array.isArray(yc.benchmark_nav) && yc.benchmark_nav.length) {
+      navSeries.push({ name: '基准', type: 'line', showSymbol: false, connectNulls: true, lineStyle: { type: 'dashed' }, data: nzArr(yc.benchmark_nav) })
+    }
+    if (yearlyNavChart) yearlyNavChart.dispose()
+    yearlyNavChart = echarts.init(yearlyNavChartRef.value)
+    yearlyNavChart.setOption({
+      tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 },
+      grid: { left: 48, right: 24, top: 32, bottom: 56, containLabel: true },
+      xAxis: { type: 'category', data: dates }, yAxis: { type: 'value', scale: true }, series: navSeries
+    })
+  }
+  // 超额
+  if (yearlyExcessChartRef.value) {
+    const exSeries: any[] = (yc.excess_nav_series ?? [])
+      .filter((s: any) => Array.isArray(s) && s.length)
+      .map((s: any, gi: number) => ({ name: `第${gi + 1}组超额`, type: 'line', showSymbol: false, connectNulls: true, data: nzArr(s) }))
+    if (yearlyExcessChart) yearlyExcessChart.dispose()
+    yearlyExcessChart = echarts.init(yearlyExcessChartRef.value)
+    yearlyExcessChart.setOption({
+      tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 },
+      grid: { left: 48, right: 24, top: 32, bottom: 56, containLabel: true },
+      xAxis: { type: 'category', data: dates }, yAxis: { type: 'value', scale: true }, series: exSeries
+    })
+  }
+  // IC
+  if (yearlyIcChartRef.value) {
+    const icSeries: any[] = []
+    if (Array.isArray(yc.ic_series) && yc.ic_series.length) icSeries.push({ name: 'IC', type: 'bar', data: nzArr(yc.ic_series) })
+    if (Array.isArray(yc.rank_ic_series) && yc.rank_ic_series.length) icSeries.push({ name: 'Rank IC', type: 'bar', data: nzArr(yc.rank_ic_series) })
+    if (Array.isArray(yc.cum_ic_series) && yc.cum_ic_series.length) icSeries.push({ name: '累计IC', type: 'line', showSymbol: false, connectNulls: true, yAxisIndex: 1, data: nzArr(yc.cum_ic_series) })
+    if (yearlyIcChart) yearlyIcChart.dispose()
+    yearlyIcChart = echarts.init(yearlyIcChartRef.value)
+    yearlyIcChart.setOption({
+      tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 },
+      grid: { left: 48, right: 48, top: 32, bottom: 56, containLabel: true },
+      xAxis: { type: 'category', data: dates },
+      yAxis: [{ type: 'value' }, { type: 'value', name: '累计IC' }], series: icSeries
+    })
+  }
+}
+
 
 // 图表全量数据
 const chartDailyData = ref<any[]>([])
@@ -2982,6 +3274,9 @@ onUnmounted(() => {
     neutralCompareChart.dispose()
     neutralCompareChart = null
   }
+  if (yearlyNavChart) { yearlyNavChart.dispose(); yearlyNavChart = null }
+  if (yearlyExcessChart) { yearlyExcessChart.dispose(); yearlyExcessChart = null }
+  if (yearlyIcChart) { yearlyIcChart.dispose(); yearlyIcChart = null }
 })
 </script>
 
@@ -4435,6 +4730,31 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   height: 520px;
   background: $bg-card;
   border-radius: $radius-md;
+}
+
+.yearly-chart-dialog-body {
+  .yearly-chart-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 12px 0 8px;
+  }
+  .yearly-chart-canvas {
+    width: 100%;
+    height: 360px;
+    margin-bottom: 8px;
+  }
+}
+
+.yearly-chart-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  .chart-hint {
+    font-size: 12px;
+    color: $text-secondary;
+  }
 }
 
 .chart-legend-hint {
