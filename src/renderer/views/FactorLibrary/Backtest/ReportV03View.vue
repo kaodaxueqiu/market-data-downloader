@@ -89,7 +89,11 @@
           </div>
           <el-table :data="assessmentMetricRows" size="small" border stripe>
             <el-table-column prop="label" label="指标" width="260" />
-            <el-table-column prop="value" label="数值" />
+            <el-table-column prop="value" label="数值">
+              <template #default="{ row }">
+                <span :class="{ 'rv-negative': row.negative }">{{ row.value }}</span>
+              </template>
+            </el-table-column>
           </el-table>
         </div>
       </div>
@@ -173,7 +177,29 @@
           :key="spec.id"
           class="rv-chart-block"
         >
-          <div class="rv-chart-title" v-if="spec.title">{{ spec.title }}</div>
+          <div class="rv-chart-title" v-if="spec.title">
+            <span>{{ spec.title }}</span>
+            <el-radio-group
+              v-if="spec.feeSwitch === 'layer'"
+              v-model="layerFeeMode"
+              size="small"
+              class="rv-fee-switch"
+            >
+              <el-radio-button value="net">费后</el-radio-button>
+              <el-radio-button value="gross">费前</el-radio-button>
+              <el-radio-button value="compare">对比</el-radio-button>
+            </el-radio-group>
+            <el-radio-group
+              v-else-if="spec.feeSwitch === 'excess'"
+              v-model="excessFeeMode"
+              size="small"
+              class="rv-fee-switch"
+            >
+              <el-radio-button value="net">费后</el-radio-button>
+              <el-radio-button value="gross">费前</el-radio-button>
+              <el-radio-button value="compare">对比</el-radio-button>
+            </el-radio-group>
+          </div>
           <div class="rv-chart-canvas" :ref="el => setChartRef(i, el)"></div>
         </div>
       </div>
@@ -374,6 +400,13 @@ const selectedGroupIdx = ref(1)
 const assessmentGroup = computed<number | null>(() => {
   return selectedGroupIdx.value
 })
+
+// ---------- 费前/费后切换（引擎 v0.29.0+，逐组 gross 数据） ----------
+const layerFeeMode = ref<'net' | 'gross' | 'compare'>('net')
+const excessFeeMode = ref<'net' | 'gross' | 'compare'>('net')
+// 当前周期分层数据是否含费前（查一组即可，组间同生共死）
+const hasGrossLayers = computed<boolean>(() => layers.value?.groups?.[0]?.gross_nav != null)
+const hasGrossExcess = computed<boolean>(() => layers.value?.groups?.[0]?.gross_excess_nav_series != null)
 const icPages = computed<any[]>(() => activeReport.value?.ic_pages ?? [])
 // IC 周期下标：跟随顶部全局周期
 const selectedIcIdx = computed<number>(() => idxByGlobalPeriod(icPages.value))
@@ -438,7 +471,17 @@ const assessmentMetricRows = computed(() => {
     ['max_drawdown', '最大回撤'], ['excess_max_drawdown', '超额最大回撤'],
     ['ann_volatility', '年化波动'], ['ann_turnover', '年化换手'], ['n_days', '天数']
   ]
-  return keys.filter(([k]) => m[k] != null).map(([k, label]) => ({ label, value: formatNum(m[k]) }))
+  const rows: Array<{ label: string; value: string; negative?: boolean }> =
+    keys.filter(([k]) => m[k] != null).map(([k, label]) => ({ label, value: formatNum(m[k]) }))
+  // 费前对照（引擎 v0.29.0+，逐组 gross_metrics）
+  const gm = groups[g - 1]?.gross_metrics
+  if (gm?.ann_excess_return != null) {
+    rows.push({ label: '费前年化超额', value: formatNum(gm.ann_excess_return) })
+  }
+  if (gm?.cost_drag_annual != null) {
+    rows.push({ label: '年化费用拖累', value: formatNum(gm.cost_drag_annual), negative: true })
+  }
+  return rows
 })
 
 // ---------- admission ----------
@@ -466,9 +509,9 @@ const isFactorVisible = (factor: string) =>
   stripFactors.value.length === 0 || stripFactors.value.includes(factor)
 
 // ---------- 动态图表规格 ----------
-// 每个 spec: { id, title, option }
-const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.EChartsOption }>>(() => {
-  const specs: Array<{ id: string; title: string; option: echarts.EChartsOption }> = []
+// 每个 spec: { id, title, option, feeSwitch? }
+const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.EChartsOption; feeSwitch?: 'layer' | 'excess' }>>(() => {
+  const specs: Array<{ id: string; title: string; option: echarts.EChartsOption; feeSwitch?: 'layer' | 'excess' }> = []
   const baseGrid = { left: 48, right: 24, top: 40, bottom: 80, containLabel: true }
 
   if (mode.value === 'research' && layers.value) {
@@ -477,9 +520,22 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
 
     // 1. 分层净值曲线
     if (groups.length) {
-      const series: any[] = groups.map((g: any) => ({
-        name: `第${g.group}组`, type: 'line', showSymbol: false, connectNulls: true, data: nz(g.nav)
-      }))
+      let series: any[]
+      const fm = hasGrossLayers.value ? layerFeeMode.value : 'net'
+      if (fm === 'gross') {
+        series = groups.map((g: any) => ({
+          name: `第${g.group}组·费前`, type: 'line', showSymbol: false, connectNulls: true, data: nz(g.gross_nav)
+        }))
+      } else if (fm === 'compare') {
+        series = groups.flatMap((g: any) => ([
+          { name: `第${g.group}组·费后`, type: 'line', showSymbol: false, connectNulls: true, data: nz(g.nav) },
+          { name: `第${g.group}组·费前`, type: 'line', showSymbol: false, connectNulls: true, lineStyle: { type: 'dotted' }, data: nz(g.gross_nav) }
+        ]))
+      } else {
+        series = groups.map((g: any) => ({
+          name: `第${g.group}组`, type: 'line', showSymbol: false, connectNulls: true, data: nz(g.nav)
+        }))
+      }
       if (Array.isArray(layers.value.benchmark_nav)) {
         series.push({
           name: '基准', type: 'line', showSymbol: false, connectNulls: true,
@@ -490,6 +546,7 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
       specs.push({
         id: 'layers-nav',
         title: `分层净值曲线${suffix}（周期 ${layers.value?.period}）`,
+        feeSwitch: hasGrossLayers.value ? 'layer' : undefined,
         option: {
           tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 }, grid: baseGrid,
           xAxis: { type: 'category', data: dates }, yAxis: { type: 'value', scale: true },
@@ -503,16 +560,36 @@ const chartSpecs = computed<Array<{ id: string; title: string; option: echarts.E
     const exDates = exLayer?.dates || []
     const exGroups = exLayer?.groups || []
     if (exGroups.length && exGroups.some((g: any) => Array.isArray(g.excess_nav_series))) {
-      const excessSeries = exGroups
-        .filter((g: any) => Array.isArray(g.excess_nav_series))
-        .map((g: any) => ({
-          name: `第${g.group}组超额`, type: 'line', showSymbol: false,
-          connectNulls: true, data: nz(g.excess_nav_series)
-        }))
+      const fm = hasGrossExcess.value ? excessFeeMode.value : 'net'
+      let excessSeries: any[]
+      if (fm === 'gross') {
+        excessSeries = exGroups
+          .filter((g: any) => Array.isArray(g.gross_excess_nav_series))
+          .map((g: any) => ({
+            name: `第${g.group}组超额·费前`, type: 'line', showSymbol: false,
+            connectNulls: true, data: nz(g.gross_excess_nav_series)
+          }))
+      } else if (fm === 'compare') {
+        excessSeries = exGroups
+          .filter((g: any) => Array.isArray(g.excess_nav_series))
+          .flatMap((g: any) => ([
+            { name: `第${g.group}组超额·费后`, type: 'line', showSymbol: false, connectNulls: true, data: nz(g.excess_nav_series) },
+            { name: `第${g.group}组超额·费前`, type: 'line', showSymbol: false, connectNulls: true, lineStyle: { type: 'dotted' }, data: nz(g.gross_excess_nav_series) }
+          ]))
+      } else {
+        excessSeries = exGroups
+          .filter((g: any) => Array.isArray(g.excess_nav_series))
+          .map((g: any) => ({
+            name: `第${g.group}组超额`, type: 'line', showSymbol: false,
+            connectNulls: true, data: nz(g.excess_nav_series)
+          }))
+      }
       const suffix = selectedRiskFactor.value ? ` - ${variantLabel(selectedRiskFactor.value)}` : ''
+      const cmpTitle = fm === 'compare' ? '（费前/费后对比）' : ''
       specs.push({
         id: 'excess-nav',
-        title: `分层超额净值曲线${suffix}（周期 ${exLayer?.period}）`,
+        title: `分层超额净值曲线${suffix}${cmpTitle}（周期 ${exLayer?.period}）`,
+        feeSwitch: hasGrossExcess.value ? 'excess' : undefined,
         option: {
           tooltip: { trigger: 'axis' }, legend: { type: 'scroll', bottom: 0 },
           grid: baseGrid,
@@ -962,6 +1039,18 @@ onBeforeUnmount(() => {
   margin-bottom: 6px;
   font-size: 13px;
   color: #606266;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rv-fee-switch {
+  flex-shrink: 0;
+}
+.rv-negative {
+  color: #f43f5e;
+  font-weight: 600;
 }
 .rv-chart-canvas {
   width: 100%;

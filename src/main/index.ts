@@ -6568,7 +6568,93 @@ ipcMain.handle('intermediateTable:dedup', async (_event) => {
     })
     return { success: true, data: response.data }
   } catch (error: any) {
-    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
+    return { success: false, error: midstatsErrorMsg(error) }
+  }
+})
+
+// 引擎 v0.27.1 起错误链包含 error + detail 多段，拼接后交由前端多行展示
+function midstatsErrorMsg(error: any): string {
+  const d = error.response?.data
+  return [d?.error, d?.detail].filter(Boolean).join('\n') || error.message || '网络错误'
+}
+
+// 中间统计表: 追加数据（异步，返回 build_id 走轮询）
+ipcMain.handle('intermediateTable:append', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/append`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 30000
+    })
+    if (response.data.success !== undefined) {
+      if (!response.data.success) return { success: false, error: response.data.error || '追加数据失败' }
+      return { success: true, data: response.data.data }
+    }
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: midstatsErrorMsg(error) }
+  }
+})
+
+// 中间统计表: 列变更（同步秒级）
+ipcMain.handle('intermediateTable:alter', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/alter`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 30000
+    })
+    if (response.data.success !== undefined) {
+      if (!response.data.success) return { success: false, error: response.data.error || '列变更失败' }
+      return { success: true, data: response.data.data }
+    }
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: midstatsErrorMsg(error) }
+  }
+})
+
+// 中间统计表: 按分区清除（同步秒级）
+ipcMain.handle('intermediateTable:dropPartition', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/drop-partition`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 30000
+    })
+    if (response.data.success !== undefined) {
+      if (!response.data.success) return { success: false, error: response.data.error || '清除分区失败' }
+      return { success: true, data: response.data.data }
+    }
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: midstatsErrorMsg(error) }
+  }
+})
+
+// 中间统计表: 清空全表数据（同步秒级，保留表结构）
+ipcMain.handle('intermediateTable:truncate', async (_event, data: any) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const axios = require('axios')
+    const response = await axios.post(`${MIDSTATS_API_BASE}/truncate`, data, {
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 30000
+    })
+    if (response.data.success !== undefined) {
+      if (!response.data.success) return { success: false, error: response.data.error || '清空数据失败' }
+      return { success: true, data: response.data.data }
+    }
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return { success: false, error: midstatsErrorMsg(error) }
   }
 })
 

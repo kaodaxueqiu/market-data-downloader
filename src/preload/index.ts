@@ -946,6 +946,10 @@ declare global {
         build: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         buildStatus: (buildId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         dedup: () => Promise<{ success: boolean; data?: any; error?: string }>
+        append: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        alter: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        dropPartition: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        truncate: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         createFromDDL: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
       }
       validatePython: (data: { code: string; requires?: string[] }) => Promise<{ success: boolean; data?: any; error?: string }>

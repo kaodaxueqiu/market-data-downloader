@@ -136,7 +136,11 @@
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="dedup">去重元数据</el-dropdown-item>
+                <el-dropdown-item command="append" :disabled="!!row._building">追加数据</el-dropdown-item>
+                <el-dropdown-item command="alter" :disabled="!!row._building">列变更</el-dropdown-item>
+                <el-dropdown-item command="dropPartition" :disabled="!!row._building">按分区清除</el-dropdown-item>
+                <el-dropdown-item command="truncate" :disabled="!!row._building">清空数据</el-dropdown-item>
+                <el-dropdown-item command="dedup" divided>去重元数据</el-dropdown-item>
                 <el-dropdown-item command="ttl" :disabled="!!row._building">修改 TTL</el-dropdown-item>
                 <el-dropdown-item command="rebuild" :disabled="!!row._building">重建</el-dropdown-item>
                 <el-dropdown-item command="delete" :disabled="!!row._building" divided>删除</el-dropdown-item>
@@ -154,6 +158,9 @@
 
     <CreateDialog v-model="createVisible" :rebuild-row="rebuildRow" @created="onCreated" @building="onBuilding" />
     <TTLDialog v-model="ttlVisible" :row="ttlRow" @updated="loadList" />
+    <AppendDialog v-model="appendVisible" :row="appendRow" @building="onBuilding" />
+    <AlterDialog v-model="alterVisible" :row="alterRow" @updated="loadList" />
+    <DropPartitionDialog v-model="dropPartitionVisible" :row="dropPartitionRow" @updated="loadList" />
     </template>
   </div>
 </template>
@@ -169,6 +176,7 @@ export interface BuildingState {
   elapsed_secs: number | null
   read_rows: number | null
   read_bytes: number | null
+  kind?: 'build' | 'append'
 }
 
 interface BuildingEntry {
@@ -189,6 +197,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Loading, Coin, ArrowDown } from '@element-plus/icons-vue'
 import CreateDialog from './CreateDialog.vue'
 import TTLDialog from './TTLDialog.vue'
+import AppendDialog from './AppendDialog.vue'
+import AlterDialog from './AlterDialog.vue'
+import DropPartitionDialog from './DropPartitionDialog.vue'
 import type { IntermediateTableMeta } from '@/types/backtest'
 
 const tableData = ref<(IntermediateTableMeta & { _building?: BuildingState })[]>([])
@@ -197,6 +208,12 @@ const createVisible = ref(false)
 const rebuildRow = ref<IntermediateTableMeta | null>(null)
 const ttlVisible = ref(false)
 const ttlRow = ref<IntermediateTableMeta | null>(null)
+const appendVisible = ref(false)
+const appendRow = ref<IntermediateTableMeta | null>(null)
+const alterVisible = ref(false)
+const alterRow = ref<IntermediateTableMeta | null>(null)
+const dropPartitionVisible = ref(false)
+const dropPartitionRow = ref<IntermediateTableMeta | null>(null)
 
 // 四态状态
 const pageLoading = ref(true)
@@ -211,9 +228,30 @@ const stageLabels: Record<string, string> = {
   checking_existing: '检查表',
   executing_ddl: '执行 DDL',
   writing_metadata: '写入元数据',
+  executing_append: '追加数据',
   completed: '已完成'
 }
 const stageLabel = (stage: string) => stageLabels[stage] ?? stage
+
+// 防 XSS：错误文本来自 SQL 引擎，先转义再把换行转为 <br>
+const escapeHtml = (s: string): string =>
+  String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+// 失败信息多行展示（引擎 v0.27.1 起返回多段文本，含"处置建议："段落）
+const showBuildFail = (raw: string, title = '建表失败') => {
+  ElMessageBox.alert('', title, {
+    confirmButtonText: '关闭',
+    type: 'error',
+    customClass: 'build-fail-alert',
+    dangerouslyUseHTMLString: true,
+    message: escapeHtml(raw).replace(/\n/g, '<br>')
+  })
+}
 
 const formatRows = (n: number) => {
   if (n >= 1e8) return (n / 1e8).toFixed(2) + ' 亿'
@@ -250,7 +288,8 @@ const startPolling = (build_id: string) => {
       detail: s.detail ?? '',
       elapsed_secs: s.elapsed_secs ?? null,
       read_rows: s.read_rows ?? null,
-      read_bytes: s.read_bytes ?? null
+      read_bytes: s.read_bytes ?? null,
+      kind: entry.state.kind
     }
     // 同步到表格行
     const idx = tableData.value.findIndex(r =>
@@ -263,23 +302,20 @@ const startPolling = (build_id: string) => {
       clearInterval(timer)
       entry.timer = null
       // 不立即刷新，保留已完成状态在临时行上让用户看到
-      ElMessage.success('建表完成')
+      ElMessage.success(entry.state.kind === 'append' ? '追加数据完成' : '建表完成')
       // 延迟 3 秒再刷新列表，用户能看到绿色已完成
       setTimeout(() => loadList(), 3000)
     } else if (s.status === 'failed') {
       clearInterval(timer)
       entry.timer = null
       // 保留 failed 状态在临时行上，不刷新
-      ElMessageBox.alert(s.error || s.detail || '建表失败', '建表失败', {
-        confirmButtonText: '关闭',
-        type: 'error'
-      })
+      showBuildFail(s.error || s.detail || '操作失败', entry.state.kind === 'append' ? '追加数据失败' : '建表失败')
     }
   }, 1500)
   entry.timer = timer
 }
 
-const onBuilding = (payload: { build_id: string; table_name: string; is_rebuild: boolean }) => {
+const onBuilding = (payload: { build_id: string; table_name: string; is_rebuild: boolean; kind?: 'build' | 'append' }) => {
   createVisible.value = false
   rebuildRow.value = null
 
@@ -292,7 +328,8 @@ const onBuilding = (payload: { build_id: string; table_name: string; is_rebuild:
     detail: '已排队，等待开始',
     elapsed_secs: null,
     read_rows: null,
-    read_bytes: null
+    read_bytes: null,
+    kind: payload.kind ?? 'build'
   }
 
   const entry: BuildingEntry = { build_id, table_name, is_rebuild, state, timer: null }
@@ -482,6 +519,39 @@ const handleAction = (cmd: string, row: IntermediateTableMeta) => {
     case 'ttl': openTtlDialog(row); break
     case 'rebuild': handleRebuild(row); break
     case 'delete': handleDelete(row); break
+    case 'append': appendRow.value = row; appendVisible.value = true; break
+    case 'alter': alterRow.value = row; alterVisible.value = true; break
+    case 'dropPartition': dropPartitionRow.value = row; dropPartitionVisible.value = true; break
+    case 'truncate': handleTruncate(row); break
+  }
+}
+
+// 清空全表数据：不可恢复，输入表名确认（type-to-confirm）
+const handleTruncate = async (row: IntermediateTableMeta) => {
+  const tableName = row.full_name || row.table_name
+  let input = ''
+  try {
+    const res = await ElMessageBox.prompt(
+      `此操作将清空表「${tableName}」的全部数据（表结构保留），不可恢复。\n请输入完整表名 ${tableName} 以确认：`,
+      '清空数据确认',
+      {
+        confirmButtonText: '确认清空',
+        cancelButtonText: '取消',
+        type: 'warning',
+        inputPlaceholder: tableName,
+        inputValidator: (v: string) => (v || '').trim() === tableName ? true : '表名不匹配，请输入完整表名',
+        customClass: 'build-fail-alert'
+      }
+    )
+    input = (res as any)?.value ?? ''
+  } catch { return }
+  if ((input || '').trim() !== tableName) return
+  const result = await window.electronAPI.intermediateTable.truncate({ table_name: tableName })
+  if (result.success) {
+    ElMessage.success('已清空数据（表结构保留）')
+    await loadList()
+  } else {
+    showBuildFail(result.error || '清空数据失败', '清空数据失败')
   }
 }
 
@@ -669,5 +739,12 @@ onMounted(() => {
 }
 .el-table .building-row:hover > td {
   background-color: #e6f4ff !important;
+}
+/* 建表/追加失败弹窗：多行错误文本可滚动 */
+.build-fail-alert .el-message-box__message {
+  max-height: 50vh;
+  overflow: auto;
+  text-align: left;
+  word-break: break-all;
 }
 </style>

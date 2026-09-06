@@ -935,6 +935,31 @@
                   <div class="metric-label">{{ isYearSelected(index) ? '区间收益' : '年化收益' }}</div>
                 </el-tooltip>
               </div>
+              <!-- 费前/费后对照卡：仅整体档且引擎产出 gross 字段时显示（v0.29.0+，全区间口径，选中年度时隐藏） -->
+              <template v-if="!isYearSelected(index) && factor?.gross_annual_return != null">
+                <div class="metric-card ic-metric">
+                  <div class="metric-value" :class="getValueClass(factor.gross_annual_return)">
+                    {{ formatPercent(factor.gross_annual_return) }}
+                  </div>
+                  <el-tooltip content="零费率账本年化收益（考核组，未扣手续费）。与费后年化之差即换手成本" placement="top">
+                    <div class="metric-label">费前年化</div>
+                  </el-tooltip>
+                </div>
+                <div class="metric-card ic-metric" v-if="factor?.gross_annual_excess_return != null">
+                  <div class="metric-value" :class="getValueClass(factor.gross_annual_excess_return)">
+                    {{ formatPercent(factor.gross_annual_excess_return) }}
+                  </div>
+                  <el-tooltip content="费前年化超额（相对基准，未扣费）" placement="top">
+                    <div class="metric-label">费前超额</div>
+                  </el-tooltip>
+                </div>
+                <div class="metric-card ic-metric" v-if="factor?.cost_drag_annual != null">
+                  <div class="metric-value negative">{{ formatPercent(factor.cost_drag_annual) }}</div>
+                  <el-tooltip content="年化费用拖累 = 费后年化超额 − 费前年化超额。越负说明换手成本越高" placement="top">
+                    <div class="metric-label">费用拖累</div>
+                  </el-tooltip>
+                </div>
+              </template>
               <div class="metric-card ic-metric">
                 <div class="metric-value" :class="cardClass(factor, index, '年度夏普', getCurrentPeriodData(factor, index)?.sharpe_ratio)">
                   {{ cardMetric(factor, index, '年度夏普', getCurrentPeriodData(factor, index)?.sharpe_ratio, 'num', 2) }}
@@ -1485,6 +1510,20 @@
       destroy-on-close
     >
       <div v-loading="chartDataLoading" element-loading-text="正在加载全量数据...">
+        <!-- 费前/费后切换：仅考核组且有费前数据时可用（v0.29.0+） -->
+        <div class="fee-mode-bar">
+          <el-radio-group v-model="excessFeeMode" size="small" :disabled="!feeToggleEnabled">
+            <el-radio-button value="net">费后</el-radio-button>
+            <el-radio-button value="gross">费前</el-radio-button>
+            <el-radio-button value="compare">对比</el-radio-button>
+          </el-radio-group>
+          <el-tooltip v-if="!hasGrossCurve" content="该任务为旧版本结果或零费率任务，无费前数据" placement="top">
+            <el-icon class="fee-tip-icon"><InfoFilled /></el-icon>
+          </el-tooltip>
+          <el-tooltip v-else-if="selectedGroup !== assessmentGroup" content="费前数据仅覆盖考核组，其他分组请看详细报告分层超额曲线" placement="top">
+            <el-icon class="fee-tip-icon"><InfoFilled /></el-icon>
+          </el-tooltip>
+        </div>
         <div ref="excessReturnChartRef" class="excess-return-chart-dialog"></div>
         <div class="chart-legend-hint">
           <span><b>实线</b>：因子/超额收益</span>
@@ -2428,7 +2467,13 @@ const getDailyGroupReturn = (dailyData: any, period: number, groupIndex: number)
 
 const renderExcessReturnChart = () => {
   if (!excessReturnChart) return
-  
+
+  // 费前/对比模式：仅考核组且有费前数据时，消费 excess_nav_curves（NAV 乘 100 减 1 转百分比）
+  if (feeToggleEnabled.value && excessFeeMode.value !== 'net') {
+    renderGrossExcessChart()
+    return
+  }
+
   // 使用图表专用的全量数据
   const data = chartDailyData.value.length > 0 ? chartDailyData.value : dailyMetrics.value
   if (!data.length) return
@@ -2583,6 +2628,60 @@ const renderExcessReturnChart = () => {
   excessReturnChart.setOption(option)
 }
 
+// 费前/费后对比图：消费 summary.excess_nav_curves[0]（考核组口径，NAV 已对齐 daily_metrics 日期）
+// NAV → 百分比：(nav - 1) * 100，与自算图的纵轴口径一致
+const renderGrossExcessChart = () => {
+  if (!excessReturnChart) return
+  const c = grossCurve.value
+  if (!c?.dates?.length) return
+  const mode = excessFeeMode.value
+  const nav2pct = (arr?: number[] | null) => (arr ?? []).map((v: number) => (((v ?? 1) - 1) * 100).toFixed(2))
+
+  const groupLabel = `第${selectedGroup.value}组`
+  const series: any[] = []
+
+  if (mode === 'gross') {
+    series.push({ name: `${groupLabel}·费前`, type: 'line', data: nav2pct(c.gross_strategy_nav), smooth: true, symbol: 'none', lineStyle: { width: 3 } })
+    series.push({ name: `基准`, type: 'line', data: nav2pct(c.benchmark_nav), smooth: true, symbol: 'none', lineStyle: { width: 1.5, type: 'dashed' } })
+    series.push({ name: `费前超额`, type: 'line', data: nav2pct(c.gross_excess_nav), smooth: true, symbol: 'none', lineStyle: { width: 2 } })
+  } else { // compare：费后实线 + 费前同色 dotted
+    series.push({ name: `${groupLabel}·费后`, type: 'line', data: nav2pct(c.strategy_nav), smooth: true, symbol: 'none', lineStyle: { width: 3 } })
+    series.push({ name: `${groupLabel}·费前`, type: 'line', data: nav2pct(c.gross_strategy_nav), smooth: true, symbol: 'none', lineStyle: { width: 3, type: 'dotted' } })
+    series.push({ name: `基准`, type: 'line', data: nav2pct(c.benchmark_nav), smooth: true, symbol: 'none', lineStyle: { width: 1.5, type: 'dashed' } })
+    series.push({ name: `费后超额`, type: 'line', data: nav2pct(c.excess_nav), smooth: true, symbol: 'none', lineStyle: { width: 2 } })
+    series.push({ name: `费前超额`, type: 'line', data: nav2pct(c.gross_excess_nav), smooth: true, symbol: 'none', lineStyle: { width: 2, type: 'dotted' } })
+  }
+
+  const dates = c.dates
+  const option: echarts.EChartsOption = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        if (!params?.length) return ''
+        let html = `<div style="font-weight: bold; margin-bottom: 8px;">${params[0].axisValue}</div>`
+        params.forEach((p: any) => {
+          html += `<div style="display: flex; align-items: center; margin: 4px 0;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: ${p.color}; border-radius: 50%; margin-right: 8px;"></span>
+            <span style="min-width: 140px;">${p.seriesName}: </span>
+            <span style="font-weight: bold;">${p.value != null ? p.value + '%' : '-'}</span>
+          </div>`
+        })
+        return html
+      }
+    },
+    legend: { data: series.map(s => s.name), bottom: 0, type: 'scroll', textStyle: { fontSize: 12 } },
+    grid: { left: '3%', right: '4%', bottom: '15%', top: '5%', containLabel: true },
+    xAxis: {
+      type: 'category', data: dates, boundaryGap: false,
+      axisLabel: { formatter: (val: string) => val.substring(5, 10), interval: Math.floor(dates.length / 10) }
+    },
+    yAxis: { type: 'value', axisLabel: { formatter: '{value}%' }, splitLine: { lineStyle: { type: 'dashed' } } },
+    series,
+    dataZoom: [{ type: 'inside', start: 0, end: 100 }]
+  }
+  excessReturnChart.setOption(option, true)
+}
+
 // 监听窗口大小变化，调整图表
 const handleResize = () => {
   excessReturnChart?.resize()
@@ -2598,6 +2697,21 @@ const layerReturnType = ref<'annual' | 'total'>('annual')
 // 选中的分组（1-10，用于计算分组收益）
 const selectedGroup = ref(1)
 
+// ===== 费前/费后切换（引擎 v0.29.0+，excess_nav_curves 只产考核组） =====
+const excessFeeMode = ref<'net' | 'gross' | 'compare'>('net')
+// 考核组组号：序列化在 report_v03 layers 块里，缺省 1
+const assessmentGroup = computed<number>(() =>
+  summary.value?.report_v03?.report?.layers?.[0]?.assessment_group ?? 1
+)
+// 费前曲线（考核组口径），无 gross 字段时为 null
+const grossCurve = computed(() => {
+  const c = summary.value?.excess_nav_curves?.[0]
+  return (c?.gross_strategy_nav != null || c?.gross_excess_nav != null) ? c : null
+})
+const hasGrossCurve = computed(() => grossCurve.value != null)
+// 概览费前 toggle 仅在考核组且有费前数据时可用
+const feeToggleEnabled = computed(() => hasGrossCurve.value && selectedGroup.value === assessmentGroup.value)
+
 // 分组选项
 const groupOptions = Array.from({ length: 10 }, (_, i) => ({
   value: i + 1,
@@ -2606,6 +2720,10 @@ const groupOptions = Array.from({ length: 10 }, (_, i) => ({
 
 // 分组切换处理
 const handleGroupChange = async () => {
+  // 切到非考核组时费前 toggle 不可用，强制回到费后
+  if (selectedGroup.value !== assessmentGroup.value) {
+    excessFeeMode.value = 'net'
+  }
   // 如果还没有加载全量数据，先加载
   if (chartDailyData.value.length === 0) {
     await loadChartData()
@@ -2615,6 +2733,11 @@ const handleGroupChange = async () => {
     renderExcessReturnChart()
   }
 }
+
+// 费前/费后档位切换时重渲
+watch(excessFeeMode, () => {
+  if (excessReturnDialogVisible.value) renderExcessReturnChart()
+})
 
 // 获取当前选中周期的数据
 const getCurrentPeriodData = (factor: any, index: number) => {
@@ -4730,6 +4853,17 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   height: 520px;
   background: $bg-card;
   border-radius: $radius-md;
+}
+
+.fee-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  .fee-tip-icon {
+    color: #909399;
+    cursor: help;
+  }
 }
 
 .yearly-chart-dialog-body {

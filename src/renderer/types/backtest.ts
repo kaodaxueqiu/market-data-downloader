@@ -101,6 +101,41 @@ export interface IntermediateTableCreateRequest {
 // 因子表达式类型
 export type ExpressionType = 'expr' | 'py_file' | 'py_code'
 
+// ===== 引擎 v0.29.0 费前/费后双轨（全部为可选，用 != null 判断存在性） =====
+// factor_results[i] 顶层新增 3 个费前标量（全区间口径，不分 period / 不分年度）
+export interface FactorGrossScalars {
+  gross_annual_return?: number | null        // 费前年化（考核组，零费率账本）
+  gross_annual_excess_return?: number | null // 费前年化超额（无基准/零费率时为 null）
+  cost_drag_annual?: number | null           // 年化费用拖累（恒负）
+}
+
+// summary.excess_nav_curves[i] 新增费前净值/超额（考核组口径，已对齐 daily_metrics 日期）
+export interface ExcessNavCurveGross {
+  dates?: string[]
+  strategy_nav?: number[]
+  benchmark_nav?: number[]
+  excess_nav?: number[]
+  gross_strategy_nav?: number[] | null   // 费前策略净值
+  gross_excess_nav?: number[] | null     // 费前超额相对净值
+}
+
+// 详细报告逐组费前数据（report_v03.report.layers[i].groups[j]）
+export interface GroupGrossFields {
+  gross_nav?: number[] | null               // 费前净值
+  gross_excess_nav_series?: number[] | null // 费前超额相对净值
+  fees?: number[] | null                    // 逐日手续费（本期不展示）
+  gross_metrics?: {
+    interval_return?: number | null
+    ann_return?: number | null
+    interval_excess_return?: number | null
+    ann_excess_return?: number | null
+    excess_sharpe?: number | null
+    max_drawdown?: number | null
+    excess_max_drawdown?: number | null
+    cost_drag_annual?: number | null
+  } | null
+}
+
 // 回测结果 Summary（补充 v0.20.0 新增字段）
 export interface BacktestSummary {
   factor_snapshot_test?: {
