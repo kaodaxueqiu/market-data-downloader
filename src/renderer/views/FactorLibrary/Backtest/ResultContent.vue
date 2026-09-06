@@ -935,26 +935,26 @@
                   <div class="metric-label">{{ isYearSelected(index) ? '区间收益' : '年化收益' }}</div>
                 </el-tooltip>
               </div>
-              <!-- 费前/费后对照卡：仅整体档且引擎产出 gross 字段时显示（v0.29.0+，全区间口径，选中年度时隐藏） -->
-              <template v-if="!isYearSelected(index) && factor?.gross_annual_return != null">
+              <!-- 费前/费后对照卡：仅整体档且引擎产出 gross_metrics 时显示（v0.29.0+，全区间口径，选中年度时隐藏） -->
+              <template v-if="!isYearSelected(index) && factorGrossMetrics(factor)?.ann_return != null">
                 <div class="metric-card ic-metric">
-                  <div class="metric-value" :class="getValueClass(factor.gross_annual_return)">
-                    {{ formatPercent(factor.gross_annual_return) }}
+                  <div class="metric-value" :class="getValueClass(factorGrossMetrics(factor).ann_return)">
+                    {{ formatPercent(factorGrossMetrics(factor).ann_return) }}
                   </div>
                   <el-tooltip content="零费率账本年化收益（考核组，未扣手续费）。与费后年化之差即换手成本" placement="top">
                     <div class="metric-label">费前年化</div>
                   </el-tooltip>
                 </div>
-                <div class="metric-card ic-metric" v-if="factor?.gross_annual_excess_return != null">
-                  <div class="metric-value" :class="getValueClass(factor.gross_annual_excess_return)">
-                    {{ formatPercent(factor.gross_annual_excess_return) }}
+                <div class="metric-card ic-metric" v-if="factorGrossMetrics(factor)?.ann_excess_return != null">
+                  <div class="metric-value" :class="getValueClass(factorGrossMetrics(factor).ann_excess_return)">
+                    {{ formatPercent(factorGrossMetrics(factor).ann_excess_return) }}
                   </div>
                   <el-tooltip content="费前年化超额（相对基准，未扣费）" placement="top">
                     <div class="metric-label">费前超额</div>
                   </el-tooltip>
                 </div>
-                <div class="metric-card ic-metric" v-if="factor?.cost_drag_annual != null">
-                  <div class="metric-value negative">{{ formatPercent(factor.cost_drag_annual) }}</div>
+                <div class="metric-card ic-metric" v-if="factorGrossMetrics(factor)?.cost_drag_annual != null">
+                  <div class="metric-value negative">{{ formatPercent(factorGrossMetrics(factor).cost_drag_annual) }}</div>
                   <el-tooltip content="年化费用拖累 = 费后年化超额 − 费前年化超额。越负说明换手成本越高" placement="top">
                     <div class="metric-label">费用拖累</div>
                   </el-tooltip>
@@ -2425,12 +2425,16 @@ const openExcessReturnChart = async () => {
 
 // 检测每日明细中是否有超额收益字段
 const hasExcessReturnData = computed(() => {
+  // v0.29.0：引擎可能不产 daily_metrics，只产 excess_nav_curves（含费前曲线）——任一路径有数据即显示面板
+  if (summary.value?.excess_nav_curves?.length) {
+    return true
+  }
   if (!dailyMetrics.value?.length || !result.value?.benchmark_metrics?.length) {
     return false
   }
   const firstRow = dailyMetrics.value[0]
   // 检查是否有 benchmark_returns 数组且包含 excess_return
-  return firstRow.benchmark_returns?.length > 0 && 
+  return firstRow.benchmark_returns?.length > 0 &&
          firstRow.benchmark_returns[0]?.excess_return != null
 })
 
@@ -2440,7 +2444,7 @@ const initExcessReturnChart = () => {
     console.log('📊 图表容器未就绪')
     return
   }
-  if (!dailyMetrics.value?.length) return
+  if (!dailyMetrics.value?.length && !summary.value?.excess_nav_curves?.length) return
   
   // 销毁旧图表
   if (excessReturnChart) {
@@ -2474,9 +2478,14 @@ const renderExcessReturnChart = () => {
     return
   }
 
-  // 使用图表专用的全量数据
+  // net 模式：优先自算（daily_metrics）；若无 daily_metrics 但有 excess_nav_curves，则用费后三线兜底
   const data = chartDailyData.value.length > 0 ? chartDailyData.value : dailyMetrics.value
-  if (!data.length) return
+  if (!data.length) {
+    if (summary.value?.excess_nav_curves?.length) {
+      renderNetFromCurvesChart()
+    }
+    return
+  }
   
   // 获取日期
   const dates = data.map((d: any) => d.date)
@@ -2628,6 +2637,48 @@ const renderExcessReturnChart = () => {
   excessReturnChart.setOption(option)
 }
 
+// net 模式兜底：无 daily_metrics 时，用 excess_nav_curves 的费后三线画图（口径同 renderGrossExcessChart）
+const renderNetFromCurvesChart = () => {
+  if (!excessReturnChart) return
+  const c = summary.value?.excess_nav_curves?.[0]
+  if (!c?.dates?.length) return
+  const nav2pct = (arr?: number[] | null) => (arr ?? []).map((v: number) => (((v ?? 1) - 1) * 100).toFixed(2))
+  const groupLabel = `第${selectedGroup.value}组`
+  const series: any[] = [
+    { name: `因子(${groupLabel})`, type: 'line', data: nav2pct(c.strategy_nav), smooth: true, symbol: 'none', lineStyle: { width: 3 } },
+    { name: c.benchmark_name || '基准', type: 'line', data: nav2pct(c.benchmark_nav), smooth: true, symbol: 'none', lineStyle: { width: 1.5, type: 'dashed' } },
+    { name: `超额收益`, type: 'line', data: nav2pct(c.excess_nav), smooth: true, symbol: 'none', lineStyle: { width: 2 } }
+  ]
+  const dates = c.dates
+  const option: echarts.EChartsOption = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        if (!params?.length) return ''
+        let html = `<div style="font-weight: bold; margin-bottom: 8px;">${params[0].axisValue}</div>`
+        params.forEach((p: any) => {
+          html += `<div style="display: flex; align-items: center; margin: 4px 0;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: ${p.color}; border-radius: 50%; margin-right: 8px;"></span>
+            <span style="min-width: 140px;">${p.seriesName}: </span>
+            <span style="font-weight: bold;">${p.value != null ? p.value + '%' : '-'}</span>
+          </div>`
+        })
+        return html
+      }
+    },
+    legend: { data: series.map(s => s.name), bottom: 0, type: 'scroll', textStyle: { fontSize: 12 } },
+    grid: { left: '3%', right: '4%', bottom: '15%', top: '5%', containLabel: true },
+    xAxis: {
+      type: 'category', data: dates, boundaryGap: false,
+      axisLabel: { formatter: (val: string) => val.substring(5, 10), interval: Math.floor(dates.length / 10) }
+    },
+    yAxis: { type: 'value', axisLabel: { formatter: '{value}%' }, splitLine: { lineStyle: { type: 'dashed' } } },
+    series,
+    dataZoom: [{ type: 'inside', start: 0, end: 100 }]
+  }
+  excessReturnChart.setOption(option, true)
+}
+
 // 费前/费后对比图：消费 summary.excess_nav_curves[0]（考核组口径，NAV 已对齐 daily_metrics 日期）
 // NAV → 百分比：(nav - 1) * 100，与自算图的纵轴口径一致
 const renderGrossExcessChart = () => {
@@ -2703,6 +2754,16 @@ const excessFeeMode = ref<'net' | 'gross' | 'compare'>('net')
 const assessmentGroup = computed<number>(() =>
   summary.value?.report_v03?.report?.layers?.[0]?.assessment_group ?? 1
 )
+// 指定 factor（variant）的考核组 gross_metrics（v0.29.0+，费前指标放在 report.layers[].groups[].gross_metrics）
+const factorGrossMetrics = (factor: any) => {
+  const key = factor?.variant || 'raw'
+  const rpt = summary.value?.variant_reports?.[key]?.report ?? summary.value?.report_v03?.report
+  const layers = rpt?.layers
+  if (!layers?.length) return null
+  const ag = layers[0]?.assessment_group ?? 1
+  return layers[0]?.groups?.[ag - 1]?.gross_metrics ?? null
+}
+
 // 费前曲线（考核组口径），无 gross 字段时为 null
 const grossCurve = computed(() => {
   const c = summary.value?.excess_nav_curves?.[0]
