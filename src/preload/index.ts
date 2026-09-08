@@ -401,7 +401,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getList: (params?: { page?: number; page_size?: number; researcher?: string; status?: string; keyword?: string; research_mode?: string; start_date?: string; end_date?: string; sort_by?: string; sort_order?: string }) =>
       ipcRenderer.invoke('research:getList', params || {}),
     getDetail: (factorId: string) => ipcRenderer.invoke('research:getDetail', factorId),
-    getStats: () => ipcRenderer.invoke('research:getStats'),
+    getStats: (params?: { researcher?: string; status?: string; keyword?: string; research_mode?: string; start_date?: string; end_date?: string }) =>
+      ipcRenderer.invoke('research:getStats', params),
     getResearchers: () => ipcRenderer.invoke('research:getResearchers'),
     getResult: (factorId: string) => ipcRenderer.invoke('research:getResult', factorId)
   },
@@ -1003,7 +1004,7 @@ declare global {
       research: {
         getList: (params?: { page?: number; page_size?: number; researcher?: string; status?: string; keyword?: string; research_mode?: string; start_date?: string; end_date?: string; sort_by?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         getDetail: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
-        getStats: () => Promise<{ success: boolean; data?: any; error?: string }>
+        getStats: (params?: { researcher?: string; status?: string; keyword?: string; research_mode?: string; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         getResearchers: () => Promise<{ success: boolean; researchers?: string[]; error?: string }>
         getResult: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }

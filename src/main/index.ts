@@ -7205,7 +7205,14 @@ ipcMain.handle('research:getDetail', async (_event, factorId: string) => {
 })
 
 // 研究成果: 获取统计信息
-ipcMain.handle('research:getStats', async () => {
+ipcMain.handle('research:getStats', async (_event, params?: {
+  researcher?: string
+  status?: string
+  keyword?: string
+  research_mode?: string
+  start_date?: string
+  end_date?: string
+}) => {
   try {
     const apiKey = getDefaultApiKeyForBacktest()
     if (!apiKey) {
@@ -7216,6 +7223,14 @@ ipcMain.handle('research:getStats', async () => {
     const response = await axios.get(
       `${RESEARCH_API_BASE}/stats`,
       {
+        params: {
+          researcher: params?.researcher || undefined,
+          status: params?.status || undefined,
+          keyword: params?.keyword || undefined,
+          research_mode: params?.research_mode || undefined,
+          start_date: params?.start_date || undefined,
+          end_date: params?.end_date || undefined
+        },
         headers: {
           'X-API-Key': apiKey
         },

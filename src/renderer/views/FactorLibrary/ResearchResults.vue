@@ -11,7 +11,7 @@
         <div class="stat-label">执行完成</div>
       </div>
       <div class="stat-card researchers">
-        <div class="stat-value">{{ researchers.length || 0 }}</div>
+        <div class="stat-value">{{ stats.total_researchers ?? researchers.length ?? 0 }}</div>
         <div class="stat-label">研究员数</div>
       </div>
     </div>
@@ -54,6 +54,17 @@
           <el-option label="深度研究" value="deep" />
           <el-option label="入库审核" value="admission" />
         </el-select>
+        <el-date-picker
+          v-model="filters.dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          clearable
+          style="width: 240px;"
+          @change="handleFilterChange"
+        />
         <el-input
           v-model="filters.keyword"
           placeholder="搜索任务名称/因子ID"
@@ -478,10 +489,17 @@ const detailLoading = ref(false)
 const currentTask = ref<any>(null)
 const taskDetail = ref<any>(null)
 
-// 加载统计信息
+// 加载统计信息（跟随当前筛选条件）
 const loadStats = async () => {
   try {
-    const res = await window.electronAPI.research.getStats()
+    const res = await window.electronAPI.research.getStats({
+      researcher: filters.value.researcher || undefined,
+      status: filters.value.status || undefined,
+      keyword: filters.value.keyword || undefined,
+      research_mode: filters.value.researchMode || undefined,
+      start_date: filters.value.dateRange?.[0] || undefined,
+      end_date: filters.value.dateRange?.[1] || undefined
+    })
     if (res.success) {
       stats.value = res.data || {}
     }
@@ -536,6 +554,7 @@ const loadList = async () => {
 const handleFilterChange = () => {
   pagination.value.page = 1
   loadList()
+  loadStats()
 }
 
 // 重置筛选
