@@ -64,7 +64,6 @@ export interface BacktestSubmitRequest {
   calc_options?: CalcOptions
   research_mode?: 'research' | 'admission'
   walk_forward?: any
-  lookahead_check?: any
   risk_neutralization?: any
   parameter_scan?: any
   udfs?: any[]

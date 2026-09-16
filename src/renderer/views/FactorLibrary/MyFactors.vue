@@ -1541,15 +1541,6 @@
               </div>
           </div>
 
-          <!-- 防前视自检（研究模式 quick/deep 显示；admission 引擎强制执行） -->
-          <el-form-item v-if="researchMode !== 'admission'" label="防前视自检">
-            <el-switch v-model="lookaheadCheckEnabled" active-text="开启前视检测" />
-            <div class="form-hint">
-              <el-icon><InfoFilled /></el-icon>
-              用样本前 70% 数据重算因子，比对是否存在未来信息泄漏，会增加耗时
-            </div>
-          </el-form-item>
-
           <!-- 风险因子剥离（研究模式 quick/deep 显示；admission 引擎强制全剥） -->
           <el-form-item v-if="researchMode !== 'admission'" label="风险因子剥离">
             <el-switch v-model="riskNeutralization.enabled" active-text="开启剥离" />
@@ -4392,8 +4383,6 @@ const researchModeHint = computed(() => researchModeHints[researchMode.value] ||
 // admission 模式：universe / forward_periods / 费率会被引擎强制覆盖
 const isAdmissionMode = computed(() => researchMode.value === 'admission')
 
-// 防前视自检开关（研究模式 quick/deep 可选；admission 引擎强制执行，前端不传）
-const lookaheadCheckEnabled = ref(false)
 
 // 风险因子剥离配置（仅 quick/deep；admission 引擎强制全剥，前端不传）
 // selected 传值必须为引擎精确英文值，展示中文
@@ -4897,11 +4886,6 @@ const submitBacktest = async () => {
         train_fraction: walkForward.train_fraction,
         min_test_days: walkForward.min_test_days
       }
-    }
-
-    // 防前视自检（仅研究模式 quick/deep 且开启时传；admission 引擎强制执行）
-    if (researchMode.value !== 'admission' && lookaheadCheckEnabled.value) {
-      data.lookahead_check = { enabled: true, fractions: [0.7] }
     }
 
     // 风险因子剥离（仅 quick/deep；admission 引擎强制全剥，前端不传）
