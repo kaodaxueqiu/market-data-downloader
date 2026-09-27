@@ -1093,7 +1093,9 @@ const checkBacktestTaskUpdates = async () => {
   }
 }
 
-// 🆕 启动消息中心定时检查（每10秒）
+// 🆕 启动消息中心定时检查（每30秒；窗口不可见时暂停，恢复时立即补查）
+const NOTIFICATION_REFRESH_INTERVAL = 30000
+
 const startNotificationRefresh = () => {
   if (notificationRefreshTimer) {
     clearInterval(notificationRefreshTimer)
@@ -1103,13 +1105,22 @@ const startNotificationRefresh = () => {
   checkWorkorderUpdates()
   checkBacktestTaskUpdates()
   
-  // 每10秒检查一次
+  // 每30秒检查一次（通知不要求实时，降频减少网关压力）
   notificationRefreshTimer = setInterval(() => {
+    if (document.visibilityState !== 'visible') return
     checkWorkorderUpdates()
     checkBacktestTaskUpdates()
-  }, 10000)
+  }, NOTIFICATION_REFRESH_INTERVAL)
   
-  console.log('⏰ 消息中心定时检查已启动（每10秒）')
+  document.addEventListener('visibilitychange', handleNotificationVisibilityChange)
+  console.log('⏰ 消息中心定时检查已启动（每30秒）')
+}
+
+// 窗口恢复可见时立即补查一次
+const handleNotificationVisibilityChange = () => {
+  if (document.visibilityState !== 'visible') return
+  checkWorkorderUpdates()
+  checkBacktestTaskUpdates()
 }
 
 // 🆕 停止消息中心检查
@@ -1117,6 +1128,7 @@ const stopNotificationRefresh = () => {
   if (notificationRefreshTimer) {
     clearInterval(notificationRefreshTimer)
     notificationRefreshTimer = null
+    document.removeEventListener('visibilitychange', handleNotificationVisibilityChange)
     console.log('⏹️ 消息中心定时检查已停止')
   }
 }
@@ -1183,6 +1195,7 @@ onMounted(async () => {
     console.error('更新下载失败:', error?.message || error)
     updateDownloading.value = false
     updateDownloadPercent.value = 0
+    ElMessage.error(error?.message || '更新下载失败，请稍后重试')
   })
   
   // 使用setTimeout避免阻塞

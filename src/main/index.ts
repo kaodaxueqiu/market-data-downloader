@@ -5594,6 +5594,36 @@ ipcMain.handle('backtest:getTasks', async (_event, params: {
   }
 })
 
+// 回测: 获取任务统计汇总（网关聚合接口，替代前端 7 次分状态请求）
+ipcMain.handle('backtest:getTasksSummary', async () => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+
+    const axios = require('axios')
+    const response = await axios.get(
+      `${BACKTEST_API_BASE}/tasks/summary`,
+      {
+        headers: {
+          'X-API-Key': apiKey
+        },
+        timeout: 15000
+      }
+    )
+
+    if (response.data.success) {
+      return { success: true, data: response.data.data }
+    } else {
+      return { success: false, error: response.data.error || '获取失败' }
+    }
+  } catch (error: any) {
+    console.error('❌ 获取回测任务统计失败:', error)
+    return { success: false, error: error.message || '网络错误' }
+  }
+})
+
 // 回测: 获取任务详情
 ipcMain.handle('backtest:getTaskDetail', async (_event, taskId: string) => {
   try {
@@ -5609,7 +5639,7 @@ ipcMain.handle('backtest:getTaskDetail', async (_event, taskId: string) => {
         headers: {
           'X-API-Key': apiKey
         },
-        timeout: 15000
+        timeout: 60000
       }
     )
 
@@ -5620,7 +5650,7 @@ ipcMain.handle('backtest:getTaskDetail', async (_event, taskId: string) => {
     }
   } catch (error: any) {
     console.error('❌ 获取回测任务详情失败:', error)
-    return { success: false, error: error.message || '网络错误' }
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
   }
 })
 
@@ -5639,7 +5669,7 @@ ipcMain.handle('backtest:getResult', async (_event, taskId: string) => {
         headers: {
           'X-API-Key': apiKey
         },
-        timeout: 30000
+        timeout: 60000
       }
     )
 
@@ -5650,7 +5680,7 @@ ipcMain.handle('backtest:getResult', async (_event, taskId: string) => {
     }
   } catch (error: any) {
     console.error('❌ 获取回测结果失败:', error)
-    return { success: false, error: error.message || '网络错误' }
+    return { success: false, error: error.response?.data?.error || error.message || '网络错误' }
   }
 })
 

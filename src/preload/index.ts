@@ -277,6 +277,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getTasks: (params?: { page?: number; page_size?: number; status?: string; task_type?: string; research_mode?: string; start_date?: string; end_date?: string; sort_field?: string; sort_order?: string }) => 
       ipcRenderer.invoke('backtest:getTasks', params || {}),
     getTaskDetail: (taskId: string) => ipcRenderer.invoke('backtest:getTaskDetail', taskId),
+    getTasksSummary: () => ipcRenderer.invoke('backtest:getTasksSummary'),
     getResult: (taskId: string) => ipcRenderer.invoke('backtest:getResult', taskId),
     getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => 
       ipcRenderer.invoke('backtest:getDailyMetrics', taskId, params),
@@ -916,6 +917,7 @@ declare global {
         submit: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         getTasks: (params?: { page?: number; page_size?: number; status?: string; task_type?: string; research_mode?: string; start_date?: string; end_date?: string; sort_field?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         getTaskDetail: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        getTasksSummary: () => Promise<{ success: boolean; data?: any; error?: string }>
         getResult: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>
         cancelTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>
         deleteTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>

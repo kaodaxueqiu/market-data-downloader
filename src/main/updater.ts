@@ -123,34 +123,63 @@ export async function downloadUpdateSilently(
     onProgress(0, '正在连接...')
   }
 
-  const response = await axios({
-    method: 'get',
-    url: downloadUrl,
-    responseType: 'stream',
-    timeout: 600000,
-    onDownloadProgress: (progressEvent) => {
-      const loaded = progressEvent.loaded || 0
-      const total = progressEvent.total || fileSize
-      // loaded 可能超过 total（gzip 传输 / 清单 size 偏小），钳制到 0~100 避免出现 114% 这类越界值
-      const percentCompleted = Math.min(100, Math.max(0, Math.round((loaded * 100) / total)))
+  let response
+  try {
+    response = await axios({
+      method: 'get',
+      url: downloadUrl,
+      responseType: 'stream',
+      timeout: 600000,
+      // 只把 2xx 视为成功：网关并发打满时返回 503 + JSON 错误体，
+      // 若不校验会把错误体当安装包写盘（几十字节假包），再被 MD5 校验拒绝
+      validateStatus: (status) => status >= 200 && status < 300,
+      onDownloadProgress: (progressEvent) => {
+        const loaded = progressEvent.loaded || 0
+        const total = progressEvent.total || fileSize
+        // loaded 可能超过 total（gzip 传输 / 清单 size 偏小），钳制到 0~100 避免出现 114% 这类越界值
+        const percentCompleted = Math.min(100, Math.max(0, Math.round((loaded * 100) / total)))
 
-      if (onProgress) {
-        onProgress(percentCompleted, `已下载 ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`)
+        if (onProgress) {
+          onProgress(percentCompleted, `已下载 ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`)
+        }
       }
+    })
+  } catch (error: any) {
+    // 把 HTTP 状态码翻译成用户可读文案
+    const status = error?.response?.status
+    if (status === 503) {
+      throw new Error('当前下载人数较多，请稍后重试')
     }
-  })
+    if (status === 404) {
+      throw new Error('安装包不存在，请联系管理员')
+    }
+    if (status) {
+      throw new Error(`下载失败（HTTP ${status}），请稍后重试`)
+    }
+    throw error
+  }
 
   const writer = fs.createWriteStream(savePath)
   response.data.pipe(writer)
 
   return new Promise((resolve, reject) => {
+    // 失败时清掉残留的半成品文件，避免下次误用或被 MD5 校验反复绊倒
+    const cleanupAndReject = (err: Error) => {
+      try {
+        fs.unlinkSync(savePath)
+      } catch (e) {
+        // 文件可能不存在或被占用，忽略
+      }
+      reject(err)
+    }
+
     writer.on('finish', () => {
       console.log('下载完成')
 
       if (expectedMD5) {
         const fileMD5 = calculateMD5(savePath)
         if (fileMD5 !== expectedMD5) {
-          reject(new Error('文件校验失败，MD5不匹配'))
+          cleanupAndReject(new Error('文件校验失败，MD5不匹配'))
           return
         }
         console.log('MD5校验通过')
@@ -165,7 +194,7 @@ export async function downloadUpdateSilently(
 
     writer.on('error', (error) => {
       console.error('文件写入失败:', error)
-      reject(error)
+      cleanupAndReject(error)
     })
   })
 }

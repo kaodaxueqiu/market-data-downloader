@@ -335,7 +335,7 @@
       :close-on-click-modal="false"
       class="task-detail-dialog"
     >
-      <div v-loading="detailLoading" class="detail-content">
+      <div v-loading="detailLoading" element-loading-text="正在加载任务详情..." class="detail-content">
         <template v-if="taskDetail">
           <!-- 基本信息 -->
           <div class="detail-section">
@@ -568,26 +568,20 @@ const statsBreakdownMismatch = computed(() => {
 // 加载各状态的统计数据
 const loadStats = async () => {
   try {
-    // 当前实现是 7 次并发请求（各状态各发一次 page_size=1 仅为拿 total）。
-    // 真正的优化需后端提供 /tasks/summary 聚合接口，属网关增强项，就绪前保持现状。
-    // 保留 deferred 查询（数据库当前无此状态，返回 0，无害；若未来调度器恢复 deferred 可自动适配）
-    const [allRes, runningRes, pendingRes, deferredRes, completedRes, failedRes, cancelledRes] = await Promise.all([
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1 }),
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'running' }),
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'pending' }),
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'deferred' }),
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'completed' }),
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'failed' }),
-      window.electronAPI.backtest.getTasks({ page: 1, page_size: 1, status: 'cancelled' })
-    ])
+    // 网关聚合接口：1 次请求拿全部状态计数（字段与旧 7 次请求完全同名同义）
+    const res = await window.electronAPI.backtest.getTasksSummary()
+    if (!res.success || !res.data) {
+      console.error('加载统计数据失败:', res.error)
+      return
+    }
     statsData.value = {
-      total: allRes.success ? allRes.data.total : 0,
-      running: runningRes.success ? runningRes.data.total : 0,    // 修复：不再合并 pending
-      pending: pendingRes.success ? pendingRes.data.total : 0,    // pending 独立计入
-      deferred: deferredRes.success ? deferredRes.data.total : 0, // 数据库现状=0，保留兼容
-      completed: completedRes.success ? completedRes.data.total : 0,
-      failed: failedRes.success ? failedRes.data.total : 0,
-      cancelled: cancelledRes.success ? cancelledRes.data.total : 0
+      total: res.data.total || 0,
+      running: res.data.running || 0,
+      pending: res.data.pending || 0,
+      deferred: res.data.deferred || 0,
+      completed: res.data.completed || 0,
+      failed: res.data.failed || 0,
+      cancelled: res.data.cancelled || 0
     }
   } catch (error) {
     console.error('加载统计数据失败:', error)
@@ -793,7 +787,14 @@ const loadTasks = async (silent = false) => {
     if (result.success && result.data) {
       tasks.value = result.data.tasks || []
       total.value = result.data.total || 0
-      
+
+      // 状态签名变化说明有任务推进，重置退避到最短间隔
+      const signature = tasks.value.map(t => `${t.task_id}:${t.status}`).join(',')
+      if (signature !== lastStatusSignature) {
+        lastStatusSignature = signature
+        pollDelay = POLL_DELAY_MIN
+      }
+
       const hasRunning = tasks.value.some(t => t.status === 'running' || t.status === 'pending' || t.status === 'deferred')
       hasRunning ? startPolling() : stopPolling()
     } else {
@@ -806,16 +807,48 @@ const loadTasks = async (silent = false) => {
   }
 }
 
+// 轮询：无状态变化时 5s → 10s → 20s 递增，有变化立即回到 5s
+const POLL_DELAY_MIN = 5000
+const POLL_DELAY_MAX = 20000
+let pollingActive = false
+let pollDelay = POLL_DELAY_MIN
+let lastStatusSignature = ''
+
+const scheduleNextPoll = () => {
+  pollTimer = window.setTimeout(async () => {
+    pollTimer = null
+    if (!pollingActive) return
+    // 窗口不可见（最小化/切后台）时跳过本次请求，恢复可见时会立即补拉一次
+    if (document.visibilityState === 'visible') {
+      await loadTasks(true)
+    }
+    if (pollingActive) {
+      pollDelay = Math.min(POLL_DELAY_MAX, pollDelay * 2)
+      scheduleNextPoll()
+    }
+  }, pollDelay)
+}
+
 const startPolling = () => {
-  if (pollTimer) return
-  pollTimer = window.setInterval(() => loadTasks(true), 5000)
+  if (pollingActive) return
+  pollingActive = true
+  scheduleNextPoll()
 }
 
 const stopPolling = () => {
+  pollingActive = false
   if (pollTimer) {
-    clearInterval(pollTimer)
+    clearTimeout(pollTimer)
     pollTimer = null
   }
+  pollDelay = POLL_DELAY_MIN
+}
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState !== 'visible') return
+  // 恢复可见：重置退避并立即补拉一次
+  pollDelay = POLL_DELAY_MIN
+  if (pollTimer) loadTasks(true)
 }
 
 // 分页变化处理
@@ -1093,8 +1126,12 @@ onMounted(() => {
   loadTasks()
   loadStockPoolMapping()
   loadBenchmarkMapping()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
-onUnmounted(() => stopPolling())
+onUnmounted(() => {
+  stopPolling()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 </script>
 
 <style scoped lang="scss">
