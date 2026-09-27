@@ -1192,10 +1192,12 @@ onMounted(async () => {
   })
 
   window.electronAPI.on('updater:error', (error: any) => {
-    console.error('更新下载失败:', error?.message || error)
+    // main 进程发送的是 error.message 字符串，这里兼容字符串与对象两种形态
+    const message = typeof error === 'string' ? error : (error?.message || '')
+    console.error('更新下载失败:', message || error)
     updateDownloading.value = false
     updateDownloadPercent.value = 0
-    ElMessage.error(error?.message || '更新下载失败，请稍后重试')
+    ElMessage.error(message || '更新下载失败，请稍后重试')
   })
   
   // 使用setTimeout避免阻塞

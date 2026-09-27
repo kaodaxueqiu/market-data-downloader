@@ -130,8 +130,7 @@ export async function downloadUpdateSilently(
       url: downloadUrl,
       responseType: 'stream',
       timeout: 600000,
-      // 只把 2xx 视为成功：网关并发打满时返回 503 + JSON 错误体，
-      // 若不校验会把错误体当安装包写盘（几十字节假包），再被 MD5 校验拒绝
+      // 显式声明只把 2xx 视为成功（axios 默认即如此，这里写明使"非 2xx 直接 reject"这一契约可见）
       validateStatus: (status) => status >= 200 && status < 300,
       onDownloadProgress: (progressEvent) => {
         const loaded = progressEvent.loaded || 0
@@ -145,16 +144,15 @@ export async function downloadUpdateSilently(
       }
     })
   } catch (error: any) {
-    // 把 HTTP 状态码翻译成用户可读文案
     const status = error?.response?.status
-    if (status === 503) {
-      throw new Error('当前下载人数较多，请稍后重试')
-    }
-    if (status === 404) {
-      throw new Error('安装包不存在，请联系管理员')
-    }
     if (status) {
-      throw new Error(`下载失败（HTTP ${status}），请稍后重试`)
+      // 优先透传网关文案：503 分为「下载槽位满」与「全局过载」两种语义，由网关下发，前端不写死
+      const fallback = status === 503
+        ? '当前下载人数较多，请稍后重试'
+        : status === 404
+          ? '安装包不存在，请联系管理员'
+          : `下载失败（HTTP ${status}），请稍后重试`
+      throw new Error(await readServerErrorMessage(error, fallback))
     }
     throw error
   }
@@ -197,6 +195,38 @@ export async function downloadUpdateSilently(
       cleanupAndReject(error)
     })
   })
+}
+
+// 读取网关错误响应体里的 message（优先透传网关语义，取不到则用兜底文案）
+// 注意：responseType 为 stream 时 error.response.data 是流，需手动读取
+async function readServerErrorMessage(error: any, fallback: string): Promise<string> {
+  const data = error?.response?.data
+  try {
+    let text: string
+    if (data && typeof data.on === 'function') {
+      text = await new Promise<string>((resolve) => {
+        const chunks: Buffer[] = []
+        data.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)))
+        data.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+        data.on('error', () => resolve(''))
+      })
+    } else if (typeof data === 'string') {
+      text = data
+    } else if (data) {
+      text = JSON.stringify(data)
+    } else {
+      return fallback
+    }
+
+    const parsed = JSON.parse(text)
+    const message = parsed?.message || parsed?.error
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+  } catch (e) {
+    // 解析失败（非 JSON 或流已断）时使用兜底文案
+  }
+  return fallback
 }
 
 // 计算文件MD5
