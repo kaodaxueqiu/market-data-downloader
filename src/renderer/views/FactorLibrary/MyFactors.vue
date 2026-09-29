@@ -1475,6 +1475,15 @@
                 </div>
               </el-form-item>
 
+              <!-- 预热天数：Python 因子引擎无法推断历史窗口，默认仅 60 日 -->
+              <el-form-item label="预热天数">
+                <el-input-number v-model="advancedOptions.warmupDays" :min="0" :max="750" :step="10" controls-position="right" placeholder="自动" style="width: 220px;" />
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  留空则引擎自动（Python 因子默认 60，上限 750）
+                </div>
+              </el-form-item>
+
               <!-- 长任务模式 -->
               <el-form-item label="长任务模式">
                 <el-switch v-model="advancedOptions.allowLongRunning" active-text="允许长任务调度" />
@@ -4360,6 +4369,7 @@ const backtestForm = reactive({
 // 高级选项（批量回测）
 const advancedOptions = reactive({
   memoryLimitMb: null as number | null,
+  warmupDays: null as number | null,
   allowLongRunning: false,
   parameterScan: {
     enabled: false,
@@ -4706,6 +4716,9 @@ const openBatchBacktest = async () => {
   riskNeutralization.enabled = false
   riskNeutralization.selected = []
   riskNeutralization.includeEach = false
+  // 重置高级选项里的数值项（udfList / parameterScan 是用户精心配置的，保留不清）
+  advancedOptions.memoryLimitMb = null
+  advancedOptions.warmupDays = null
   backtestDialogVisible.value = true
 }
 
@@ -4838,10 +4851,11 @@ const submitBacktest = async () => {
       }
     }
 
-    // calc_options（内存预算，留空不传）
-    if (advancedOptions.memoryLimitMb) {
+    // calc_options（内存预算 / 预热天数，各自留空则不传该字段）
+    if (advancedOptions.memoryLimitMb || advancedOptions.warmupDays) {
       data.calc_options = {
-        memory_limit_mb: advancedOptions.memoryLimitMb
+        ...(advancedOptions.memoryLimitMb ? { memory_limit_mb: advancedOptions.memoryLimitMb } : {}),
+        ...(advancedOptions.warmupDays ? { warmup_days: advancedOptions.warmupDays } : {})
       }
     }
 

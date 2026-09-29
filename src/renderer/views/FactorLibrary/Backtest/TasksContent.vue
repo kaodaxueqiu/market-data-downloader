@@ -466,6 +466,30 @@
             </div>
           </div>
           
+          <!-- 高级选项（内存预算 / 预热天数 / 参数扫描 / 自定义算子）：配置了才显示 -->
+          <div class="detail-section" v-if="hasAdvancedConfig">
+            <div class="section-title">
+              <el-icon><Setting /></el-icon>
+              高级选项
+            </div>
+            <div class="section-body">
+              <el-descriptions :column="3" border size="small">
+                <el-descriptions-item label="内存预算" v-if="taskDetail.task_config.calc_options?.memory_limit_mb">
+                  {{ taskDetail.task_config.calc_options.memory_limit_mb }} MB
+                </el-descriptions-item>
+                <el-descriptions-item label="预热天数" v-if="taskDetail.task_config.calc_options?.warmup_days">
+                  {{ taskDetail.task_config.calc_options.warmup_days }}
+                </el-descriptions-item>
+                <el-descriptions-item label="参数扫描" v-if="taskDetail.task_config.parameter_scan">
+                  已开启（最多 {{ taskDetail.task_config.parameter_scan.max_candidates }} 组候选）
+                </el-descriptions-item>
+                <el-descriptions-item label="自定义算子" v-if="taskDetail.task_config.udfs?.length">
+                  {{ taskDetail.task_config.udfs.map((u: any) => u.name).join(', ') }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
+          
           <!-- 错误信息 -->
           <div class="detail-section error" v-if="taskDetail.error_message">
             <div class="section-title">
@@ -474,7 +498,12 @@
               <el-button link size="small" @click="copyError(taskDetail.error_message)">复制</el-button>
             </div>
             <div class="section-body">
-              <pre class="error-message">{{ taskDetail.error_message }}</pre>
+              <p>{{ getFriendlyError(taskDetail.error_message).friendly }}</p>
+              <el-collapse v-if="getFriendlyError(taskDetail.error_message).hasMatch">
+                <el-collapse-item title="查看技术详情">
+                  <pre class="error-message">{{ taskDetail.error_message }}</pre>
+                </el-collapse-item>
+              </el-collapse>
             </div>
           </div>
         </template>
@@ -487,6 +516,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getFriendlyError } from '@/utils/friendlyError'
 import { 
   Refresh, Document, Setting, DataAnalysis, Connection, Warning
 } from '@element-plus/icons-vue'
@@ -539,6 +569,18 @@ const hasActiveFilters = computed(() => {
 const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const taskDetail = ref<any>(null)
+
+// 详情弹窗「高级选项」区是否显示：四项配置任一存在才渲染
+const hasAdvancedConfig = computed(() => {
+  const cfg = taskDetail.value?.task_config
+  if (!cfg) return false
+  return !!(
+    cfg.calc_options?.memory_limit_mb ||
+    cfg.calc_options?.warmup_days ||
+    cfg.parameter_scan ||
+    cfg.udfs?.length
+  )
+})
 
 let pollTimer: number | null = null
 

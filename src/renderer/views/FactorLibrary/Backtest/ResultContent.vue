@@ -1566,6 +1566,7 @@ import * as echarts from 'echarts'
 import FactorValuesSection from './FactorValuesSection.vue'
 import ReportView from './ReportView.vue'
 import ReportV03View from './ReportV03View.vue'
+import { getFriendlyError } from '@/utils/friendlyError'
 
 // electronAPI 类型已在 preload/index.ts 中全局定义
 
@@ -3112,69 +3113,7 @@ const calcDuration = (start: string, end: string) => {
 }
 
 // R11: 失败任务错误信息友好化映射
-// 把引擎对研发友好的技术错误，翻译成因子研究员能看懂的建议
-const friendlyErrorMap: Array<{ pattern: RegExp; message: string }> = [
-  {
-    pattern: /有效样本检查失败|没有任何可计算的有效 IC/i,
-    message: '该因子在此股票池和时间区间下没有产生有效信号。可能原因：① 因子全为 NaN（检查字段名是否正确）② 时间区间太短（至少 60 个交易日）③ 股票池与数据源不匹配'
-  },
-  {
-    pattern: /not found:\s*\w+|unknown field/i,
-    message: '因子表达式中使用了未知字段。请检查数据源可用字段，例如 close_price 而非 close。'
-  },
-  {
-    pattern: /expression.*invalid|parse error|syntax error/i,
-    message: '因子表达式语法错误。请检查括号是否配对、算子名是否正确（如 Delay/Mean/Ts_Rank）。'
-  },
-  {
-    pattern: /timeout|timed out/i,
-    message: '计算超时。可能是股票池过大或表达式过于复杂，建议缩小回测区间或简化因子。'
-  },
-  {
-    pattern: /代码引用 data\["(.+?)"\]，但字段目录未登记该表/,
-    message: '表 $1 未在字段目录登记，请在数据源配置里手动填写表名和字段'
-  },
-  {
-    pattern: /代码包含动态字段引用/,
-    message: '代码里有动态字段引用，引擎无法静态识别，请显式配置 fields'
-  }
-]
-
-const getFriendlyError = (rawError: string | undefined): { friendly: string; hasMatch: boolean } => {
-  if (!rawError) return { friendly: '未知错误，请联系管理员', hasMatch: false }
-
-  // 优先解析结构化 JSON：unresolved_fields / ambiguous_fields
-  try {
-    // 尝试从 error 字符串中提取 JSON 片段
-    const jsonMatch = rawError.match(/\{[\s\S]*"unresolved_fields"[\s\S]*\}|\{[\s\S]*"ambiguous_fields"[\s\S]*\}/)
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0])
-      if (parsed.unresolved_fields?.length) {
-        return {
-          friendly: `字段 ${parsed.unresolved_fields.join(', ')} 在字段目录里找不到，请检查字段名`,
-          hasMatch: true
-        }
-      }
-      if (parsed.ambiguous_fields?.length) {
-        const parts = parsed.ambiguous_fields.map((af: any) => {
-          const candidates = af.candidates?.map((c: any) => c.table || c.table_name || c).join(', ') || ''
-          return `字段 ${af.field} 在多张表里都有（${candidates}），请在 fields 里显式指定`
-        })
-        return { friendly: parts.join('；'), hasMatch: true }
-      }
-    }
-  } catch { /* JSON 解析失败，走正则匹配 */ }
-
-  // 正则匹配，支持 $1 捕获组替换
-  for (const item of friendlyErrorMap) {
-    const m = rawError.match(item.pattern)
-    if (m) {
-      const msg = item.message.replace('$1', m[1] || '')
-      return { friendly: msg, hasMatch: true }
-    }
-  }
-  return { friendly: rawError, hasMatch: false }
-}
+// 映射表与 getFriendlyError 已抽到 @/renderer/utils/friendlyError，与任务列表详情弹窗共用同一份
 
 // R12: 因子表达式语法高亮
 // 注意顺序：必须先转义 HTML，再做高亮替换，否则 <span> 标签的 < 会被转义掉
