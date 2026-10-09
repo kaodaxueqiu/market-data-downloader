@@ -91,7 +91,7 @@ import { InfoFilled, CircleClose } from '@element-plus/icons-vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { python as pythonLang } from '@codemirror/lang-python'
 import { sql as sqlLang } from '@codemirror/lang-sql'
-import type { IntermediateTableCreateRequest, IntermediateTableMeta } from '@/types/backtest'
+import type { IntermediateTableCreateRequest, IntermediateTableMeta, LeakageCheckReport } from '@/types/backtest'
 
 const props = defineProps<{
   modelValue: boolean
@@ -255,6 +255,31 @@ const onModeChange = () => {
   form.table_name = ''
 }
 
+// 中间统计表字段泄露检测（引擎 v0.44.0，仅 Python 同步建表路径带 leakage）
+const fmtLeakNum = (v: number | null | undefined) => (v == null ? '—' : v.toFixed(4))
+
+const handleLeakage = (leakage?: LeakageCheckReport, err?: string) => {
+  // 1) 检出疑似泄露 → 黄色 warning（不当错误）
+  if (leakage && leakage.suspicious_count > 0) {
+    const rows = leakage.reports
+      .filter(r => r.suspicious)
+      .map(r => `${r.field}（${r.horizon}日）pearson=${fmtLeakNum(r.pearson)}  rank_ic=${fmtLeakNum(r.daily_rank_ic)}`)
+      .join('\n')
+    ElMessageBox.alert(
+      `以下字段可能与未来价格相关，请检查字段构建 SQL：\n\n${rows}`,
+      '字段可能引入未来价格信息',
+      { type: 'warning', confirmButtonText: '我知道了' }
+    )
+    return
+  }
+  // 2) 检测执行失败 → 信息提示，不报错
+  if (!leakage && err) {
+    ElMessage.info('泄露检测未执行（不影响建表结果）')
+    return
+  }
+  // 3) leakage 存在且无命中 → 静默；缺失且无 err → 静默
+}
+
 const handleSubmit = async () => {
   // 校验
   if (form.mode === 'python') {
@@ -321,7 +346,9 @@ const handleSubmit = async () => {
     // 异步建表：拿到 build_id 后交给父组件轮询
     const build_id = result.data?.build_id
     if (!build_id) {
-      // 同步返回，无 build_id（小表 / rebuild）
+      // 同步返回，无 build_id（Python 模式小表 / rebuild）
+      // 引擎 v0.44.0：Python 建表响应可能带泄露检测报告（DDL / 异步 build 路径不带）
+      handleLeakage(result.data?.leakage, result.data?.leakage_check_error)
       ElMessage.success(isRebuild.value ? '重建成功' : '创建成功')
       emit('created')
       return

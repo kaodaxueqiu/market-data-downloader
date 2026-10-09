@@ -6164,6 +6164,39 @@ ipcMain.handle('backtest:downloadLedgerAudit', async (_event, taskId: string, pe
   }
 })
 
+// 我的因子相关性：POST /api/v1/audit/my-factor-collinearity
+// 注意：网关 metaProxy 为纯透传，引擎直接返回裸 JSON（非 {success,data} 包装）
+ipcMain.handle('backtest:myFactorCollinearity', async (_event, taskId: string, topK?: number, minOverlap?: number) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) {
+      return { success: false, error: '未找到API Key' }
+    }
+    const axios = require('axios')
+    const payload: any = { task_id: taskId }
+    if (topK != null) payload.top_k = topK
+    if (minOverlap != null) payload.min_overlap = minOverlap
+
+    const response = await axios.post(
+      'http://61.151.241.233:8080/api/v1/audit/my-factor-collinearity',
+      payload,
+      {
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+        timeout: 120000           // 逐对全量计算，比常规接口慢，给足余量
+      }
+    )
+    // 引擎裸 JSON 直返；兼容未来若改为包装形态
+    const d = response.data
+    if (d && typeof d.status === 'string') return { success: true, data: d }
+    if (d?.success) return { success: true, data: d.data }
+    return { success: false, error: d?.error || '未知错误' }
+  } catch (error: any) {
+    console.error('❌ 我的因子相关性计算失败:', error)
+    const msg = error?.response?.data?.error || error?.message || '网络错误'
+    return { success: false, error: `我的因子相关性计算失败: ${msg}` }
+  }
+})
+
 // 回测: 获取预设股票池列表
 ipcMain.handle('backtest:getStockPools', async () => {
   try {
@@ -6447,6 +6480,7 @@ ipcMain.handle('intermediateTable:create', async (_event, data: any) => {
       timeout: 30000
     })
     if (response.data.success) {
+      // data 即引擎 CreateIntermediateResp，已含 leakage / leakage_check_error（引擎 v0.44.0）
       return { success: true, data: response.data.data }
     } else {
       return { success: false, error: response.data.error || '新建中间统计表失败' }

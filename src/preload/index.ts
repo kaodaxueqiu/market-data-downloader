@@ -287,6 +287,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:downloadRankIC', taskId, period),
     downloadLedgerAudit: (taskId: string, period: number, group: number) =>
       ipcRenderer.invoke('backtest:downloadLedgerAudit', taskId, period, group),
+    myFactorCollinearity: (taskId: string, topK?: number, minOverlap?: number) =>
+      ipcRenderer.invoke('backtest:myFactorCollinearity', taskId, topK, minOverlap),
     getStockPools: () => ipcRenderer.invoke('backtest:getStockPools'),
     getPriceTypeOptions: () => ipcRenderer.invoke('backtest:getPriceTypeOptions'),
     getAdmissionConfig: () => ipcRenderer.invoke('backtest:getAdmissionConfig'),
@@ -923,6 +925,7 @@ declare global {
         deleteTask: (taskId: string) => Promise<{ success: boolean; message?: string; error?: string }>
         downloadRankIC: (taskId: string, period: number) => Promise<{ success: boolean; filePath?: string; error?: string }>
         downloadLedgerAudit: (taskId: string, period: number, group: number) => Promise<{ success: boolean; filePath?: string; error?: string }>
+        myFactorCollinearity: (taskId: string, topK?: number, minOverlap?: number) => Promise<{ success: boolean; data?: any; error?: string }>
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
         getPriceTypeOptions: () => Promise<{ success: boolean; data?: { rebalance_price_types?: Array<{ value: string; label: string; description?: string; category?: string }>; buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }>; time_filter_presets?: Array<{ name: string; start: string; end: string; description?: string }> }; error?: string }>
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>

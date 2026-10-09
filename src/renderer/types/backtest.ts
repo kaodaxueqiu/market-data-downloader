@@ -172,3 +172,63 @@ export interface BacktestSummary {
     findings?: Array<{ code: string; severity: string; message: string }>
   }
 }
+
+// ---- 我的因子相关性（引擎 v0.44.0，POST /api/v1/audit/my-factor-collinearity）----
+export interface MyFactorCorrMatch {
+  source_factor_id: string
+  factor_label: string
+  hist_task_id: string
+  hist_date_from: string
+  hist_date_to: string
+  n_overlap: number
+  pearson_corr: number | null
+  abs_pearson_corr: number | null
+}
+
+export interface MyFactorCorrSkipped {
+  source_factor_id?: string
+  hist_task_id?: string
+  n_overlap?: number        // no_hist_values 时缺失
+  reason: string            // empty_current_values | no_my_factor_history | insufficient_overlap | no_hist_values
+}
+
+export interface MyFactorCorrResp {
+  status: 'ok' | 'skipped'
+  current_task_id: string
+  my_factor_count: number
+  compared: number
+  skipped: MyFactorCorrSkipped[]
+  matches: MyFactorCorrMatch[]
+  max_abs_corr: number | null
+  top_k: number
+  min_overlap: number
+  method: string
+  error: string | null
+}
+
+// ---- 中间统计表字段泄露检测（引擎 v0.44.0，挂在 create 响应上）----
+export interface LeakageFieldReport {
+  field: string
+  horizon: number
+  pearson: number | null
+  daily_rank_ic: number | null
+  suspicious: boolean
+  reason: string
+}
+
+export interface LeakageCheckReport {
+  table_name: string
+  n_rows: number
+  n_fields: number
+  reports: LeakageFieldReport[]
+  suspicious_count: number
+}
+
+export interface IntermediateCreateResp {
+  table_name: string
+  fingerprint: string
+  reused: boolean
+  workspace_db: string
+  leakage?: LeakageCheckReport
+  leakage_check_error?: string
+}

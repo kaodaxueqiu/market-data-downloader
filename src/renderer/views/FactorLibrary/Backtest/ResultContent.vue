@@ -715,6 +715,63 @@
               </div>
             </div>
 
+            <!-- 与我的因子相关性（按需触发，不依赖 admission 模式） -->
+            <div v-if="task?.status === 'completed'" class="analysis-card">
+              <div class="analysis-card-header">
+                <span>与我的因子相关性</span>
+                <el-button size="small" :loading="myCorrLoading" @click="loadMyFactorCollinearity">
+                  {{ myCorrData ? '重新计算' : '开始计算' }}
+                </el-button>
+              </div>
+
+              <!-- 未计算 -->
+              <div v-if="!myCorrData && !myCorrError" class="my-corr-empty">
+                点击「开始计算」，与该账号已保存的历史因子回测比对，识别重复因子。
+              </div>
+
+              <!-- 错误 -->
+              <el-alert v-else-if="myCorrError" type="error" :closable="false" :title="myCorrError" />
+
+              <!-- 跳过态 -->
+              <el-alert v-else-if="myCorrData?.status === 'skipped'" type="info" :closable="false"
+                        :title="myCorrSkipText(myCorrData?.skipped ?? [])" />
+
+              <!-- 正常态 -->
+              <template v-else-if="myCorrOk">
+                <div class="my-corr-summary">
+                  参与对比历史因子 <b>{{ myCorrOk.my_factor_count }}</b> 个，
+                  已计算 <b>{{ myCorrOk.compared }}</b> 对，
+                  跳过 <b>{{ myCorrOk.skipped.length }}</b> 对（样本不足/无值）
+                  <template v-if="myCorrOk.max_abs_corr != null">
+                    ｜最大 |相关性| <b :class="corrLevelClass(myCorrOk.max_abs_corr)">{{ myCorrOk.max_abs_corr.toFixed(4) }}</b>
+                  </template>
+                </div>
+
+                <el-table v-if="myCorrOk.matches.length" :data="myCorrOk.matches" size="small" border style="margin-top: 8px">
+                  <el-table-column prop="factor_label" label="因子" min-width="160" show-overflow-tooltip />
+                  <el-table-column label="共同区间" min-width="180">
+                    <template #default="{ row }">{{ row.hist_date_from }} ~ {{ row.hist_date_to }}</template>
+                  </el-table-column>
+                  <el-table-column prop="n_overlap" label="重叠样本" width="100" />
+                  <el-table-column label="Pearson" width="110">
+                    <template #default="{ row }">
+                      <span :class="corrLevelClass(row.pearson_corr)">
+                        {{ row.pearson_corr == null ? '—' : row.pearson_corr.toFixed(4) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="标记" width="110">
+                    <template #default="{ row }">
+                      <el-tag v-if="row.abs_pearson_corr != null && row.abs_pearson_corr >= 0.90" type="danger" size="small">高度重复</el-tag>
+                      <el-tag v-else-if="row.abs_pearson_corr != null && row.abs_pearson_corr >= 0.80" type="warning" size="small">疑似重复</el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+
+                <div v-else class="my-corr-empty">未发现可对比的历史因子（或全部因样本不足被跳过）。</div>
+              </template>
+            </div>
+
             <!-- 样本外黑盒（所有模式） -->
             <div v-if="holdoutValidation" class="analysis-card">
               <div class="analysis-card-header">
@@ -1567,6 +1624,7 @@ import FactorValuesSection from './FactorValuesSection.vue'
 import ReportView from './ReportView.vue'
 import ReportV03View from './ReportV03View.vue'
 import { getFriendlyError } from '@/utils/friendlyError'
+import type { MyFactorCorrResp, MyFactorCorrSkipped } from '@/types/backtest'
 
 // electronAPI 类型已在 preload/index.ts 中全局定义
 
@@ -1943,6 +2001,49 @@ const riskLevelTagType = (rl?: string): string => {
     default: return 'info'
   }
 }
+
+// ============ 与我的因子相关性（audit 接口实时计算，引擎 v0.44.0）============
+// 与库级共线性（summary.factor_collinearity）数据来源独立：这里是按需调接口比对
+const myCorrLoading = ref(false)
+const myCorrData = ref<MyFactorCorrResp | null>(null)
+const myCorrError = ref('')
+
+const loadMyFactorCollinearity = async () => {
+  if (!props.taskId) return
+  myCorrLoading.value = true
+  myCorrError.value = ''
+  try {
+    const res = await window.electronAPI.backtest.myFactorCollinearity(props.taskId, 20)
+    if (res.success) myCorrData.value = res.data
+    else myCorrError.value = res.error || '计算失败'
+  } catch (e: any) {
+    myCorrError.value = e?.message || '计算失败'
+  } finally {
+    myCorrLoading.value = false
+  }
+}
+
+// 阈值与库内审核一致：|corr| ≥ 0.80 标橙、≥ 0.90 标「高度重复」
+const corrLevelClass = (v: number | null) =>
+  v == null ? '' : Math.abs(v) >= 0.90 ? 'corr-critical' : Math.abs(v) >= 0.80 ? 'corr-warn' : ''
+
+const myCorrSkipText = (skipped: MyFactorCorrSkipped[]) => {
+  const reason = skipped[0]?.reason
+  if (reason === 'empty_current_values') return '该任务暂无可用于比对的因子值'
+  if (reason === 'no_my_factor_history') return '你还没有已完成的历史因子回测可对比'
+  return '暂无可比对数据'
+}
+
+// 正常态收窄：模板里 TS 无法从 v-else 推断 myCorrData 非空，用 computed 兜住
+const myCorrOk = computed<MyFactorCorrResp | null>(() =>
+  myCorrData.value && myCorrData.value.status === 'ok' ? myCorrData.value : null
+)
+
+// 回测详情变化时清掉上一次的计算结果，避免串任务
+watch(() => props.taskId, () => {
+  myCorrData.value = null
+  myCorrError.value = ''
+})
 
 // v0.3.1 report_v03（跳过或缺失时降级到旧 reportData/admissionReport）
 const reportV03 = computed<any>(() => {
@@ -3441,6 +3542,19 @@ onUnmounted(() => {
   margin-bottom: 8px;
 }
 .collinearity-title { font-weight: 600; }
+
+// 与我的因子相关性（v0.44.0 audit 接口）
+.my-corr-summary {
+  margin: 8px 0;
+  font-size: 13px;
+}
+.my-corr-empty {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.corr-critical { color: #f56c6c; font-weight: 600; }
+.corr-warn { color: #e6a23c; font-weight: 600; }
 .collinearity-core {
   display: flex;
   align-items: baseline;
