@@ -816,7 +816,7 @@
             <div class="form-hint" style="margin-top: 6px; display: flex; align-items: center; justify-content: space-between;">
               <span>
                 <el-icon><InfoFilled /></el-icon>
-                需包含 calculate_factor 函数入口；可选定义 build_intermediate_table
+                需包含 calculate_factor(data, context) 入口（旧版 factor(data) 仍兼容）；可选定义 build_intermediate_table
               </span>
               <el-button size="small" :loading="polarsTranslating" @click="previewPolarsTranslate">
                 预览 Polars 代码
@@ -1227,9 +1227,17 @@
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting" :disabled="submitDisabled">
-          {{ isEdit ? '保存并迭代版本' : '创建' }}
-        </el-button>
+        <el-tooltip
+          :content="submitDisabledReason || '保存'"
+          placement="top"
+          :disabled="!submitDisabled"
+        >
+          <span style="margin-left: 12px;">
+            <el-button type="primary" @click="handleSubmit" :loading="submitting" :disabled="submitDisabled">
+              {{ isEdit ? '保存并迭代版本' : '创建' }}
+            </el-button>
+          </span>
+        </el-tooltip>
       </template>
     </el-dialog>
 
@@ -2125,27 +2133,30 @@ const getSnapshotData = () => {
     return getSnapshotData() !== editOriginalSnapshot.value
   })
 
-const submitDisabled = computed(() => {
+const submitDisabledReason = computed<string>(() => {
     // 因子代码重名
-    if (factorCodeError.value) return true
+    if (factorCodeError.value) return '因子代码已存在，请修改'
     // 必填项：因子代码
-    if (!form.factor_code.trim()) return true
+    if (!form.factor_code.trim()) return '请填写因子代码'
     // 必填项：因子名称
-    if (!form.factor_name.trim()) return true
+    if (!form.factor_name.trim()) return '请填写因子名称'
     // 必填项：因子分类
-    if (!form.category_l3_id) return true
+    if (!form.category_l3_id) return '请选择三级分类'
     // 表达式模式：必须有表达式
-    if (factorMode.value === 'expression' && !form.expression.trim()) return true
+    if (factorMode.value === 'expression' && !form.expression.trim()) return '请填写因子表达式'
     // pycode 模式：必须有代码
-    if (factorMode.value === 'pycode' && !factorPyCode.value.trim()) return true
+    if (factorMode.value === 'pycode' && !factorPyCode.value.trim()) return '请填写 Python 代码'
     // pycode 模式：代码检查不通过
-    if (factorMode.value === 'pycode' && hasPyCodeCheckError.value) return true
+    if (factorMode.value === 'pycode' && hasPyCodeCheckError.value)
+      return pyCodeFuncError.value || '代码检查未通过：表或字段不存在'
     // pyfile 模式：必须选了文件（新建时）
-    if (factorMode.value === 'pyfile' && !isEdit.value && !pyFileInfo.fileName) return true
+    if (factorMode.value === 'pyfile' && !isEdit.value && !pyFileInfo.fileName) return '请选择 .py 文件'
     // 编辑模式：必须有变动
-    if (isEdit.value && !hasEditChanges.value) return true
-    return false
+    if (isEdit.value && !hasEditChanges.value) return '未检测到改动'
+    return ''
   })
+
+const submitDisabled = computed(() => !!submitDisabledReason.value)
 
 // Python 代码编辑器（新建因子对话框用）
 const factorPyCodeEditorRef = ref<HTMLElement>()
@@ -2270,9 +2281,21 @@ const runPyCodeCheck = async () => {
     return
   }
   
-  // 检查必须包含 calculate_factor 函数
-  if (!code.includes('def calculate_factor')) {
-    pyCodeFuncError.value = '缺少 calculate_factor 函数入口'
+  // 与引擎 python_validate.rs L303-L325 逐条对齐：
+  //   · 主入口 calculate_factor / 旧版 factor，二者有其一即通过
+  //   · prepare_data / build_intermediate_table 仅用于独立中间统计表；
+  //     单独存在时引擎 bail（has_intermediate_only），前端必须同样拦截
+  const entryOf = (name: string) =>
+    new RegExp(`(^|[^A-Za-z0-9_])def\\s+${name}\\s*\\(`).test(code)
+  const hasMainEntry = entryOf('calculate_factor') || entryOf('factor')
+  const hasIntermediateOnly =
+    !hasMainEntry && (entryOf('prepare_data') || entryOf('build_intermediate_table'))
+
+  if (hasIntermediateOnly) {
+    pyCodeFuncError.value =
+      '只定义了 prepare_data/build_intermediate_table：该入口仅用于独立中间统计表，不能产出因子值，请改用 calculate_factor(data, context)'
+  } else if (!hasMainEntry) {
+    pyCodeFuncError.value = '缺少 calculate_factor（或旧版 factor）函数入口'
   } else {
     pyCodeFuncError.value = ''
   }
@@ -2295,16 +2318,16 @@ const runPyCodeCheck = async () => {
       
       try {
         let foundTable: any = null
-        const searchKeyword = tableName.includes('.') ? tableName.split('.').pop()! : tableName
-        const searchResult = await window.electronAPI.dbdict.search(searchKeyword)
+        const shortTableName = tableName.includes('.') ? tableName.split('.').pop()! : tableName
+        const searchResult = await window.electronAPI.dbdict.search(shortTableName)
         const results = searchResult.data || []
         for (const item of results) {
           if (item.type !== 'table') continue
+          if (item.table_name !== shortTableName) continue
+          // 同名表跨库时，优先与用户写的库名一致的那张；只写短名则取第一条
           const fullName = `${item.database}.${item.table_name}`
-          if (fullName === tableName || item.table_name === tableName) {
-            foundTable = item
-            break
-          }
+          if (fullName === tableName) { foundTable = item; break }
+          if (!foundTable) foundTable = item
         }
         
         if (foundTable) {
@@ -3926,7 +3949,10 @@ const prevalidateCode = async () => {
 
 // 提交表单
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {
+    ElMessage.warning('表单未就绪，请关闭弹窗后重试')
+    return
+  }
 
   // Python 代码静态校验预检
   if (factorMode.value === 'pycode') {
@@ -3940,6 +3966,7 @@ const handleSubmit = async () => {
   try {
     await formRef.value.validate()
   } catch {
+    ElMessage.warning('请检查表单中标红的必填项')
     return
   }
   
@@ -4020,15 +4047,17 @@ const handleSubmit = async () => {
     }
   }
 
-  // Python代码模式验证
-  if (factorMode.value === 'pycode' && !isEdit.value) {
+  // Python代码模式验证（新建 / 编辑一致）
+  if (factorMode.value === 'pycode') {
     if (!factorPyCode.value.trim()) {
       ElMessage.error('请输入 Python 代码')
       return
     }
     // 代码检查未通过时拦截
     if (hasPyCodeCheckError.value) {
-      ElMessage.error('代码检查未通过，请检查表名和字段是否正确')
+      ElMessage.error(
+        pyCodeFuncError.value || '代码检查未通过：请检查数据源表名与字段是否存在'
+      )
       return
     }
   }

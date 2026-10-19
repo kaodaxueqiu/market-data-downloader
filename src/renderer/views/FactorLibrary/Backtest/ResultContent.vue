@@ -917,15 +917,15 @@
                   >{{ getVariantLabel(vr.variant, vi) }}</div>
                 </div>
               </div>
-              <div class="selector-row" v-if="factor.period_ic_stats?.length">
+              <div class="selector-row" v-if="periodOptionsOf(factor).length">
                 <span class="selector-label">周期</span>
                 <div class="selector-tabs">
                   <div
-                    v-for="p in factor.period_ic_stats"
+                    v-for="p in periodOptionsOf(factor)"
                     :key="p.period"
                     class="selector-tab"
-                    :class="{ active: selectedPeriods[index] === p.period }"
-                    @click="selectedPeriods[index] = p.period"
+                    :class="{ active: Number(selectedPeriods[index]) === Number(p.period) }"
+                    @click="selectedPeriods[index] = Number(p.period)"
                   >{{ p.period }}日</div>
                 </div>
               </div>
@@ -1684,9 +1684,12 @@ watch(activeVariant, (newIdx, oldIdx) => {
   // 周期：沿用旧档位选中的周期；若新档位不含该周期，回退到其第一个周期
   const prevPeriod = selectedPeriods.value[oldIdx]
   if (prevPeriod != null) {
-    const periods = result.value?.factor_results?.[newIdx]?.period_ic_stats ?? []
-    const has = periods.some((p: any) => p.period === prevPeriod)
-    selectedPeriods.value[newIdx] = has ? prevPeriod : (periods[0]?.period ?? prevPeriod)
+    const newFactor = result.value?.factor_results?.[newIdx]
+    const periods = icPagesOf(newFactor).length
+      ? icPagesOf(newFactor)
+      : (newFactor?.period_ic_stats ?? [])
+    const has = periods.some((p: any) => Number(p.period) === Number(prevPeriod))
+    selectedPeriods.value[newIdx] = has ? prevPeriod : (Number(periods[0]?.period) || prevPeriod)
   }
   // 年度：直接沿用（年度是展示过滤值，与档位无关）
   yearlyYearByVariant.value[newIdx] = yearlyYearByVariant.value[oldIdx] ?? ''
@@ -1807,7 +1810,19 @@ const layerReturnLabel = (index: number): string => {
 // 选中年度时：遍历该 variant 全部 yearly_metrics_p{period} 表，各取该年行，拼成跨周期对比（与 period_ic_stats 行结构兼容）
 // 值从格式化字符串还原为数值（百分比 /100），交给模板原有 formatNumber/formatPercent 展示，不改变口径
 const periodComparisonRows = (factor: any, index: number): any[] => {
-  if (!isYearSelected(index)) return factor?.period_ic_stats ?? []
+  if (!isYearSelected(index)) {
+    // 整体档：period_ic_stats 为底（保留收益/分层字段），Rank IC 覆盖为 ic_pages 权威口径
+    const byPeriod = new Map<number, any>(
+      (factor?.period_ic_stats ?? []).map((r: any) => [Number(r.period), { ...r }])
+    )
+    for (const page of icPagesOf(factor)) {
+      const row = byPeriod.get(Number(page.period)) ?? { period: page.period }
+      const s = statsOfSeries(page.rank_ic_series)
+      row.rank_ic_mean = page.summary?.rank_ic_mean ?? s?.mean ?? null
+      if (!byPeriod.has(Number(page.period))) byPeriod.set(Number(page.period), row)
+    }
+    return Array.from(byPeriod.values()).sort((a, b) => Number(a.period) - Number(b.period))
+  }
   const year = yearlyYearByVariant.value[index]
   const rows = variantYearlyTables(factor)
     .filter((t: any) => String(t?.key ?? '').startsWith('yearly_metrics_p'))
@@ -1911,6 +1926,46 @@ const getVariantLabel = (variant: string, index?: number) => {
 const summary = computed<any>(() => {
   return result.value?.summary ?? result.value?.factor_results?.[0]?.summary ?? null
 })
+
+// 当前 variant 的 ic_pages：优先 variant_reports[variant]，回退主 report_v03
+const icPagesOf = (factor: any): any[] => {
+  const key = factor?.variant || 'raw'
+  const vr = summary.value?.variant_reports?.[key]?.report?.ic_pages
+  if (Array.isArray(vr) && vr.length) return vr
+  const main = summary.value?.report_v03?.report?.ic_pages
+  return Array.isArray(main) ? main : []
+}
+
+const icPageOf = (factor: any, index: number): any | null => {
+  const pages = icPagesOf(factor)
+  if (!pages.length) return null
+  const period = selectedPeriods.value[index]
+  return pages.find((p: any) => Number(p.period) === Number(period)) ?? pages[0]
+}
+
+// 与引擎 diagnostics::ic::compute_ic_stats 同口径（样本标准差 n-1，ir = mean/std）
+const statsOfSeries = (series: any[]) => {
+  const xs = (Array.isArray(series) ? series : [])
+    .filter((v: any) => typeof v === 'number' && Number.isFinite(v)) as number[]
+  const n = xs.length
+  if (!n) return null
+  const mean = xs.reduce((a, b) => a + b, 0) / n
+  const std = n > 1 ? Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : 0
+  return {
+    n, mean, std,
+    ir: std > 1e-12 ? mean / std : 0,
+    max: xs.reduce((a, b) => Math.max(a, b), -Infinity),
+    min: xs.reduce((a, b) => Math.min(a, b), Infinity),
+    positive_ratio: xs.filter(v => v > 0).length / n,
+  }
+}
+
+// 周期选项：ic_pages 存在时以它为准（admission 任务只有 [5]），否则回退旧字段
+const periodOptionsOf = (factor: any): any[] => {
+  const pages = icPagesOf(factor)
+  if (pages.length) return pages.map(p => ({ period: Number(p.period) }))
+  return factor?.period_ic_stats ?? []
+}
 // v0.2.6 report（追加式，缺失则子组件显示空态）
 const reportData = computed<any>(() => summary.value?.report ?? null)
 
@@ -2904,12 +2959,28 @@ watch(excessFeeMode, () => {
 
 // 获取当前选中周期的数据
 const getCurrentPeriodData = (factor: any, index: number) => {
+  const stats = factor?.period_ic_stats ?? []
   const period = selectedPeriods.value[index]
-  if (!period || !factor.period_ic_stats?.length) {
-    // 返回默认周期数据（第一个）
-    return factor.period_ic_stats?.[0] || null
+  const base =
+    (period != null ? stats.find((p: any) => Number(p.period) === Number(period)) : null) ??
+    stats[0] ??
+    null
+
+  const page = icPageOf(factor, index)
+  if (!page) return base
+
+  const s = statsOfSeries(page.rank_ic_series)
+  return {
+    ...(base ?? {}),
+    period: page.period ?? base?.period,
+    // 统一覆盖为 ic_pages 权威口径
+    rank_ic_mean: page.summary?.rank_ic_mean ?? s?.mean ?? null,
+    rank_ic_std: s?.std ?? null,
+    rank_ic_ir: page.summary?.rank_icir ?? s?.ir ?? null,
+    rank_ic_max: s?.max ?? null,
+    rank_ic_min: s?.min ?? null,
+    rank_ic_positive_ratio: s?.positive_ratio ?? null,
   }
-  return factor.period_ic_stats.find((p: any) => p.period === period) || factor.period_ic_stats[0]
 }
 
 // 生成基准指数对比表格数据
@@ -2963,9 +3034,34 @@ const benchmarkCompareData = (factor: any, index: number) => {
   return rows
 }
 
+// 每日明细 Rank IC 查表：date -> rank_ic，按周期索引；raw 口径
+// （CH 每日明细的 period_ics[].rank_ic 引擎未回填，只有 ic_pages 有权威值）
+const dailyRankIcByPeriod = computed<Record<number, Record<string, number | null>>>(() => {
+  const out: Record<number, Record<string, number | null>> = {}
+  const main = summary.value?.report_v03?.report?.ic_pages
+  const raw = summary.value?.variant_reports?.raw?.report?.ic_pages
+  const pages = (Array.isArray(main) && main.length ? main : raw) ?? []
+  for (const page of pages) {
+    const m: Record<string, number | null> = {}
+    const dates: string[] = page.dates ?? []
+    const series: any[] = page.rank_ic_series ?? []
+    for (let i = 0; i < dates.length; i++) {
+      const v = series[i]
+      m[dates[i]] = typeof v === 'number' && Number.isFinite(v) ? v : null
+    }
+    out[Number(page.period)] = m
+  }
+  return out
+})
+
 // 获取每日明细中指定周期的IC数据
 const getDailyPeriodIC = (row: any, index: number, field: 'ic' | 'rank_ic') => {
   const period = selectedPeriods.value[index]
+  if (field === 'rank_ic') {
+    const byDate = dailyRankIcByPeriod.value[Number(period)]
+    // 该周期有 ic_pages → 以它为唯一口径；单日查不到就是 null，不回退（否则会串成默认周期的数）
+    if (byDate) return byDate[row.date] ?? null
+  }
   if (!period || !row.period_ics?.length) {
     return row[field] // 返回默认值
   }
@@ -2997,7 +3093,11 @@ const objectToRows = (obj: Record<string, string>) => {
 const initPeriodSelections = () => {
   if (!result.value?.factor_results) return
   result.value.factor_results.forEach((factor: any, index: number) => {
-    if (factor.period_ic_stats?.length && !selectedPeriods.value[index]) {
+    if (selectedPeriods.value[index]) return
+    const pages = icPagesOf(factor)
+    if (pages.length) {
+      selectedPeriods.value[index] = Number(pages[0].period)
+    } else if (factor.period_ic_stats?.length) {
       selectedPeriods.value[index] = factor.period_ic_stats[0].period
     }
   })

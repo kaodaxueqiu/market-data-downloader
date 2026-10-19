@@ -118,11 +118,9 @@
           <el-table-column label="实际值" width="120">
             <template #default="{ row }">{{ row.value == null ? '—' : formatNum(row.value, 4) }}</template>
           </el-table-column>
-          <el-table-column label="结果" width="100">
+          <el-table-column label="结果" width="120">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.pass === true ? 'success' : row.pass === false ? 'danger' : 'info'">
-                {{ row.pass === true ? '通过' : row.pass === false ? '未通过' : '未执行' }}
-              </el-tag>
+              <el-tag size="small" :type="checkTagType(row)">{{ checkPassText(row) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="备注">
@@ -487,6 +485,24 @@ const assessmentMetricRows = computed(() => {
 // ---------- admission ----------
 const conclusion = computed<any>(() => activeReport.value?.conclusion ?? null)
 const checks = computed<any[]>(() => conclusion.value?.checks ?? [])
+
+// pass === null 的两种语义要分开：信息项 vs 已执行但引擎不给布尔结论
+const checkPassText = (row: any): string => {
+  if (row.pass === true) return '通过'
+  if (row.pass === false) return '未通过'
+  const item = String(row.item ?? '')
+  if (item.startsWith('库内因子相关性')) return '待后处理评估'
+  if (item.includes('无前视自检')) return Number(row.value) === 0 ? '已执行·未检出' : '已执行'
+  return '未执行'
+}
+
+const checkTagType = (row: any): 'success' | 'danger' | 'info' | 'warning' => {
+  if (row.pass === true) return 'success'
+  if (row.pass === false) return 'danger'
+  const item = String(row.item ?? '')
+  if (item.includes('无前视自检')) return Number(row.value) === 0 ? 'success' : 'warning'
+  return 'info'
+}
 const conclusionClass = computed(() => {
   const r: string = conclusion.value?.result || ''
   if (r.includes('未通过') || r.includes('拒绝')) return 'rv-conclusion-fail'
