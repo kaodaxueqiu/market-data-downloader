@@ -1,5 +1,5 @@
-import { FileTextOutlined, SaveOutlined } from "@ant-design/icons";
-import { Button, Empty, Input, Spin, Tag } from "antd";
+import { FileTextOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { Button, Empty, Input, Modal, Spin, Tag } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -7,6 +7,7 @@ import {
   readProfileFile,
   saveProfileFile,
 } from "@/api/services/agentProfile";
+import { restartAgent } from "@/api/services/agentOps";
 import type {
   AgentProfileFile,
   AgentProfileFileContent,
@@ -46,6 +47,7 @@ export const AgentProfile = () => {
   const [dirty, setDirty] = useState(false);
   const [fileLoading, setFileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
     getAgentsListByReq();
@@ -125,6 +127,33 @@ export const AgentProfile = () => {
     } finally {
       setFileLoading(false);
     }
+  };
+
+  const handleRestart = () => {
+    if (!currentAgentID) return;
+    Modal.confirm({
+      title: "重启智能体",
+      content: `确定要重启「${currentAgent?.nickname || currentAgentID}」吗？重启后智能体需要约 60 秒恢复。`,
+      okText: "确认重启",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        setRestarting(true);
+        try {
+          await restartAgent(currentAgentID);
+          feedbackToast({ msg: "已提交重启，约 60 秒后智能体恢复" });
+        } catch (error) {
+          const e = error as { code?: string; message?: string };
+          if (e?.code === "RESTART_TOO_FREQUENT") {
+            feedbackToast({ error: { message: "重启过于频繁，请稍后再试" } });
+          } else {
+            feedbackToast({ error: { message: e?.message || "重启失败，请稍后重试" } });
+          }
+        } finally {
+          setRestarting(false);
+        }
+      },
+    });
   };
 
   const handleSave = async () => {
@@ -302,7 +331,7 @@ export const AgentProfile = () => {
 
       {/* 右侧主区 */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex h-12 items-center border-b border-(--gap-text) px-4">
+        <div className="flex h-12 items-center justify-between border-b border-(--gap-text) px-4">
           <span className="text-sm text-(--sub-text)">
             {currentAgent ? (
               <>
@@ -313,6 +342,16 @@ export const AgentProfile = () => {
               "智能体人设 / 配置"
             )}
           </span>
+          {currentAgentID && (
+            <Button
+              danger
+              icon={<ReloadOutlined />}
+              loading={restarting}
+              onClick={handleRestart}
+            >
+              重启智能体
+            </Button>
+          )}
         </div>
         {renderMain()}
       </div>

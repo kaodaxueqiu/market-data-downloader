@@ -148,6 +148,11 @@ jobs:
           fi
         shell: bash
 
+      # 宿主启动时比对此文件与 IM 写入本地的版本号，不一致则清理 IM 缓存；值需带 v 前缀，与 IM 的 VITE_APP_VERSION 一致
+      - name: Write IM version file
+        run: echo '{"version":"v${{ steps.im-version.outputs.version }}"}' > resources/im/im-version.json && cat resources/im/im-version.json
+        shell: bash
+
       # ── 构建量化平台 ──
       - name: Install dependencies
         run: npm install

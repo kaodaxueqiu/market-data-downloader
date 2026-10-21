@@ -1,3 +1,4 @@
+import { ReloadOutlined } from "@ant-design/icons";
 import { CbEvents, GroupStatus } from "@openim/wasm-client-sdk";
 import {
   GroupAtType,
@@ -12,10 +13,13 @@ import {
   WSEvent,
 } from "@openim/wasm-client-sdk";
 import { useQuery } from "@tanstack/react-query";
-import { Layout, Popover, Tooltip, Typography } from "antd";
+import { Layout, Modal, Popover, Tooltip, Typography } from "antd";
 import clsx from "clsx";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+
+import { restartAgent } from "@/api/services/agentOps";
+import { feedbackToast } from "@/utils/feedback";
 
 import type { Agent } from "@/api/types/agent";
 import group_member from "@/assets/images/chatHeader/group_member.png";
@@ -49,6 +53,7 @@ const ChatHeader = ({
   agent?: Agent;
 }) => {
   const { t } = useTranslation();
+  const [restarting, setRestarting] = useState(false);
   const singleSettingRef = useRef<OverlayVisibleHandle>(null);
   const groupSettingRef = useRef<OverlayVisibleHandle>(null);
   const searchMessageRef = useRef<OverlayVisibleHandle>(null);
@@ -161,6 +166,34 @@ const ChatHeader = ({
     }
   };
 
+  const handleRestartAgent = () => {
+    const agentID = currentConversation?.userID;
+    if (!agentID) return;
+    Modal.confirm({
+      title: "重启智能体",
+      content: `确定要重启「${agent?.nickname || agentID}」吗？重启后智能体需要约 60 秒恢复。`,
+      okText: "确认重启",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        setRestarting(true);
+        try {
+          await restartAgent(agentID);
+          feedbackToast({ msg: "已提交重启，约 60 秒后智能体恢复" });
+        } catch (error) {
+          const e = error as { code?: string; message?: string };
+          if (e?.code === "RESTART_TOO_FREQUENT") {
+            feedbackToast({ error: { message: "重启过于频繁，请稍后再试" } });
+          } else {
+            feedbackToast({ error: { message: e?.message || "重启失败，请稍后重试" } });
+          }
+        } finally {
+          setRestarting(false);
+        }
+      },
+    });
+  };
+
   const isNotificationSession =
     currentConversation?.conversationType === SessionType.Notification;
   const isSingleSession = currentConversation?.conversationType === SessionType.Single;
@@ -227,6 +260,15 @@ const ChatHeader = ({
                   </Tooltip>
                 );
               })}
+              {agent && (
+                <Tooltip title="重启智能体">
+                  <ReloadOutlined
+                    className="ml-5 cursor-pointer text-xl text-red-500"
+                    spin={restarting}
+                    onClick={handleRestartAgent}
+                  />
+                </Tooltip>
+              )}
             </div>
           )}
         </div>
