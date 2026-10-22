@@ -79,6 +79,13 @@ const router = createHashRouter([
               return { Component: TaskList };
             },
           },
+          {
+            path: "my-agents",
+            async lazy() {
+              const { MyAgents } = await import("@/pages/myAgents");
+              return { Component: MyAgents };
+            },
+          },
         ],
       },
       {
