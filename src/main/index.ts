@@ -7180,6 +7180,7 @@ ipcMain.handle('research:getList', async (_event, params: {
   status?: string
   keyword?: string
   research_mode?: string
+  admission_passed?: boolean
   start_date?: string
   end_date?: string
   sort_by?: string
@@ -7209,6 +7210,7 @@ ipcMain.handle('research:getList', async (_event, params: {
           status: params.status,
           keyword: params.keyword,
           research_mode: params.research_mode,
+          admission_passed: params.admission_passed,
           start_date: params.start_date,
           end_date: params.end_date,
           sort_by: params.sort_by || 'updated_at',
@@ -7274,6 +7276,7 @@ ipcMain.handle('research:getStats', async (_event, params?: {
   status?: string
   keyword?: string
   research_mode?: string
+  admission_passed?: boolean
   start_date?: string
   end_date?: string
 }) => {
@@ -7292,6 +7295,7 @@ ipcMain.handle('research:getStats', async (_event, params?: {
           status: params?.status || undefined,
           keyword: params?.keyword || undefined,
           research_mode: params?.research_mode || undefined,
+          admission_passed: params?.admission_passed,
           start_date: params?.start_date || undefined,
           end_date: params?.end_date || undefined
         },

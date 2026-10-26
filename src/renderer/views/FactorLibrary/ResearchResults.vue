@@ -33,7 +33,7 @@
           v-model="filters.status"
           placeholder="状态"
           clearable
-          style="width: 110px;"
+          style="width: 120px;"
           @change="handleFilterChange"
         >
           <el-option label="等待执行" value="pending" />
@@ -41,6 +41,8 @@
           <el-option label="已完成" value="completed" />
           <el-option label="执行失败" value="failed" />
           <el-option label="已取消" value="cancelled" />
+          <el-option label="审核通过" value="admission_passed" />
+          <el-option label="审核未通过" value="admission_failed" />
         </el-select>
         <el-select
           v-model="filters.researchMode"
@@ -166,33 +168,40 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="状态" align="center" min-width="90">
+      <el-table-column label="状态" align="center" min-width="110">
         <template #default="{ row }">
           <div class="status-wrapper">
-            <span :class="['status-text', row.status]">
-              {{ getStatusName(row.status) }}
-            </span>
-            <template v-if="row.status === 'running'">
-              <div class="progress-info">
-                <el-progress
-                  :percentage="row.progress || 0"
-                  :stroke-width="4"
-                  :show-text="false"
-                  style="width: 80px;"
-                />
-                <span class="progress-percent">{{ row.progress || 0 }}%</span>
-              </div>
-            </template>
-            <el-tooltip
-              v-else-if="row.status === 'failed' && row.error_message"
-              effect="dark"
-              placement="top"
-              :content="row.error_message"
-            >
-              <span class="error-brief">
-                {{ row.error_message.length > 40 ? row.error_message.slice(0, 40) + '…' : row.error_message }}
+            <template v-if="row.research_mode === 'admission' && row.status === 'completed'">
+              <span :class="row.admission_passed === true ? 'status-text admission-passed' : 'status-text admission-failed'">
+                {{ row.admission_passed === true ? '✓ 审核通过' : '✗ 审核未通过' }}
               </span>
-            </el-tooltip>
+            </template>
+            <template v-else>
+              <span :class="['status-text', row.status]">
+                {{ getStatusName(row.status) }}
+              </span>
+              <template v-if="row.status === 'running'">
+                <div class="progress-info">
+                  <el-progress
+                    :percentage="row.progress || 0"
+                    :stroke-width="4"
+                    :show-text="false"
+                    style="width: 80px;"
+                  />
+                  <span class="progress-percent">{{ row.progress || 0 }}%</span>
+                </div>
+              </template>
+              <el-tooltip
+                v-else-if="row.status === 'failed' && row.error_message"
+                effect="dark"
+                placement="top"
+                :content="row.error_message"
+              >
+                <span class="error-brief">
+                  {{ row.error_message.length > 40 ? row.error_message.slice(0, 40) + '…' : row.error_message }}
+                </span>
+              </el-tooltip>
+            </template>
           </div>
         </template>
       </el-table-column>
@@ -492,11 +501,13 @@ const taskDetail = ref<any>(null)
 // 加载统计信息（跟随当前筛选条件）
 const loadStats = async () => {
   try {
+    const isAdmissionFilter = filters.value.status === 'admission_passed' || filters.value.status === 'admission_failed'
     const res = await window.electronAPI.research.getStats({
       researcher: filters.value.researcher || undefined,
-      status: filters.value.status || undefined,
+      status: isAdmissionFilter ? 'completed' : (filters.value.status || undefined),
       keyword: filters.value.keyword || undefined,
-      research_mode: filters.value.researchMode || undefined,
+      research_mode: isAdmissionFilter ? 'admission' : (filters.value.researchMode || undefined),
+      admission_passed: isAdmissionFilter ? filters.value.status === 'admission_passed' : undefined,
       start_date: filters.value.dateRange?.[0] || undefined,
       end_date: filters.value.dateRange?.[1] || undefined
     })
@@ -524,13 +535,29 @@ const loadResearchers = async () => {
 const loadList = async () => {
   loading.value = true
   try {
+    // 筛选"审核通过/未通过"时,自动锁定 admission + completed
+    let apiStatus: string | undefined = filters.value.status
+    let apiResearchMode: string | undefined = filters.value.researchMode
+    let localAdmissionFilter: boolean | null = null
+    
+    if (filters.value.status === 'admission_passed') {
+      apiStatus = 'completed'
+      apiResearchMode = 'admission'
+      localAdmissionFilter = true
+    } else if (filters.value.status === 'admission_failed') {
+      apiStatus = 'completed'
+      apiResearchMode = 'admission'
+      localAdmissionFilter = false
+    }
+
     const res = await window.electronAPI.research.getList({
       page: pagination.value.page,
       page_size: pagination.value.page_size,
       researcher: filters.value.researcher || undefined,
-      status: filters.value.status || undefined,
+      status: apiStatus || undefined,
       keyword: filters.value.keyword || undefined,
-      research_mode: filters.value.researchMode || undefined,
+      research_mode: apiResearchMode || undefined,
+      admission_passed: localAdmissionFilter !== null ? localAdmissionFilter : undefined,
       start_date: filters.value.dateRange?.[0] || undefined,
       end_date: filters.value.dateRange?.[1] || undefined,
       sort_by: sort.value.sort_by,
@@ -1138,6 +1165,8 @@ onMounted(() => {
       &.completed { color: #16a34a; background: #dcfce7; }
       &.failed { color: #dc2626; background: #fee2e2; }
       &.cancelled { color: #64748b; background: #f1f5f9; }
+      &.admission-passed { color: #16a34a; background: #dcfce7; &::before { display: none; } }
+      &.admission-failed { color: #dc2626; background: #fee2e2; &::before { display: none; } }
     }
 
     .progress-info {
