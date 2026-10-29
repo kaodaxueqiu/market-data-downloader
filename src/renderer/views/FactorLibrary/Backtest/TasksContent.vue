@@ -58,6 +58,19 @@
         />
       </div>
       <div class="toolbar-right">
+        <el-popover placement="bottom-end" width="200" trigger="click">
+          <template #reference>
+            <el-button :icon="Setting">列设置</el-button>
+          </template>
+          <div class="column-settings">
+            <div style="font-weight: 600; margin-bottom: 8px;">显示列</div>
+            <el-checkbox-group v-model="visibleColumns">
+              <div v-for="col in allColumns" :key="col.prop">
+                <el-checkbox :label="col.prop">{{ col.label }}</el-checkbox>
+              </div>
+            </el-checkbox-group>
+          </div>
+        </el-popover>
         <el-button @click="clearAllFilters" :disabled="!hasActiveFilters">
           清除筛选
         </el-button>
@@ -100,9 +113,10 @@
       @sort-change="handleTableSortChange"
       @filter-change="handleTableFilterChange"
     >
-      <el-table-column type="index" label="#" width="50" align="center" />
+      <el-table-column v-if="isVisible('index')" type="index" label="#" width="50" align="center" />
       
       <el-table-column
+        v-if="isVisible('task_name')"
         label="任务名称"
         prop="task_name"
         align="center"
@@ -114,7 +128,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="任务ID" width="100" align="center" show-overflow-tooltip>
+      <el-table-column v-if="isVisible('task_id')" label="任务ID" width="100" align="center" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="id-cell" @click="copyText(row.task_id)" title="点击复制">
             {{ row.task_id || '-' }}
@@ -122,7 +136,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="因子ID" width="90" align="center" show-overflow-tooltip>
+      <el-table-column v-if="isVisible('source_factor_id')" label="因子ID" width="90" align="center" show-overflow-tooltip>
         <template #default="{ row }">
           <span
             v-if="row.source_factor_id"
@@ -134,7 +148,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="运行类型" align="center" width="112">
+      <el-table-column v-if="isVisible('research_mode')" label="运行类型" align="center" width="112">
         <template #default="{ row }">
           <span :class="['run-mode', row.research_mode]">
             {{ getResearchModeName(row.research_mode) }}
@@ -142,20 +156,27 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="引擎版本" align="center" width="90">
+      <el-table-column v-if="isVisible('engine_version')" label="引擎版本" align="center" width="90">
         <template #default="{ row }">
           <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
           <span v-else style="color: #cbd5e1;">-</span>
         </template>
       </el-table-column>
       
-      <el-table-column label="执行人" align="center">
+      <el-table-column v-if="isVisible('user_id')" label="研究员" align="center">
         <template #default="{ row }">
-          {{ row.user_id || '-' }}
+          {{ row.user_id || row.researcher || '-' }}
+        </template>
+      </el-table-column>
+
+      <el-table-column v-if="isVisible('universe')" label="股票池" align="center">
+        <template #default="{ row }">
+          {{ getUniverseName(row) }}
         </template>
       </el-table-column>
       
       <el-table-column 
+        v-if="isVisible('status')"
         label="状态" 
         align="center"
         column-key="status"
@@ -228,6 +249,7 @@
       </el-table-column>
       
       <el-table-column 
+        v-if="isVisible('rank_ic_5')"
         label="5日RankIC" 
         align="center"
         prop="rank_ic_5"
@@ -241,6 +263,7 @@
       </el-table-column>
       
       <el-table-column 
+        v-if="isVisible('rank_ic_10')"
         label="10日RankIC" 
         align="center"
         prop="rank_ic_10"
@@ -253,8 +276,37 @@
         </template>
       </el-table-column>
       
+      <el-table-column
+        v-if="isVisible('annual_return_5')"
+        prop="annual_return_5"
+        label="5日年化收益"
+        align="center"
+        sortable="custom"
+        width="115"
+      >
+        <template #default="{ row }">
+          <span v-if="row.status === 'completed'" :class="getReturnClass(getPeriodAnnualReturn(row, 5))">
+            {{ formatPercent(getPeriodAnnualReturn(row, 5)) }}
+          </span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      
       <el-table-column 
-        label="运行时间" 
+        v-if="isVisible('completed_at')"
+        label="完成时间" 
+        align="center"
+        prop="completed_at"
+        width="135"
+      >
+        <template #default="{ row }">
+          {{ row.status === 'completed' ? formatDate(row.completed_at) : '-' }}
+        </template>
+      </el-table-column>
+      
+      <el-table-column 
+        v-if="isVisible('created_at')"
+        label="创建时间" 
         align="center"
         prop="created_at"
         width="135"
@@ -264,7 +316,7 @@
         </template>
       </el-table-column>
       
-      <el-table-column label="耗时" align="center" min-width="90">
+      <el-table-column v-if="isVisible('duration')" label="耗时" align="center" min-width="90">
         <template #default="{ row }">
           <span v-if="row.completed_at">{{ calcDuration(row.started_at, row.completed_at) }}</span>
           <span v-else-if="row.status === 'running'" class="running-text">运行中</span>
@@ -272,7 +324,7 @@
         </template>
       </el-table-column>
       
-      <el-table-column label="操作" min-width="190" align="center">
+      <el-table-column v-if="isVisible('operation')" label="操作" min-width="190" align="center">
         <template #default="{ row }">
           <div class="action-cell">
             <button class="action-btn primary" @click="viewTaskDetail(row)">详情</button>
@@ -513,7 +565,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getFriendlyError } from '@/utils/friendlyError'
@@ -526,6 +578,57 @@ const emit = defineEmits<{
 }>()
 
 const loading = ref(false)
+
+// 列配置
+const allColumns = [
+  { prop: 'index', label: '#' },
+  { prop: 'task_name', label: '任务名称' },
+  { prop: 'task_id', label: '任务ID' },
+  { prop: 'source_factor_id', label: '因子ID' },
+  { prop: 'research_mode', label: '运行类型' },
+  { prop: 'engine_version', label: '引擎版本' },
+  { prop: 'user_id', label: '研究员' },
+  { prop: 'universe', label: '股票池' },
+  { prop: 'rank_ic_5', label: '5日RankIC' },
+  { prop: 'rank_ic_10', label: '10日RankIC' },
+  { prop: 'annual_return_5', label: '5日年化收益' },
+  { prop: 'status', label: '状态' },
+  { prop: 'completed_at', label: '完成时间' },
+  { prop: 'created_at', label: '创建时间' },
+  { prop: 'duration', label: '耗时' },
+  { prop: 'operation', label: '操作' }
+]
+
+const defaultVisibleColumns = [
+  'index',
+  'task_name',
+  'task_id',
+  'source_factor_id',
+  'research_mode',
+  'engine_version',
+  'user_id',
+  'universe',
+  'rank_ic_5',
+  'rank_ic_10',
+  'annual_return_5',
+  'status',
+  'completed_at',
+  'operation'
+]
+
+const visibleColumns = ref<string[]>(
+  JSON.parse(
+    localStorage.getItem('tasks_content_cols') ||
+    JSON.stringify(defaultVisibleColumns)
+  )
+)
+
+watch(visibleColumns, (val) => {
+  localStorage.setItem('tasks_content_cols', JSON.stringify(val))
+})
+
+const isVisible = (prop: string) => visibleColumns.value.includes(prop)
+
 // 点击复制 ID
 const copyText = (text?: string) => {
   if (!text) return
@@ -681,6 +784,33 @@ const formatRankIc = (value: number | null): string => {
   return value.toFixed(4)
 }
 
+// 获取指定周期的年化收益
+const getPeriodAnnualReturn = (row: any, period: number): number | null => {
+  const periodStats = row.period_ic_stats || row.factor_result?.period_ic_stats
+  if (!Array.isArray(periodStats)) return null
+  const stat = periodStats.find((p: any) => p.period === period)
+  return stat?.annual_return ?? null
+}
+
+const formatPercent = (value: number | null): string => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return DASH
+  return `${(value * 100).toFixed(2)}%`
+}
+
+const getReturnClass = (value: number | null): string => {
+  if (value === null || value === undefined) return ''
+  if (value > 0) return 'rank-ic-good'
+  if (value < 0) return 'rank-ic-bad'
+  return 'rank-ic-neutral'
+}
+
+// 格式化股票池展示
+const getUniverseName = (row: any): string => {
+  const uni = row.universe || row.task_config?.universe
+  if (!uni) return '-'
+  return getUniverseDisplay(uni)
+}
+
 // 根据 Rank IC 值返回样式类
 const getRankIcClass = (value: number | null): string => {
   if (value === null || value === undefined) return ''
@@ -780,9 +910,11 @@ const handleTableSortChange = ({ prop, order }: { prop: string, order: string | 
     sortField.value = 'created_at'
     sortOrder.value = 'desc'
   } else {
-    sortField.value = prop
+    // 统一映射参数，例如前端 annual_return_5 对应后端 annual_return_5
+    sortField.value = prop === 'annual_return_5' ? 'annual_return_5' : prop
     sortOrder.value = order === 'ascending' ? 'asc' : 'desc'
   }
+  currentPage.value = 1
   loadTasks()
 }
 

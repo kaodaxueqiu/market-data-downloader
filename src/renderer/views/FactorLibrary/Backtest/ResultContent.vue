@@ -1055,11 +1055,26 @@
             <div class="detail-panels">
               <!-- 多周期完整指标对比 -->
               <div class="detail-panel" v-if="periodComparisonRows(factor, index).length">
-                <div class="panel-title">
-                  <el-icon><TrendCharts /></el-icon>
-                  <el-tooltip content="年化收益为因子最大组纯多头几何年化口径" placement="top">
-                    <span>多周期完整指标对比</span>
-                  </el-tooltip>
+                <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <el-icon><TrendCharts /></el-icon>
+                    <el-tooltip content="年化收益为因子最大组纯多头几何年化口径" placement="top">
+                      <span>多周期完整指标对比</span>
+                    </el-tooltip>
+                  </div>
+                  <el-popover placement="bottom-end" width="200" trigger="click">
+                    <template #reference>
+                      <el-button link :icon="Setting" size="small" style="color: #94a3b8;">列设置</el-button>
+                    </template>
+                    <div class="column-settings">
+                      <div style="font-weight: 600; margin-bottom: 8px; font-size: 12px;">显示列</div>
+                      <el-checkbox-group v-model="periodTableCols" style="display: flex; flex-direction: column; gap: 6px;">
+                        <div v-for="col in allPeriodCols" :key="col.prop" style="font-size: 12px;">
+                          <el-checkbox :label="col.prop">{{ col.label }}</el-checkbox>
+                        </div>
+                      </el-checkbox-group>
+                    </div>
+                  </el-popover>
                 </div>
                 <div class="panel-body">
                   <el-table 
@@ -1068,37 +1083,37 @@
                     stripe
                     :row-class-name="(data: any) => data.row.period === selectedPeriods[index] ? 'selected-row' : ''"
                   >
-                    <el-table-column prop="period" label="周期" width="70" fixed>
+                    <el-table-column v-if="isPeriodColVisible('period')" prop="period" label="周期" width="70" fixed>
                       <template #default="{ row }">
                         <span :class="{ 'period-active': row.period === selectedPeriods[index] }">
                           {{ row.period }}日
                         </span>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="rank_ic_mean" label="Rank IC" width="90">
+                    <el-table-column v-if="isPeriodColVisible('rank_ic_mean')" prop="rank_ic_mean" label="Rank IC" width="90">
                       <template #default="{ row }">
                         <span :class="getValueClass(row.rank_ic_mean)">{{ formatNumber(row.rank_ic_mean, 4) }}</span>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="annual_return" :label="isYearSelected(index) ? '区间收益' : '多头年化'" width="90">
+                    <el-table-column v-if="isPeriodColVisible('annual_return')" prop="annual_return" :label="isYearSelected(index) ? '区间收益' : '多头年化'" width="90">
                       <template #default="{ row }">
                         <span :class="getValueClass(row.annual_return)">{{ formatPercent(row.annual_return) }}</span>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="sharpe_ratio" label="夏普" width="70">
+                    <el-table-column v-if="isPeriodColVisible('sharpe_ratio')" prop="sharpe_ratio" label="夏普" width="70">
                       <template #default="{ row }">
                         <span :class="getValueClass(row.sharpe_ratio)">{{ formatNumber(row.sharpe_ratio, 2) }}</span>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="max_drawdown" label="最大回撤" width="90">
+                    <el-table-column v-if="isPeriodColVisible('max_drawdown')" prop="max_drawdown" label="最大回撤" width="90">
                       <template #default="{ row }">
                         <span class="negative">{{ formatPercent(row.max_drawdown) }}</span>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="win_rate" label="胜率" width="70">
+                    <el-table-column v-if="isPeriodColVisible('win_rate')" prop="win_rate" label="胜率" width="70">
                       <template #default="{ row }">{{ formatPercent(row.win_rate) }}</template>
                     </el-table-column>
-                    <el-table-column prop="monotonicity" label="单调性" width="80">
+                    <el-table-column v-if="isPeriodColVisible('monotonicity')" prop="monotonicity" label="单调性" width="80">
                       <template #default="{ row }">
                         <span :class="getMonotonicityClass(row.monotonicity)">{{ formatNumber(row.monotonicity, 2) }}</span>
                       </template>
@@ -1451,10 +1466,25 @@
           <el-collapse v-if="dailyMetrics.length > 0 || dailyMetricsLoading" class="daily-collapse">
             <el-collapse-item>
               <template #title>
-                <div class="collapse-title">
-                  <el-icon><Document /></el-icon>
-                  每日明细 ({{ dailyMetricsTotal }}条记录)
-                  <el-icon v-if="dailyMetricsLoading" class="is-loading" style="margin-left: 8px;"><Loading /></el-icon>
+                <div class="collapse-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <el-icon><Document /></el-icon>
+                    每日明细 ({{ dailyMetricsTotal }}条记录)
+                    <el-icon v-if="dailyMetricsLoading" class="is-loading" style="margin-left: 8px;"><Loading /></el-icon>
+                  </div>
+                  <el-popover placement="bottom-end" width="200" trigger="click" @click.stop>
+                    <template #reference>
+                      <el-button link :icon="Setting" size="small" style="color: #94a3b8;" @click.stop>列设置</el-button>
+                    </template>
+                    <div class="column-settings">
+                      <div style="font-weight: 600; margin-bottom: 8px; font-size: 12px;">显示列</div>
+                      <el-checkbox-group v-model="dailyTableCols" style="display: flex; flex-direction: column; gap: 6px;">
+                        <div v-for="col in allDailyCols" :key="col.prop" style="font-size: 12px;">
+                          <el-checkbox :label="col.prop">{{ col.label }}</el-checkbox>
+                        </div>
+                      </el-checkbox-group>
+                    </div>
+                  </el-popover>
                 </div>
               </template>
               <el-table 
@@ -1464,8 +1494,8 @@
                 max-height="400"
                 v-loading="dailyMetricsLoading && dailyMetrics.length === 0"
               >
-                <el-table-column prop="date" label="日期" width="110" fixed />
-                <el-table-column label="Rank IC" width="110">
+                <el-table-column v-if="isDailyColVisible('date')" prop="date" label="日期" width="110" fixed />
+                <el-table-column v-if="isDailyColVisible('rank_ic')" label="Rank IC" width="110">
                   <template #header>
                     Rank IC ({{ selectedPeriods[0] || '-' }}日)
                   </template>
@@ -1476,24 +1506,26 @@
                   </template>
                 </el-table-column>
                 <!-- 10组分层收益 -->
-                <el-table-column 
-                  v-for="groupIdx in 10" 
-                  :key="'group_' + groupIdx"
-                  :label="'第' + groupIdx + '组'"
-                  width="85"
-                >
-                  <template #default="{ row }">
-                    <span :class="getValueClass(row.layer_returns?.[groupIdx - 1])">
-                      {{ formatPercent(row.layer_returns?.[groupIdx - 1]) }}
-                    </span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="turnover" label="换手率" width="90">
+                <template v-if="isDailyColVisible('layers')">
+                  <el-table-column 
+                    v-for="groupIdx in 10" 
+                    :key="'group_' + groupIdx"
+                    :label="'第' + groupIdx + '组'"
+                    width="85"
+                  >
+                    <template #default="{ row }">
+                      <span :class="getValueClass(row.layer_returns?.[groupIdx - 1])">
+                        {{ formatPercent(row.layer_returns?.[groupIdx - 1]) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                </template>
+                <el-table-column v-if="isDailyColVisible('turnover')" prop="turnover" label="换手率" width="90">
                   <template #default="{ row }">{{ formatPercent(row.turnover) }}</template>
                 </el-table-column>
-                <el-table-column prop="num_stocks" label="股票数" width="80" />
+                <el-table-column v-if="isDailyColVisible('num_stocks')" prop="num_stocks" label="股票数" width="80" />
                 <!-- 动态基准列 -->
-                <template v-if="dailyMetrics[0]?.benchmark_returns?.length">
+                <template v-if="isDailyColVisible('benchmarks') && dailyMetrics[0]?.benchmark_returns?.length">
                   <el-table-column 
                     v-for="bm in dailyMetrics[0].benchmark_returns" 
                     :key="bm.benchmark_code + '_return'"
@@ -1617,7 +1649,7 @@ import { ElMessage } from 'element-plus'
 import { 
   ArrowLeft, ArrowRight, Refresh, Loading, Calendar, Timer, 
   CircleCheck, TrendCharts, Histogram, DataLine, Document, Download, Tickets, Clock,
-  WarningFilled, InfoFilled, SetUp, Key
+  WarningFilled, InfoFilled, SetUp, Key, Setting
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import FactorValuesSection from './FactorValuesSection.vue'
@@ -1644,6 +1676,37 @@ const completedTasks = ref<any[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(12)
+
+// 列设置：多周期完整指标对比
+const allPeriodCols = [
+  { prop: 'period', label: '周期' },
+  { prop: 'rank_ic_mean', label: 'Rank IC' },
+  { prop: 'annual_return', label: '年化/区间收益' },
+  { prop: 'sharpe_ratio', label: '夏普' },
+  { prop: 'max_drawdown', label: '最大回撤' },
+  { prop: 'win_rate', label: '胜率' },
+  { prop: 'monotonicity', label: '单调性' }
+]
+const periodTableCols = ref<string[]>(JSON.parse(localStorage.getItem('task_detail_period_cols') || JSON.stringify(allPeriodCols.map(c => c.prop))))
+watch(periodTableCols, (val) => {
+  localStorage.setItem('task_detail_period_cols', JSON.stringify(val))
+})
+const isPeriodColVisible = (prop: string) => periodTableCols.value.includes(prop)
+
+// 列设置：每日明细
+const allDailyCols = [
+  { prop: 'date', label: '日期' },
+  { prop: 'rank_ic', label: 'Rank IC' },
+  { prop: 'layers', label: '分层收益(1-10组)' },
+  { prop: 'turnover', label: '换手率' },
+  { prop: 'num_stocks', label: '股票数' },
+  { prop: 'benchmarks', label: '基准及超额' }
+]
+const dailyTableCols = ref<string[]>(JSON.parse(localStorage.getItem('task_detail_daily_cols') || JSON.stringify(allDailyCols.map(c => c.prop))))
+watch(dailyTableCols, (val) => {
+  localStorage.setItem('task_detail_daily_cols', JSON.stringify(val))
+})
+const isDailyColVisible = (prop: string) => dailyTableCols.value.includes(prop)
 
 // 详情状态
 const detailLoading = ref(false)

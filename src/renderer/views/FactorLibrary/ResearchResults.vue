@@ -77,6 +77,19 @@
         />
       </div>
       <div class="toolbar-right">
+        <el-popover placement="bottom-end" width="200" trigger="click">
+          <template #reference>
+            <el-button :icon="Setting">列设置</el-button>
+          </template>
+          <div class="column-settings">
+            <div style="font-weight: 600; margin-bottom: 8px;">显示列</div>
+            <el-checkbox-group v-model="visibleColumns">
+              <div v-for="col in allColumns" :key="col.prop">
+                <el-checkbox :label="col.prop">{{ col.label }}</el-checkbox>
+              </div>
+            </el-checkbox-group>
+          </div>
+        </el-popover>
         <el-button @click="resetFilters" :disabled="!hasActiveFilters">清除筛选</el-button>
         <el-button :icon="Refresh" @click="loadList" :loading="loading">刷新</el-button>
       </div>
@@ -103,15 +116,15 @@
       :cell-style="{ padding: '8px 10px', color: '#475569', fontSize: '12px' }"
       @sort-change="handleSortChange"
     >
-      <el-table-column type="index" label="#" width="55" align="center" />
+      <el-table-column v-if="isVisible('index')" type="index" label="#" width="55" align="center" />
 
-      <el-table-column prop="task_name" label="任务名称" show-overflow-tooltip>
+      <el-table-column v-if="isVisible('task_name')" prop="task_name" label="任务名称" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="task-name-text">{{ row.task_name }}</span>
         </template>
       </el-table-column>
 
-      <el-table-column label="任务ID" width="100" align="center" show-overflow-tooltip>
+      <el-table-column v-if="isVisible('task_id')" label="任务ID" width="100" align="center" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="id-cell" @click="copyText(row.task_id)" title="点击复制">
             {{ row.task_id || '-' }}
@@ -119,7 +132,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="因子ID" width="90" align="center" show-overflow-tooltip>
+      <el-table-column v-if="isVisible('factor_id')" label="因子ID" width="90" align="center" show-overflow-tooltip>
         <template #default="{ row }">
           <span
             v-if="row.factor_id"
@@ -131,7 +144,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="运行类型" align="center" width="112">
+      <el-table-column v-if="isVisible('research_mode')" label="运行类型" align="center" width="112">
         <template #default="{ row }">
           <span :class="['run-mode', row.research_mode]">
             {{ getResearchModeName(row.research_mode) }}
@@ -139,18 +152,18 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="引擎版本" align="center" width="90">
+      <el-table-column v-if="isVisible('engine_version')" label="引擎版本" align="center" width="90">
         <template #default="{ row }">
           <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
           <span v-else style="color: #cbd5e1;">-</span>
         </template>
       </el-table-column>
 
-      <el-table-column prop="researcher" label="研究员" align="center" />
+      <el-table-column v-if="isVisible('researcher')" prop="researcher" label="研究员" align="center" />
 
-      <el-table-column prop="universe" label="股票池" align="center" />
+      <el-table-column v-if="isVisible('universe')" prop="universe" label="股票池" align="center" />
 
-      <el-table-column label="5日RankIC" align="center">
+      <el-table-column v-if="isVisible('rank_ic_5')" label="5日RankIC" align="center">
         <template #default="{ row }">
           <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 5))">
             {{ formatRankIc(getPeriodRankIc(row, 5)) }}
@@ -159,7 +172,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="10日RankIC" align="center">
+      <el-table-column v-if="isVisible('rank_ic_10')" label="10日RankIC" align="center">
         <template #default="{ row }">
           <span v-if="row.status === 'completed'" :class="getRankIcClass(getPeriodRankIc(row, 10))">
             {{ formatRankIc(getPeriodRankIc(row, 10)) }}
@@ -168,7 +181,23 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="状态" align="center" min-width="110">
+      <el-table-column
+        v-if="isVisible('annual_return_5')"
+        prop="annual_return_5"
+        label="5日年化收益"
+        align="center"
+        sortable="custom"
+        width="115"
+      >
+        <template #default="{ row }">
+          <span v-if="row.status === 'completed'" :class="getReturnClass(getPeriodAnnualReturn(row, 5))">
+            {{ formatPercent(getPeriodAnnualReturn(row, 5)) }}
+          </span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column v-if="isVisible('status')" label="状态" align="center" min-width="110">
         <template #default="{ row }">
           <div class="status-wrapper">
             <template v-if="row.research_mode === 'admission' && row.status === 'completed'">
@@ -207,6 +236,7 @@
       </el-table-column>
 
       <el-table-column
+        v-if="isVisible('completed_at')"
         prop="completed_at"
         label="运行时间"
         align="center"
@@ -218,7 +248,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" min-width="130" align="center">
+      <el-table-column v-if="isVisible('operation')" label="操作" min-width="130" align="center">
         <template #default="{ row }">
           <div class="action-cell">
             <button class="action-btn primary" @click="viewDetail(row)">详情</button>
@@ -448,7 +478,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -464,6 +494,31 @@ const tasks = ref<any[]>([])
 const total = ref(0)
 const stats = ref<any>({})
 const researchers = ref<string[]>([])
+
+const allColumns = [
+  { prop: 'index', label: '#' },
+  { prop: 'task_name', label: '任务名称' },
+  { prop: 'task_id', label: '任务ID' },
+  { prop: 'factor_id', label: '因子ID' },
+  { prop: 'research_mode', label: '运行类型' },
+  { prop: 'engine_version', label: '引擎版本' },
+  { prop: 'researcher', label: '研究员' },
+  { prop: 'universe', label: '股票池' },
+  { prop: 'rank_ic_5', label: '5日RankIC' },
+  { prop: 'rank_ic_10', label: '10日RankIC' },
+  { prop: 'annual_return_5', label: '5日年化收益' },
+  { prop: 'status', label: '状态' },
+  { prop: 'completed_at', label: '运行时间' },
+  { prop: 'operation', label: '操作' }
+]
+
+const visibleColumns = ref<string[]>(JSON.parse(localStorage.getItem('research_results_cols') || JSON.stringify(allColumns.map(c => c.prop))))
+
+watch(visibleColumns, (val) => {
+  localStorage.setItem('research_results_cols', JSON.stringify(val))
+})
+
+const isVisible = (prop: string) => visibleColumns.value.includes(prop)
 
 // 筛选
 const filters = ref({
@@ -653,15 +708,34 @@ const goToFactor = (factorId?: string) => {
   router.push({ path: '/factor-library/my-factors', query: { factorId } })
 }
 
-// 获取指定周期的 Rank IC
-const getPeriodRankIc = (row: any, period: number): number | null => {
+// 获取指定周期的指标
+const getPeriodStat = (row: any, period: number): any => {
   const periodStats = row.period_ic_stats || row.factor_result?.period_ic_stats
   if (!Array.isArray(periodStats)) return null
-  const stat = periodStats.find((p: any) => p.period === period)
-  return stat?.rank_ic_mean ?? null
+  return periodStats.find((p: any) => p.period === period) || null
+}
+
+const getPeriodRankIc = (row: any, period: number): number | null => {
+  return getPeriodStat(row, period)?.rank_ic_mean ?? null
+}
+
+const getPeriodAnnualReturn = (row: any, period: number): number | null => {
+  return getPeriodStat(row, period)?.annual_return ?? null
 }
 
 const DASH = '—'
+
+const formatPercent = (value: number | null): string => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return DASH
+  return `${(value * 100).toFixed(2)}%`
+}
+
+const getReturnClass = (value: number | null): string => {
+  if (value === null || value === undefined) return ''
+  if (value > 0) return 'rank-ic-good'
+  if (value < 0) return 'rank-ic-bad'
+  return 'rank-ic-neutral'
+}
 
 // 格式化 Rank IC 显示
 const formatRankIc = (value: number | null): string => {
