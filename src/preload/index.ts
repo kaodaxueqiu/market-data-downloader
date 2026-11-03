@@ -289,6 +289,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:downloadLedgerAudit', taskId, period, group),
     myFactorCollinearity: (taskId: string, topK?: number, minOverlap?: number) =>
       ipcRenderer.invoke('backtest:myFactorCollinearity', taskId, topK, minOverlap),
+    listAdmittedFactors: (includeReplacements = true) =>
+      ipcRenderer.invoke('backtest:listAdmittedFactors', includeReplacements),
+    getAdmittedFactorDetail: (factorId: string) =>
+      ipcRenderer.invoke('backtest:getAdmittedFactorDetail', factorId),
+    replaceAdmittedFactor: (newTaskId: string, oldFactorId: string, dryRun: boolean) =>
+      ipcRenderer.invoke('backtest:replaceAdmittedFactor', newTaskId, oldFactorId, dryRun),
     getStockPools: () => ipcRenderer.invoke('backtest:getStockPools'),
     getPriceTypeOptions: () => ipcRenderer.invoke('backtest:getPriceTypeOptions'),
     getAdmissionConfig: () => ipcRenderer.invoke('backtest:getAdmissionConfig'),
@@ -926,6 +932,9 @@ declare global {
         downloadRankIC: (taskId: string, period: number) => Promise<{ success: boolean; filePath?: string; error?: string }>
         downloadLedgerAudit: (taskId: string, period: number, group: number) => Promise<{ success: boolean; filePath?: string; error?: string }>
         myFactorCollinearity: (taskId: string, topK?: number, minOverlap?: number) => Promise<{ success: boolean; data?: any; error?: string }>
+        listAdmittedFactors: (includeReplacements?: boolean) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
+        getAdmittedFactorDetail: (factorId: string) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
+        replaceAdmittedFactor: (newTaskId: string, oldFactorId: string, dryRun: boolean) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
         getPriceTypeOptions: () => Promise<{ success: boolean; data?: { rebalance_price_types?: Array<{ value: string; label: string; description?: string; category?: string }>; buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }>; time_filter_presets?: Array<{ name: string; start: string; end: string; description?: string }> }; error?: string }>
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>

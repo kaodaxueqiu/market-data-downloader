@@ -232,3 +232,83 @@ export interface IntermediateCreateResp {
   leakage?: LeakageCheckReport
   leakage_check_error?: string
 }
+
+// ---- 已入库因子管理与替换 ----
+export interface AdmittedFactorMetrics {
+  excess_sharpe?: number | null
+  excess_annual_return?: number | null
+  turnover_annual?: number | null
+  rank_ic_mean?: number | null
+  ic_mean?: number | null
+}
+
+export interface ReplacementOffer {
+  eligible: boolean
+  status: string
+  message?: string
+  threshold?: number
+  blocking_factor_id?: string | null
+  blocking_factor_name?: string | null
+  blocking_factor_is_self?: boolean
+  blocking_factor_display?: string
+  blocking_abs_corr?: number | null
+  new_metrics?: AdmittedFactorMetrics
+  old_metrics?: AdmittedFactorMetrics
+  better_rule?: string
+}
+
+export interface AdmittedFactor {
+  factor_id: string
+  factor_name: string
+  owner_id: string
+  admitted_task_id: string
+  admitted_at?: string
+  date_from?: string
+  date_to?: string
+  row_count?: number
+  stock_count?: number
+  metrics?: AdmittedFactorMetrics
+  owner_source?: 'values_owner' | 'backtest_task' | string
+}
+
+export interface ReplacementCandidate {
+  new_task_id: string
+  new_factor_id: string
+  new_factor_name: string
+  created_at?: string
+  offer: ReplacementOffer
+}
+
+export interface AdmittedFactorReplacement {
+  old_factor_id: string
+  new_factor_id: string
+  old_task_id: string
+  new_task_id: string
+  max_abs_corr: number
+  threshold: number
+  old_excess_sharpe?: number | null
+  new_excess_sharpe?: number | null
+  old_excess_annual_return?: number | null
+  new_excess_annual_return?: number | null
+  replaced_at: string
+  operator_id?: string
+}
+
+export interface AdmittedFactorListResponse {
+  status: string
+  factor_count: number
+  threshold: number
+  factors: AdmittedFactor[]
+  replacement_candidates?: ReplacementCandidate[]
+  replacements?: AdmittedFactorReplacement[]
+}
+
+export interface ReplaceAdmittedFactorResponse {
+  status: string
+  reason?: string
+  message?: string
+  old_factor_id?: string
+  new_factor_id?: string
+  rows_written?: number
+  rows_deleted?: number
+}

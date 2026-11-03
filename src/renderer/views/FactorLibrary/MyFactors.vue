@@ -1,5 +1,7 @@
 <template>
   <div class="my-factors-page">
+    <el-tabs v-model="activePageTab" class="page-tabs">
+      <el-tab-pane label="我的因子" name="factors">
     <!-- 加载中 -->
     <div v-if="pageLoading" class="loading-container">
       <el-icon class="is-loading" :size="40"><Loading /></el-icon>
@@ -2032,6 +2034,11 @@
         </el-button>
       </template>
     </el-dialog>
+      </el-tab-pane>
+      <el-tab-pane label="已入库因子" name="admitted" lazy class="admitted-pane">
+        <AdmittedFactors />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -2040,6 +2047,7 @@ import { ref, reactive, onMounted, computed, watch, nextTick, inject } from 'vue
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { previewPolars } from '@/utils/translatePreview'
+import AdmittedFactors from './AdmittedFactors.vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { python as pythonLang } from '@codemirror/lang-python'
 import { 
@@ -2050,6 +2058,10 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+const activePageTab = computed({
+  get: () => route.name === 'AdmittedFactors' ? 'admitted' : 'factors',
+  set: (tab: string) => router.push(tab === 'admitted' ? '/factor-library/admitted-factors' : '/factor-library/my-factors')
+})
 // 从回测任务页跳转过来时高亮的因子ID
 const highlightFactorId = ref<string | null>(null)
 
@@ -5519,6 +5531,27 @@ onMounted(async () => {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+}
+
+.page-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
+
+  :deep(.el-tabs__content) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  :deep(.el-tab-pane) {
+    height: 100%;
+  }
+
+  :deep(.admitted-pane) {
+    overflow: auto;
+  }
 }
 
 .main-content {

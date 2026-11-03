@@ -33,6 +33,12 @@ const routes: RouteRecordRaw[] = [
         meta: { menuId: 'my_factors' }
       },
       {
+        path: 'admitted-factors',
+        name: 'AdmittedFactors',
+        component: () => import('../views/FactorLibrary/MyFactors.vue'),
+        meta: { menuId: 'my_factors' }
+      },
+      {
         path: 'private-warehouse',
         name: 'PrivateWarehouse',
         component: () => import('../views/FactorLibrary/PrivateWarehouse.vue'),

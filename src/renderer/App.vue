@@ -29,13 +29,21 @@
                   </el-icon>
                   <span>{{ menu.name }}</span>
                 </template>
-                <el-menu-item 
-                  v-for="child in menu.children" 
-                  :key="child.id" 
-                  :index="child.path"
-                >
-                  {{ child.name }}
-                </el-menu-item>
+                <template v-for="child in menu.children" :key="child.id">
+                  <el-sub-menu v-if="child.children && child.children.length > 0" :index="child.path">
+                    <template #title>{{ child.name }}</template>
+                    <el-menu-item
+                      v-for="grandchild in child.children"
+                      :key="grandchild.id"
+                      :index="grandchild.path"
+                    >
+                      {{ grandchild.name }}
+                    </el-menu-item>
+                  </el-sub-menu>
+                  <el-menu-item v-else :index="child.path">
+                    {{ child.name }}
+                  </el-menu-item>
+                </template>
               </el-sub-menu>
               
               <!-- 无子菜单：普通菜单项 -->
@@ -305,7 +313,9 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 const route = useRoute()
 const router = useRouter()
 
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() =>
+  route.path === '/factor-library/admitted-factors' ? '/factor-library/my-factors' : route.path
+)
 const hasApiKey = ref(false)
 const appVersion = ref('1.6.1')
 const sidebarCollapsed = ref(false)
@@ -472,6 +482,7 @@ const childTitles: Record<string, string[]> = {
   '/factor-library': ['因子库'],
   '/factor-library/plaza': ['因子库', '因子广场'],
   '/factor-library/my-factors': ['因子库', '我的因子'],
+  '/factor-library/admitted-factors': ['因子库', '我的因子'],
   '/factor-library/private-warehouse': ['因子库', '私有数据仓库'],
   '/factor-library/submit': ['因子库', '提交因子'],
   '/factor-library/backtest': ['因子库', '单因子回测'],

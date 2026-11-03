@@ -465,11 +465,11 @@
                 <span>入库审核</span>
                 <el-tag
                   v-if="admissionReport?.decision"
-                  :type="admissionReport.decision === 'pass' ? 'success' : admissionReport.decision === 'reject' ? 'danger' : 'warning'"
+                  :type="admissionDecisionType"
                   effect="dark"
                   size="small"
                 >
-                  {{ admissionReport.decision === 'pass' ? '通过' : admissionReport.decision === 'reject' ? '拒绝' : '待复核' }}
+                  {{ admissionDecisionText }}
                 </el-tag>
               </div>
               <!-- P4: 原始数据展示 -->
@@ -488,6 +488,51 @@
                   </span>
                 </div>
               </div>
+
+              <div v-if="admissionReport?.decision === 'replaceable' && replacementOffer" class="replacement-offer">
+                <el-alert
+                  v-if="replacementOffer.message"
+                  :title="replacementOffer.message"
+                  type="warning"
+                  :closable="false"
+                  show-icon
+                />
+                <el-descriptions :column="2" border size="small" class="replacement-offer-meta">
+                  <el-descriptions-item label="相关已入库因子">
+                    {{ replacementOffer.blocking_factor_display || '-' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="相关性">
+                    {{ formatNumber(replacementOffer.blocking_abs_corr, 4) }}
+                  </el-descriptions-item>
+                  <el-descriptions-item v-if="replacementOffer.status !== 'blocked_other_owner'" label="阈值">
+                    {{ formatNumber(replacementOffer.threshold, 4) }}
+                  </el-descriptions-item>
+                </el-descriptions>
+                <el-table
+                  v-if="replacementOffer.status !== 'blocked_other_owner' && (replacementOffer.new_metrics || replacementOffer.old_metrics)"
+                  :data="replacementMetricRows"
+                  size="small"
+                  border
+                  class="replacement-offer-metrics"
+                >
+                  <el-table-column prop="label" label="指标" />
+                  <el-table-column label="当前因子" align="center">
+                    <template #default="{ row }">{{ row.format(replacementOffer.new_metrics?.[row.key]) }}</template>
+                  </el-table-column>
+                  <el-table-column label="已入库因子" align="center">
+                    <template #default="{ row }">{{ row.format(replacementOffer.old_metrics?.[row.key]) }}</template>
+                  </el-table-column>
+                </el-table>
+                <el-button
+                  v-if="replacementOffer.status !== 'blocked_other_owner'"
+                  type="warning"
+                  class="replacement-offer-button"
+                  @click="goToAdmittedFactors"
+                >
+                  前往已入库因子管理
+                </el-button>
+              </div>
+
               <el-descriptions :column="2" border size="small">
                 <el-descriptions-item label="前视快照">
                   <el-tag size="small" :type="getStatusTagType(summary.factor_snapshot_test?.status)">
@@ -616,7 +661,11 @@
                     style="margin-top: 8px"
                   >
                     <el-table-column label="因子编号" min-width="120">
-                      <template #default="{ row }">{{ row.factor_code ?? '-' }}</template>
+                      <template #default="{ row }">
+                        {{ row.visibility === 'other_anonymized'
+                          ? (row.factor_display || '其他研究员的已入库因子')
+                          : (row.factor_code ?? '-') }}
+                      </template>
                     </el-table-column>
                     <el-table-column label="|corr|" min-width="90">
                       <template #default="{ row }">
@@ -630,10 +679,10 @@
                         </el-tag>
                       </template>
                     </el-table-column>
-                    <el-table-column label="重叠样本数" min-width="100">
+                    <el-table-column v-if="!hasAnonymizedMatches" label="重叠样本数" min-width="100">
                       <template #default="{ row }">{{ row.overlap_count ?? '-' }}</template>
                     </el-table-column>
-                    <el-table-column label="风险等级" min-width="110">
+                    <el-table-column v-if="!hasAnonymizedMatches" label="风险等级" min-width="110">
                       <template #default="{ row }">
                         <el-tag size="small" :type="riskLevelTagType(row.risk_level)" effect="plain">
                           {{ riskLevelText(row.risk_level) }}
@@ -2034,6 +2083,33 @@ const reportData = computed<any>(() => summary.value?.report ?? null)
 
 // 入库审核报告（仅 admission 模式有）
 const admissionReport = computed<any>(() => summary.value?.admission_report ?? null)
+const replacementOffer = computed<any>(() => admissionReport.value?.replacement_offer ?? null)
+const admissionDecisionText = computed(() => {
+  const texts: Record<string, string> = {
+    pass: '已入库',
+    reject: '未通过',
+    pending: '待定',
+    replaceable: '可替换本人已入库因子'
+  }
+  return texts[admissionReport.value?.decision] || '待复核'
+})
+const admissionDecisionType = computed<'success' | 'danger' | 'warning' | 'info'>(() => {
+  const decision = admissionReport.value?.decision
+  if (decision === 'pass') return 'success'
+  if (decision === 'reject') return 'danger'
+  if (decision === 'pending') return 'info'
+  return 'warning'
+})
+const replacementMetricRows = [
+  { key: 'excess_sharpe' as const, label: '超额夏普', format: (value?: number | null) => formatNumber(value, 4) },
+  { key: 'excess_annual_return' as const, label: '年化超额收益', format: (value?: number | null) => formatPercent(value) }
+]
+const goToAdmittedFactors = () => {
+  router.push({
+    path: '/factor-library/admitted-factors',
+    query: props.taskId ? { new_task_id: props.taskId } : undefined
+  })
+}
 const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
 
 // ============ v0.3.2 方案D 因子共线性报告 ============
@@ -2061,6 +2137,9 @@ const collinearityMatches = computed<any[]>(() => {
   const m = collinearity.value?.matches
   return Array.isArray(m) ? m : []
 })
+const hasAnonymizedMatches = computed(() =>
+  collinearityMatches.value.some(match => match.visibility === 'other_anonymized')
+)
 
 // 是否"无相似因子"（通过唯一性检查）：matches 为空 且 max_abs_corr 确实为 0
 // 注意：只在 max_abs_corr 为有限数且 ===0 时才算唯一；若字段缺失(undefined/null)
@@ -3931,6 +4010,19 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
             color: #94a3b8;
             font-size: 12px;
           }
+        }
+      }
+
+      .replacement-offer {
+        margin-bottom: 12px;
+
+        .replacement-offer-meta,
+        .replacement-offer-metrics {
+          margin-top: 12px;
+        }
+
+        .replacement-offer-button {
+          margin-top: 12px;
         }
       }
 

@@ -569,6 +569,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getFriendlyError } from '@/utils/friendlyError'
+import { formatUniverse } from '@/utils/universe'
 import { 
   Refresh, Document, Setting, DataAnalysis, Connection, Warning
 } from '@element-plus/icons-vue'
@@ -806,9 +807,7 @@ const getReturnClass = (value: number | null): string => {
 
 // 格式化股票池展示
 const getUniverseName = (row: any): string => {
-  const uni = row.universe || row.task_config?.universe
-  if (!uni) return '-'
-  return getUniverseDisplay(uni)
+  return getUniverseDisplay(row.universe ?? row.task_config?.universe)
 }
 
 // 根据 Rank IC 值返回样式类
@@ -1203,27 +1202,7 @@ const loadBenchmarkMapping = async () => {
 }
 
 // 获取股票池显示
-const getUniverseDisplay = (universe: any) => {
-  if (!universe) return '-'
-  if (universe.type === 'preset') {
-    const presetName = universe.preset_name
-    // 先从缓存查找
-    if (stockPoolCache.value.has(presetName)) {
-      return stockPoolCache.value.get(presetName)
-    }
-    // 兜底映射
-    const names: Record<string, string> = {
-      'all': '全市场',
-      'hs300': '沪深300',
-      'zz500': '中证500',
-      'zz1000': '中证1000',
-      'sz50': '上证50',
-      'zz2000': '中证2000'
-    }
-    return names[presetName] || presetName
-  }
-  return '自定义股票池'
-}
+const getUniverseDisplay = (universe: unknown) => formatUniverse(universe, stockPoolCache.value)
 
 // 获取比较基准显示
 const getBenchmarkDisplay = (benchmarks: string[]) => {

@@ -6197,6 +6197,71 @@ ipcMain.handle('backtest:myFactorCollinearity', async (_event, taskId: string, t
   }
 })
 
+// 已入库因子列表
+ipcMain.handle('backtest:listAdmittedFactors', async (_event, includeReplacements = true) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const response = await axios.post(
+      'http://61.151.241.233:8080/api/v1/audit/admitted-factors/list',
+      { include_replacements: includeReplacements },
+      { headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey }, timeout: 60000 }
+    )
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return {
+      success: false,
+      status: error.response?.status,
+      error: error.response?.data?.message || error.response?.data?.error || error.message || '获取已入库因子失败'
+    }
+  }
+})
+
+// 已入库因子详情
+ipcMain.handle('backtest:getAdmittedFactorDetail', async (_event, factorId: string) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const response = await axios.post(
+      'http://61.151.241.233:8080/api/v1/audit/admitted-factors/detail',
+      { factor_id: factorId },
+      { headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey }, timeout: 60000 }
+    )
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    return {
+      success: false,
+      status: error.response?.status,
+      error: error.response?.status === 404
+        ? '因子不存在或不属于当前账号'
+        : error.response?.data?.message || error.response?.data?.error || error.message || '获取因子详情失败'
+    }
+  }
+})
+
+// 替换已入库因子：只发送一次，失败或超时均不自动重试
+ipcMain.handle('backtest:replaceAdmittedFactor', async (_event, newTaskId: string, oldFactorId: string, dryRun: boolean) => {
+  try {
+    const apiKey = getDefaultApiKeyForBacktest()
+    if (!apiKey) return { success: false, error: '未找到API Key' }
+    const response = await axios.post(
+      'http://61.151.241.233:8080/api/v1/audit/admitted-factors/replace',
+      { new_task_id: newTaskId, old_factor_id: oldFactorId, dry_run: dryRun },
+      { headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey }, timeout: 300000 }
+    )
+    return { success: true, data: response.data }
+  } catch (error: any) {
+    const timeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+    return {
+      success: false,
+      status: error.response?.status,
+      error: timeout
+        ? '请求超时，请刷新已入库因子列表确认结果，不要重复提交'
+        : error.response?.data?.message || error.response?.data?.error || error.message || '替换请求失败'
+    }
+  }
+})
+
 // 回测: 获取预设股票池列表
 ipcMain.handle('backtest:getStockPools', async () => {
   try {

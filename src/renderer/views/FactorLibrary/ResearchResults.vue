@@ -161,7 +161,9 @@
 
       <el-table-column v-if="isVisible('researcher')" prop="researcher" label="研究员" align="center" />
 
-      <el-table-column v-if="isVisible('universe')" prop="universe" label="股票池" align="center" />
+      <el-table-column v-if="isVisible('universe')" label="股票池" align="center">
+        <template #default="{ row }">{{ getUniverseDisplay(row.universe) }}</template>
+      </el-table-column>
 
       <el-table-column v-if="isVisible('rank_ic_5')" label="5日RankIC" align="center">
         <template #default="{ row }">
@@ -485,6 +487,7 @@ import {
   Refresh, Document, Setting, DataAnalysis, Connection, Warning
 } from '@element-plus/icons-vue'
 import StageErrors from '@/components/StageErrors.vue'
+import { formatUniverse } from '@/utils/universe'
 
 const router = useRouter()
 
@@ -797,21 +800,7 @@ const getResearchModeName = (mode?: string) => {
 }
 
 // 股票池显示
-const getUniverseDisplay = (universe: any) => {
-  if (!universe) return '-'
-  if (universe.type === 'preset') {
-    const names: Record<string, string> = {
-      'all': '全市场',
-      'hs300': '沪深300',
-      'zz500': '中证500',
-      'zz1000': '中证1000',
-      'sz50': '上证50',
-      'zz2000': '中证2000'
-    }
-    return names[universe.preset_name] || universe.preset_name
-  }
-  return '自定义股票池'
-}
+const getUniverseDisplay = (universe: unknown) => formatUniverse(universe)
 
 // 比较基准显示
 const getBenchmarkDisplay = (benchmarks: string[]) => {
