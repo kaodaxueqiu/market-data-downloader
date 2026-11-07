@@ -88,6 +88,22 @@
           </template>
         </el-table-column>
         
+        <el-table-column label="数据库账号" width="130">
+          <template #default="{ row }">
+            <div v-if="row.database_accounts && row.database_accounts.length" class="db-accounts">
+              <el-tag
+                v-for="acc in row.database_accounts"
+                :key="acc.engine"
+                :type="getDbState(acc.state).type"
+                size="small"
+              >
+                {{ acc.engine === 'postgresql' ? 'PG' : 'CH' }} {{ getDbState(acc.state).text }}
+              </el-tag>
+            </div>
+            <span v-else style="color: #cbd5e1;">—</span>
+          </template>
+        </el-table-column>
+
         <el-table-column label="创建时间" width="160">
           <template #default="{ row }">
             <el-text size="small" type="info">
@@ -400,9 +416,9 @@
                 <el-form-item label="用户名">
                   <el-input 
                     v-model="databaseConfig.postgresql_username" 
-                    placeholder="请输入PostgreSQL用户名"
-                    clearable
+                    disabled
                   />
+                  <div class="db-field-tip">账号名由创建 Key 时确定，不可修改</div>
                 </el-form-item>
                 
                 <el-form-item label="密码">
@@ -427,9 +443,9 @@
                 <el-form-item label="用户名">
                   <el-input 
                     v-model="databaseConfig.clickhouse_username" 
-                    placeholder="请输入ClickHouse用户名"
-                    clearable
+                    disabled
                   />
+                  <div class="db-field-tip">账号名由创建 Key 时确定，不可修改</div>
                 </el-form-item>
                 
                 <el-form-item label="密码">
@@ -812,6 +828,14 @@ interface ApiKeyItem {
     clickhouse_username?: string
     clickhouse_password?: string
   }
+  // 🆕 数据库账号及其实时状态
+  database_accounts?: DbAccountState[] | null
+}
+
+interface DbAccountState {
+  engine: string
+  username: string
+  state: string
 }
 
 const activeTab = ref('list')
@@ -1051,7 +1075,8 @@ const loadApiKeys = async () => {
         email: key.email || '',
         phone: key.phone || '',
         company: key.company || '',
-        expires_at: key.expires_at || ''
+        expires_at: key.expires_at || '',
+        database_accounts: key.database_accounts || null
       }))
       console.log(`✅ 加载了 ${apiKeys.value.length} 个API Key`)
     } else {
@@ -1260,11 +1285,53 @@ const handlePermissionConfig = (row: ApiKeyItem) => {
   loadUserPermissions()
 }
 
+// 数据库账号状态展示
+const DB_STATE_MAP: Record<string, { text: string; type: 'success' | 'danger' | 'warning' | 'info' }> = {
+  active: { text: '正常', type: 'success' },
+  suspended: { text: '已停用', type: 'danger' },
+  not_found: { text: '账号不存在', type: 'warning' },
+  unknown: { text: '未知', type: 'info' }
+}
+
+const getDbState = (state: string) => DB_STATE_MAP[state] || DB_STATE_MAP.unknown
+
+// 展示吊销/激活后数据库账号的同步结果
+const showDatabaseAccountResult = (title: string, accounts: any[] | undefined) => {
+  if (!accounts || accounts.length === 0) return
+
+  const RESULT_MAP: Record<string, string> = {
+    suspended: '已停用',
+    already_suspended: '此前已停用',
+    active: '已恢复',
+    already_active: '此前已可用',
+    not_found: '账号不存在',
+    error: '同步失败'
+  }
+  const escape = (s: string) =>
+    String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+  const failed = accounts.filter(a => a.result === 'error' || a.result === 'not_found')
+  const rows = accounts.map(a => {
+    const engine = a.engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse'
+    const result = RESULT_MAP[a.result] || a.result
+    const reason = a.reason ? ` — ${escape(a.reason)}` : ''
+    return `<li>${engine}（${escape(a.username)}）：${escape(result)}${reason}</li>`
+  }).join('')
+
+  ElMessageBox.alert(
+    `<div>数据库账号同步结果：</div>
+     <ul style="margin: 8px 0 0; padding-left: 18px;">${rows}</ul>
+     ${failed.length ? '<div style="margin-top: 8px; color: #e6a23c;">部分数据库账号同步失败，请手动检查</div>' : ''}`,
+    title,
+    { dangerouslyUseHTMLString: true, type: failed.length ? 'warning' : 'success' }
+  )
+}
+
 // 吊销Key
 const handleRevoke = async (row: ApiKeyItem) => {
   try {
     await ElMessageBox.confirm(
-      `确定要吊销 "${row.name}" 的API Key吗？吊销后将无法使用，但可以重新激活。`,
+      `确定要吊销 "${row.name}" 的API Key吗？吊销后将无法使用，其绑定的数据库账号也会同步停用。`,
       '确认吊销',
       {
         confirmButtonText: '确定吊销',
@@ -1277,6 +1344,7 @@ const handleRevoke = async (row: ApiKeyItem) => {
     
     if (result.success) {
       ElMessage.success('吊销成功！')
+      showDatabaseAccountResult('吊销完成', result.data?.databaseAccounts)
       await loadApiKeys()
     } else {
       ElMessage.error(result.error || '吊销失败')
@@ -1292,7 +1360,7 @@ const handleRevoke = async (row: ApiKeyItem) => {
 const handleReactivate = async (row: ApiKeyItem) => {
   try {
     await ElMessageBox.confirm(
-      `确定要重新激活 "${row.name}" 的API Key吗？`,
+      `确定要重新激活 "${row.name}" 的API Key吗？其绑定的数据库账号也会同步恢复。`,
       '确认激活',
       {
         confirmButtonText: '确定激活',
@@ -1305,6 +1373,7 @@ const handleReactivate = async (row: ApiKeyItem) => {
     
     if (result.success) {
       ElMessage.success('激活成功！')
+      showDatabaseAccountResult('激活完成', result.data?.databaseAccounts)
       await loadApiKeys()
     } else {
       ElMessage.error(result.error || '激活失败')
@@ -2056,9 +2125,23 @@ onMounted(async () => {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .db-accounts {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
   
   :deep(.el-table) {
     font-size: 13px;
+  }
+
+  .db-field-tip {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
   }
   
   .permission-categories {

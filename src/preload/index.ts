@@ -747,8 +747,8 @@ declare global {
         createApiKey: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
         updateApiKey: (key: string, data: any) => Promise<{ success: boolean; error?: string }>
         deleteApiKeyAdmin: (key: string) => Promise<{ success: boolean; error?: string }>
-        revokeApiKey: (key: string) => Promise<{ success: boolean; error?: string }>
-        reactivateApiKey: (key: string) => Promise<{ success: boolean; error?: string }>
+        revokeApiKey: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>
+        reactivateApiKey: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>
         fetchPermissionConfig: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>
         fetchPermissionRegistry: () => Promise<{ success: boolean; data?: any; error?: string }>
         patchPermissionConfig: (key: string, updates: any) => Promise<{ success: boolean; error?: string }>

@@ -302,7 +302,7 @@ export class ConfigManager {
       console.log('✅ 吊销成功:', response.data)
       
       if (response.data.success) {
-        return { success: true }
+        return { success: true, data: response.data.data }
       } else {
         return { success: false, error: response.data.error || '吊销失败' }
       }
@@ -341,7 +341,7 @@ export class ConfigManager {
       console.log('✅ 激活成功:', response.data)
       
       if (response.data.success) {
-        return { success: true }
+        return { success: true, data: response.data.data }
       } else {
         return { success: false, error: response.data.error || '激活失败' }
       }

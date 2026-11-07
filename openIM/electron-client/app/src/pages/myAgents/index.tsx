@@ -1,4 +1,11 @@
-import { CopyOutlined, FileTextOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+  CopyOutlined,
+  FileTextOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import { Button, Checkbox, Drawer, Empty, Input, Modal, Select, Spin, Tag } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -6,6 +13,8 @@ import {
   getAgentLogs,
   getAgentStatus,
   getMyAgents,
+  offlineAgent,
+  onlineAgent,
   restartAgent,
 } from "@/api/services/agentOps";
 import type { AgentOpsItem, ResearcherStatus } from "@/api/types/agentOps";
@@ -37,8 +46,10 @@ const isFreshPod = (age?: string) => !!age && (/^\d+s$/.test(age) || /^[0-2]m(\d
 const CHROMIUM_LINE = /^\[\d+(:\d+)+\/\d+\.\d+:/;
 
 const StatusTag = ({ researcher }: { researcher: ResearcherStatus }) => {
+  if (researcher.replicas === 0 || researcher.status === "Stopped") return <Tag color="default">已下线</Tag>;
   if (researcher.ready) return <Tag color="success">运行中</Tag>;
   if (researcher.status === "Running") return <Tag color="warning">启动中</Tag>;
+  if (researcher.status === "Stopping") return <Tag color="warning">下线中</Tag>;
   return <Tag color="error">{researcher.status || "异常"}</Tag>;
 };
 
@@ -47,6 +58,8 @@ export const MyAgents = () => {
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [restartingIDs, setRestartingIDs] = useState<Set<string>>(new Set());
+  const [onliningIDs, setOnliningIDs] = useState<Set<string>>(new Set());
+  const [offliningIDs, setOffliningIDs] = useState<Set<string>>(new Set());
   const timers = useRef<Map<string, number>>(new Map());
 
   const [logAgent, setLogAgent] = useState<AgentOpsItem | null>(null);
@@ -84,11 +97,29 @@ export const MyAgents = () => {
       return next;
     });
 
+  const setOnlining = (agentID: string, on: boolean) =>
+    setOnliningIDs((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(agentID);
+      else next.delete(agentID);
+      return next;
+    });
+
+  const setOfflining = (agentID: string, on: boolean) =>
+    setOffliningIDs((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(agentID);
+      else next.delete(agentID);
+      return next;
+    });
+
   const stopPolling = (agentID: string) => {
     const id = timers.current.get(agentID);
     if (id !== undefined) window.clearInterval(id);
     timers.current.delete(agentID);
     setRestarting(agentID, false);
+    setOnlining(agentID, false);
+    setOfflining(agentID, false);
   };
 
   const startPolling = (agent: AgentOpsItem) => {
@@ -119,7 +150,80 @@ export const MyAgents = () => {
     timers.current.set(agent.agentID, id);
   };
 
+  const handleOnline = (agent: AgentOpsItem) => {
+    Modal.confirm({
+      title: "上线智能体",
+      content: `确定要上线「${agent.name}」吗？上线后智能体将可以响应消息。`,
+      okText: "上线",
+      cancelText: "取消",
+      onOk: async () => {
+        setOnlining(agent.agentID, true);
+        try {
+          await onlineAgent(agent.agentID);
+          feedbackToast({ msg: "已提交上线，正在等待智能体启动…" });
+          startPolling(agent);
+        } catch (error) {
+          setOnlining(agent.agentID, false);
+          feedbackToast({ error: { message: errMsg(error, "上线失败，请稍后重试") } });
+        }
+      },
+    });
+  };
+
+  const pollUntilOffline = (agent: AgentOpsItem) => {
+    const startedAt = Date.now();
+    const id = window.setInterval(async () => {
+      if (Date.now() - startedAt > POLL_TIMEOUT) {
+        stopPolling(agent.agentID);
+        feedbackToast({ error: { message: `${agent.name} 下线超时` } });
+        return;
+      }
+      try {
+        const { researcher } = await getAgentStatus(agent.agentID);
+        setItems((prev) =>
+          prev.map((it) => (it.agentID === agent.agentID ? { ...it, researcher } : it)),
+        );
+        if (researcher.replicas === 0 || researcher.status === "Stopped") {
+          stopPolling(agent.agentID);
+          feedbackToast({ msg: `${agent.name} 已下线` });
+        }
+      } catch {
+        // 下线过程中状态接口可能短暂失败，继续轮询
+      }
+    }, POLL_INTERVAL);
+    timers.current.set(agent.agentID, id);
+  };
+
+  const handleOffline = (agent: AgentOpsItem) => {
+    Modal.confirm({
+      title: "下线智能体",
+      content: `确定要下线「${agent.name}」吗？下线后智能体将无法响应消息。`,
+      okText: "下线",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        setOfflining(agent.agentID, true);
+        try {
+          await offlineAgent(agent.agentID);
+          feedbackToast({ msg: "已提交下线，正在停止智能体…" });
+          pollUntilOffline(agent);
+        } catch (error) {
+          setOfflining(agent.agentID, false);
+          feedbackToast({ error: { message: errMsg(error, "下线失败，请稍后重试") } });
+        }
+      },
+    });
+  };
+
   const handleRestart = (agent: AgentOpsItem) => {
+    if (agent.researcher?.replicas === 0) {
+      Modal.warning({
+        title: "无法重启",
+        content: "智能体已下线，请先上线后再重启",
+      });
+      return;
+    }
+
     Modal.confirm({
       title: "重启智能体",
       content: `确定要重启「${agent.name}」吗？重启期间智能体暂时无法响应。`,
@@ -201,6 +305,8 @@ export const MyAgents = () => {
   const renderCard = (agent: AgentOpsItem) => {
     const r = agent.researcher;
     const restarting = restartingIDs.has(agent.agentID);
+    const onlining = onliningIDs.has(agent.agentID);
+    const offlining = offliningIDs.has(agent.agentID);
     return (
       <div
         key={agent.agentID}
@@ -258,12 +364,40 @@ export const MyAgents = () => {
             >
               日志
             </Button>
+
+            {r?.replicas === 0 ? (
+              <Button
+                size="small"
+                type="text"
+                icon={<PlayCircleOutlined />}
+                loading={onlining}
+                onClick={() => handleOnline(agent)}
+                className="flex-1"
+                style={{ color: "#52c41a" }}
+              >
+                上线
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                type="text"
+                icon={<PauseCircleOutlined />}
+                loading={offlining}
+                onClick={() => handleOffline(agent)}
+                className="flex-1"
+                style={{ color: "#faad14" }}
+              >
+                下线
+              </Button>
+            )}
+
             <Button
               size="small"
               danger
               type="text"
               icon={<ReloadOutlined />}
               loading={restarting}
+              disabled={r?.replicas === 0}
               onClick={() => handleRestart(agent)}
               className="flex-1"
             >

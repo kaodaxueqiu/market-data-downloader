@@ -43,7 +43,6 @@
         <!-- 用户列表 -->
         <div v-show="activeTab === 'users'" class="users-pane">
           <div class="tab-toolbar">
-            <el-button type="primary" size="small" @click="openCreateUserDialog">+ 创建用户</el-button>
             <el-input v-model="userSearch" placeholder="搜索用户名" size="small" clearable style="width:200px;margin-left:auto" />
           </div>
           <el-table :data="filteredUsers" stripe v-loading="usersLoading" empty-text="暂无用户" size="small" height="100%">
@@ -54,11 +53,14 @@
                 <el-tag v-if="row.hasCh" size="small" type="warning">CH</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="320" fixed="right">
+            <el-table-column label="状态" min-width="180">
               <template #default="{ row }">
-                <el-button size="small" text type="info" @click="viewUserGrants(row.username)">查看权限</el-button>
-                <el-button size="small" text type="warning" @click="openChangePasswordDialog(row.username)">改密码</el-button>
-                <el-button size="small" text type="danger" @click="confirmDeleteUser(row)">删除</el-button>
+                <el-tag v-if="row.hasPg" :type="loginTag(row.pgCanLogin).type" size="small" style="margin-right:8px">
+                  PG {{ loginTag(row.pgCanLogin).text }}
+                </el-tag>
+                <el-tag v-if="row.hasCh" :type="loginTag(row.chCanLogin).type" size="small">
+                  CH {{ loginTag(row.chCanLogin).text }}
+                </el-tag>
               </template>
             </el-table-column>
           </el-table>
@@ -209,67 +211,6 @@
         </div>
       </el-card>
     </div>
-
-    <!-- 查看权限弹窗 -->
-    <el-dialog v-model="grantsDialogVisible" :title="'权限详情 - ' + grantsDialogUser" width="700px" destroy-on-close>
-      <div v-for="(engine, eidx) in ['postgresql', 'clickhouse']" :key="eidx">
-        <h4 style="margin:12px 0 6px">{{ engine === 'postgresql' ? 'PostgreSQL' : 'ClickHouse' }}</h4>
-        <el-table :data="grantsDialogData[engine] || []" size="small" empty-text="无权限" stripe>
-          <el-table-column prop="database" label="数据库" width="140" />
-          <el-table-column prop="table" label="表" width="180">
-            <template #default="{ row }">{{ row.table === '*' ? '所有表' : row.table }}</template>
-          </el-table-column>
-          <el-table-column label="权限">
-            <template #default="{ row }">
-              <el-tag v-for="p in row.privileges" :key="p" size="small" style="margin:2px 4px 2px 0">{{ p }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </el-dialog>
-
-    <!-- 创建用户弹窗 -->
-    <el-dialog v-model="createDialogVisible" title="创建数据库用户" width="440px" destroy-on-close>
-      <el-form label-width="90px" size="small">
-        <el-form-item label="数据库类型">
-          <el-radio-group v-model="createForm.db_type">
-            <el-radio value="both">两个都创建</el-radio>
-            <el-radio value="postgresql">PostgreSQL</el-radio>
-            <el-radio value="clickhouse">ClickHouse</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="用户名">
-          <el-input v-model="createForm.username" placeholder="字母开头，可含字母/数字/下划线" />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input v-model="createForm.password" type="password" show-password placeholder="请输入密码" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="createLoading" @click="doCreateUser">创建</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 修改密码弹窗 -->
-    <el-dialog v-model="pwdDialogVisible" :title="'修改密码 - ' + pwdDialogUser" width="400px" destroy-on-close>
-      <el-form label-width="90px" size="small">
-        <el-form-item label="数据库类型">
-          <el-radio-group v-model="pwdForm.db_type">
-            <el-radio value="both">两个都改</el-radio>
-            <el-radio value="postgresql">PostgreSQL</el-radio>
-            <el-radio value="clickhouse">ClickHouse</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="新密码">
-          <el-input v-model="pwdForm.password" type="password" show-password placeholder="请输入新密码" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="pwdDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="pwdLoading" @click="doChangePassword">确定</el-button>
-      </template>
-    </el-dialog>
 
     <!-- 建库弹窗 -->
     <el-dialog v-model="createDbDialogVisible" title="新建数据库" width="420px" destroy-on-close>
@@ -463,21 +404,48 @@ const userSearch = ref('')
 const rawUsers = ref<any>({ postgresql: { users: [] }, clickhouse: { users: [] } })
 
 const mergedUsers = computed(() => {
-  const map = new Map<string, { username: string; hasPg: boolean; hasCh: boolean; binding: any }>()
+  const map = new Map<string, {
+    username: string
+    hasPg: boolean
+    hasCh: boolean
+    binding: any
+    pgCanLogin?: boolean
+    chCanLogin?: boolean
+  }>()
   for (const u of rawUsers.value.postgresql?.users || []) {
-    map.set(u.username, { username: u.username, hasPg: true, hasCh: false, binding: u.bound_api_key || null })
+    map.set(u.username, {
+      username: u.username,
+      hasPg: true,
+      hasCh: false,
+      binding: u.bound_api_key || null,
+      pgCanLogin: u.can_login,
+    })
   }
   for (const u of rawUsers.value.clickhouse?.users || []) {
     const existing = map.get(u.username)
     if (existing) {
       existing.hasCh = true
+      existing.chCanLogin = u.can_login
       if (!existing.binding && u.bound_api_key) existing.binding = u.bound_api_key
     } else {
-      map.set(u.username, { username: u.username, hasPg: false, hasCh: true, binding: u.bound_api_key || null })
+      map.set(u.username, {
+        username: u.username,
+        hasPg: false,
+        hasCh: true,
+        binding: u.bound_api_key || null,
+        chCanLogin: u.can_login,
+      })
     }
   }
   return Array.from(map.values())
 })
+
+// 账号可登录状态（can_login：true 正常 / false 已停用 / 缺失为未知）
+const loginTag = (canLogin?: boolean) => {
+  if (canLogin === true) return { text: '正常', type: 'success' as const }
+  if (canLogin === false) return { text: '已停用', type: 'danger' as const }
+  return { text: '未知', type: 'info' as const }
+}
 
 const filteredUsers = computed(() => {
   const q = userSearch.value.trim().toLowerCase()
@@ -493,99 +461,6 @@ async function loadUsers() {
     if (res.success && res.data) rawUsers.value = res.data
   } finally {
     usersLoading.value = false
-  }
-}
-
-// ========== 创建用户 ==========
-const createDialogVisible = ref(false)
-const createLoading = ref(false)
-const createForm = ref({ db_type: 'both', username: '', password: '' })
-
-function openCreateUserDialog() {
-  createForm.value = { db_type: 'both', username: '', password: '' }
-  createDialogVisible.value = true
-}
-
-async function doCreateUser() {
-  const { username, password, db_type } = createForm.value
-  if (!username.trim()) return ElMessage.warning('请输入用户名')
-  if (!password) return ElMessage.warning('请输入密码')
-  createLoading.value = true
-  try {
-    const res = await api.createUser({ db_type, username: username.trim(), password })
-    if (res.success) {
-      ElMessage.success('用户创建成功')
-      createDialogVisible.value = false
-      loadUsers()
-    } else {
-      ElMessage.error(res.error || '创建失败')
-    }
-  } finally {
-    createLoading.value = false
-  }
-}
-
-// ========== 删除用户 ==========
-async function confirmDeleteUser(row: any) {
-  const bindingTip = row.binding ? `\n该用户已绑定 API Key [${row.binding.api_key_name}]，删除后 API Key 的数据库配置将失效。` : ''
-  await ElMessageBox.confirm(
-    `此操作将永久删除用户「${row.username}」及其所有权限，不可恢复。${bindingTip}`,
-    '确认删除',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
-  )
-  const res = await api.deleteUser(row.username, 'both')
-  if (res.success) {
-    ElMessage.success('用户已删除')
-    loadUsers()
-  } else {
-    ElMessage.error(res.error || '删除失败')
-  }
-}
-
-// ========== 修改密码 ==========
-const pwdDialogVisible = ref(false)
-const pwdDialogUser = ref('')
-const pwdLoading = ref(false)
-const pwdForm = ref({ db_type: 'both', password: '' })
-
-function openChangePasswordDialog(username: string) {
-  pwdDialogUser.value = username
-  pwdForm.value = { db_type: 'both', password: '' }
-  pwdDialogVisible.value = true
-}
-
-async function doChangePassword() {
-  if (!pwdForm.value.password) return ElMessage.warning('请输入新密码')
-  pwdLoading.value = true
-  try {
-    const res = await api.changePassword(pwdDialogUser.value, pwdForm.value)
-    if (res.success) {
-      ElMessage.success('密码修改成功')
-      pwdDialogVisible.value = false
-    } else {
-      ElMessage.error(res.error || '修改失败')
-    }
-  } finally {
-    pwdLoading.value = false
-  }
-}
-
-// ========== 查看权限弹窗 ==========
-const grantsDialogVisible = ref(false)
-const grantsDialogUser = ref('')
-const grantsDialogData = ref<Record<string, any[]>>({})
-
-async function viewUserGrants(username: string) {
-  grantsDialogUser.value = username
-  grantsDialogData.value = {}
-  grantsDialogVisible.value = true
-  const res = await api.getUserGrants(username)
-  if (res.success && res.data) {
-    const grants = res.data.grants || {}
-    grantsDialogData.value = {
-      postgresql: grants.postgresql?.grants || [],
-      clickhouse: grants.clickhouse?.grants || [],
-    }
   }
 }
 

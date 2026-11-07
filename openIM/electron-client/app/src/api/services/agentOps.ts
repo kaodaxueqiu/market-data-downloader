@@ -1,6 +1,8 @@
 import adminClient from "../core/adminClient";
 import type {
   AgentLogsResult,
+  AgentOfflineResult,
+  AgentOnlineResult,
   AgentRestartResult,
   AgentStatusResult,
   MyAgentsResult,
@@ -23,5 +25,17 @@ export const getAgentLogs = (agentID: string, tail = 200) =>
 export const restartAgent = (agentID: string) =>
   adminClient.post<AgentRestartResult, AgentRestartResult>(
     `/agents/${encodeURIComponent(agentID)}/restart`,
+    { confirm: true },
+  );
+
+export const onlineAgent = (agentID: string) =>
+  adminClient.post<AgentOnlineResult, AgentOnlineResult>(
+    `/agents/${encodeURIComponent(agentID)}/online`,
+    { confirm: true },
+  );
+
+export const offlineAgent = (agentID: string) =>
+  adminClient.post<AgentOfflineResult, AgentOfflineResult>(
+    `/agents/${encodeURIComponent(agentID)}/offline`,
     { confirm: true },
   );
