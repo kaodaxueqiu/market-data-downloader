@@ -511,6 +511,8 @@
               <el-form-item label="研究模式">
                 <el-radio-group v-model="researchMode" class="research-mode-group">
                   <el-radio-button value="research">研究</el-radio-button>
+                  <el-radio-button value="admission">入库审核</el-radio-button>
+                  <el-radio-button value="upgrade">已入库因子升级</el-radio-button>
                 </el-radio-group>
 
                 <div class="research-tiers">
@@ -518,8 +520,46 @@
                 </div>
               </el-form-item>
 
-              <!-- walk-forward 高级选项（研究模式可选；admission 引擎强制） -->
-              <el-form-item v-if="researchMode !== 'admission'" label="walk-forward">
+              <!-- 审核池（admission / upgrade 模式） -->
+              <el-form-item v-if="isAdmissionMode" label="审核池">
+                <el-select v-model="admissionPool" style="width: 240px" :disabled="researchMode === 'upgrade'">
+                  <el-option
+                    v-for="pool in poolOptions"
+                    :key="pool.value"
+                    :label="pool.label"
+                    :value="pool.value"
+                  />
+                </el-select>
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  {{ researchMode === 'upgrade' ? '升级模式：池随目标因子自动确定' : '入库审核将按该池的配置执行，提交的股票池会被池配置覆盖' }}
+                </div>
+              </el-form-item>
+
+              <!-- 升级目标因子（仅 upgrade 模式） -->
+              <el-form-item v-if="researchMode === 'upgrade'" label="目标因子">
+                <el-select
+                  v-model="upgradeTargetId"
+                  filterable
+                  placeholder="选择要升级的已入库因子"
+                  style="width: 360px"
+                  :loading="upgradeTargetsLoading"
+                >
+                  <el-option
+                    v-for="f in upgradeTargets"
+                    :key="f.factor_id"
+                    :label="`${f.factor_name} (${f.factor_id}, v${f.current_version ?? '-'})`"
+                    :value="f.factor_id"
+                  />
+                </el-select>
+                <div class="form-hint">
+                  <el-icon><InfoFilled /></el-icon>
+                  仅本人名下、当前池生效中的已入库因子可升级；通过后版本号 +1
+                </div>
+              </el-form-item>
+
+              <!-- walk-forward 高级选项（研究模式可选；admission/upgrade 引擎强制） -->
+              <el-form-item v-if="!isAdmissionMode" label="walk-forward">
                 <el-switch v-model="walkForward.enabled" active-text="开启滚动验证" />
                 <div class="form-hint">
                   <el-icon><InfoFilled /></el-icon>
@@ -541,8 +581,8 @@
                 </el-row>
               </el-form-item>
 
-              <!-- 风险因子剥离（研究模式 quick/deep 显示；admission 引擎强制全剥） -->
-              <el-form-item v-if="researchMode !== 'admission'" label="风险因子剥离">
+              <!-- 风险因子剥离（研究模式 quick/deep 显示；admission/upgrade 引擎强制全剥） -->
+              <el-form-item v-if="!isAdmissionMode" label="风险因子剥离">
                 <el-switch v-model="riskNeutralization.enabled" active-text="开启剥离" />
                 <div class="form-hint">
                   <el-icon><InfoFilled /></el-icon>
@@ -1080,7 +1120,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import type { AdmittedFactor } from '@/types/backtest'
 import { EditorView, basicSetup } from 'codemirror'
 import { python as pythonLang } from '@codemirror/lang-python'
 import { 
@@ -1376,15 +1418,103 @@ const formData = reactive({
 })
 
 // 研究模式（顶层字段，非 backtest_params）
-const researchMode = ref<'research' | 'admission'>('research')
+const researchMode = ref<'research' | 'admission' | 'upgrade'>('research')
 const researchModeHints: Record<string, string> = {
   research: '研究：完整 IC / 分层 / CNE6 风格中性化 / 泛化诊断',
-  admission: '入库审核：含前视快照、库级共线性/正交、治理结论（最慢）'
+  admission: '入库审核：含前视快照、库级共线性/正交、治理结论（最慢）',
+  upgrade: '已入库因子升级：沿用入库审核标准，通过后同一因子版本号+1（次慢）'
 }
 const researchModeHint = computed(() => researchModeHints[researchMode.value] || '')
 
-// admission 模式：universe / ic_periods / return_periods / 费率会被引擎强制覆盖
-const isAdmissionMode = computed(() => researchMode.value === 'admission')
+// admission/upgrade 模式：universe / ic_periods / return_periods / 费率会被引擎强制覆盖
+const isAdmissionMode = computed(() => researchMode.value === 'admission' || researchMode.value === 'upgrade')
+
+// ---- 审核池与升级目标因子 ----
+const admissionPool = ref('csi1000')
+const poolOptions = ref<Array<{ value: string; label: string }>>([{ value: 'csi1000', label: '中证1000 (csi1000)' }])
+const upgradeTargetId = ref('')
+const upgradeTargets = ref<AdmittedFactor[]>([])
+const upgradeTargetsLoading = ref(false)
+
+// 轻量解析 admission yaml 中的 pools 键（与 AdmittedFactors.vue 同规则）
+const parseAdmissionPools = (yaml: string) => {
+  const pools: Array<{ value: string; label: string }> = []
+  let inPools = false
+  let poolsIndent = -1
+  let currentPool = ''
+  for (const raw of yaml.split(/\r?\n/)) {
+    const line = raw.replace(/\t/g, '  ')
+    if (!line.trim() || line.trim().startsWith('#')) continue
+    const indent = line.length - line.trimStart().length
+    const trimmed = line.trim()
+    if (trimmed.startsWith('pools:')) {
+      inPools = true
+      poolsIndent = indent
+      continue
+    }
+    if (inPools && indent <= poolsIndent) { inPools = false; continue }
+    if (!inPools) continue
+    if (indent > poolsIndent && /^[A-Za-z0-9_]+:\s*$/.test(trimmed)) {
+      currentPool = trimmed.replace(/:$/, '')
+      pools.push({ value: currentPool, label: currentPool })
+    } else if (currentPool && /^label:\s*(.+)$/.test(trimmed)) {
+      const label = trimmed.match(/^label:\s*(.+)$/)?.[1]?.trim().replace(/^['"]|['"]$/g, '')
+      const found = pools.find(p => p.value === currentPool)
+      if (label && found) found.label = label
+    }
+  }
+  return pools
+}
+
+const loadPoolOptions = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getAdmissionConfig()
+    if (result.success && result.data?.yaml) {
+      const pools = parseAdmissionPools(result.data.yaml)
+      if (pools.length) {
+        poolOptions.value = pools
+        // 默认值 csi1000 不在 v3 池列表时，回退到第一个池
+        if (!pools.some(p => p.value === admissionPool.value)) {
+          admissionPool.value = pools[0].value
+        }
+      }
+    }
+  } catch {
+    // 读取失败保持默认 csi1000
+  }
+}
+
+const loadUpgradeTargets = async () => {
+  upgradeTargetsLoading.value = true
+  try {
+    const result = await window.electronAPI.backtest.listAdmittedFactors(admissionPool.value)
+    if (result.success && result.data) {
+      upgradeTargets.value = (result.data.factors || []).filter(
+        (f: AdmittedFactor) => f.status !== 'superseded' && f.status !== 'failed'
+      )
+    } else {
+      upgradeTargets.value = []
+    }
+  } catch {
+    upgradeTargets.value = []
+  } finally {
+    upgradeTargetsLoading.value = false
+  }
+}
+
+// 切到 upgrade 模式时加载目标因子列表；admission 模式变化时清空
+watch(researchMode, (mode) => {
+  if (mode === 'upgrade') {
+    upgradeTargetId.value = ''
+    loadUpgradeTargets()
+  } else {
+    upgradeTargetId.value = ''
+  }
+})
+
+const selectedUpgradeTarget = computed(() =>
+  upgradeTargets.value.find(f => f.factor_id === upgradeTargetId.value) || null
+)
 
 // walk-forward 高级选项（顶层字段，仅 deep / admission 生效）
 const walkForward = reactive({
@@ -2206,7 +2336,18 @@ const handleSubmit = async () => {
         return
       }
     }
-    
+    // 升级模式：目标因子必选
+    if (researchMode.value === 'upgrade') {
+      if (!upgradeTargetId.value) {
+        ElMessage.warning('请选择要升级的已入库因子')
+        return
+      }
+      if (!selectedUpgradeTarget.value) {
+        ElMessage.warning('所选目标因子不在当前池的已入库列表中，请重新选择')
+        return
+      }
+    }
+
     // 校验数据源
     if (formData.data_sources.length === 0) {
       ElMessage.error('请至少配置一个数据源')
@@ -2296,6 +2437,12 @@ const handleSubmit = async () => {
         start_date: dateRange.value[0],
         end_date: dateRange.value[1],
         research_mode: researchMode.value,
+        ...(isAdmissionMode.value ? { admission_pool: admissionPool.value } : {}),
+        ...(researchMode.value === 'upgrade' ? {
+          upgrade_target_factor_id: upgradeTargetId.value || undefined,
+          // 乐观锁：默认携带选中因子的当前版本，版本被并发更新时网关报 version_conflict
+          upgrade_base_version: selectedUpgradeTarget.value?.current_version ?? undefined
+        } : {}),
         data_sources: processedDataSources,
         universe: formData.universe,
         backtest_params: {
@@ -2350,8 +2497,8 @@ const handleSubmit = async () => {
         }
       }
 
-      // walk-forward（顶层，研究模式且开启时传；admission 引擎全权接管，前端不传）
-      if (researchMode.value !== 'admission' && walkForward.enabled) {
+      // walk-forward（顶层，研究模式且开启时传；admission/upgrade 引擎全权接管，前端不传）
+      if (!isAdmissionMode.value && walkForward.enabled) {
         requestData.walk_forward = {
           enabled: true,
           max_folds: walkForward.max_folds,
@@ -2360,8 +2507,8 @@ const handleSubmit = async () => {
         }
       }
       
-      // 风险因子剥离（仅 quick/deep；admission 引擎强制全剥，前端不传）
-      if (researchMode.value !== 'admission') {
+      // 风险因子剥离（仅 quick/deep；admission/upgrade 引擎强制全剥，前端不传）
+      if (!isAdmissionMode.value) {
         if (riskNeutralization.enabled) {
           requestData.risk_neutralization = {
             enabled: true,
@@ -2532,8 +2679,28 @@ const loadPriceTypeOptions = async () => {
 onMounted(async () => {
   // 初始化 API Key
   await initApiKey()
+  await loadPoolOptions()
   loadStockPools()
   loadPriceTypeOptions()
+
+  // 从已入库因子页"升级因子"跳转预填：?mode=upgrade&pool=xxx&target_factor_id=xxx
+  const route = useRoute()
+  if (route.query.mode === 'upgrade') {
+    researchMode.value = 'upgrade'
+    if (typeof route.query.pool === 'string' && poolOptions.value.some(p => p.value === route.query.pool)) {
+      admissionPool.value = route.query.pool
+    }
+    if (typeof route.query.target_factor_id === 'string') {
+      await loadUpgradeTargets()
+      if (upgradeTargets.value.some(f => f.factor_id === route.query.target_factor_id)) {
+        upgradeTargetId.value = route.query.target_factor_id as string
+      } else {
+        // 目标因子不在列表（他人因子/已升级），只保留 factor_id 提示
+        upgradeTargetId.value = ''
+        ElMessage.warning(`因子 ${route.query.target_factor_id} 不在当前池的已入库列表中，请手动选择目标因子`)
+      }
+    }
+  }
 })
 
 onBeforeUnmount(() => {

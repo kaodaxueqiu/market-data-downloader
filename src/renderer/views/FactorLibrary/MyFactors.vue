@@ -1451,10 +1451,27 @@
             <el-radio-group v-model="researchMode" style="width: 100%">
               <el-radio-button v-if="!admissionLocked" value="research">研究</el-radio-button>
               <el-radio-button v-if="admissionLocked" value="admission">入库审核</el-radio-button>
+              <!-- 升级仅从已入库因子页"升级因子"进入（预填目标因子），此处不开放 -->
             </el-radio-group>
 
             <div class="research-tiers">
               <div class="tiers-hint">{{ researchModeHint }}</div>
+            </div>
+          </el-form-item>
+
+          <!-- 审核池（admission 模式；upgrade 模式由目标因子决定，见 openAdmission 预填） -->
+          <el-form-item v-if="isAdmissionMode" label="审核池">
+            <el-select v-model="admissionPool" style="width: 240px" :disabled="researchMode === 'upgrade'">
+              <el-option
+                v-for="pool in poolOptions"
+                :key="pool.value"
+                :label="pool.label"
+                :value="pool.value"
+              />
+            </el-select>
+            <div class="form-hint">
+              <el-icon><InfoFilled /></el-icon>
+              {{ researchMode === 'upgrade' ? '升级模式：池随目标因子自动确定' : '入库审核将按该池的配置执行，提交的股票池会被池配置覆盖' }}
             </div>
           </el-form-item>
 
@@ -1561,7 +1578,7 @@
           </div>
 
           <!-- 风险因子剥离（研究模式 quick/deep 显示；admission 引擎强制全剥） -->
-          <el-form-item v-if="researchMode !== 'admission'" label="风险因子剥离">
+          <el-form-item v-if="!isAdmissionMode" label="风险因子剥离">
             <el-switch v-model="riskNeutralization.enabled" active-text="开启剥离" />
             <div class="form-hint">
               <el-icon><InfoFilled /></el-icon>
@@ -1593,7 +1610,7 @@
             </div>
           </el-form-item>
 
-          <el-form-item v-if="researchMode !== 'admission'" label="walk-forward">
+          <el-form-item v-if="!isAdmissionMode" label="walk-forward">
             <el-switch v-model="walkForward.enabled" active-text="开启滚动验证" />
             <div style="color: #909399; font-size: 12px; margin-top: 4px;">
               开启 walk-forward 会多次重算因子和回测，耗时明显增加
@@ -3738,12 +3755,12 @@ const activeDetail = ref<any>(null)
 
 const submittedVersions = ref<number[]>([])
 
-// 当前版本是否已通过入库审核：从回测历史筛 admission 且通过、且版本匹配当前版本
+// 当前版本是否已通过入库审核：从回测历史筛 admission/upgrade 且通过、且版本匹配当前版本
 const currentVersionAdmissionPassed = computed(() => {
   const ver = String(selectedVersion.value || Number(currentFactorDetail.value?.version) || '')
   if (!ver) return false
   return backtestHistory.value.some((t: any) =>
-    t.research_mode === 'admission' &&
+    ['admission', 'upgrade'].includes(t.research_mode) &&
     t.admission_passed === true &&
     String(t.version) === ver
   )
@@ -4422,17 +4439,70 @@ const advancedOptions = reactive({
 })
 
 // 研究模式（顶层字段）
-const researchMode = ref<'research' | 'admission'>('research')
+const researchMode = ref<'research' | 'admission' | 'upgrade'>('research')
 // 入库审核锁定：由「入库审核」按钮发起时锁定 admission 档，禁止改选 research
 const admissionLocked = ref(false)
 const researchModeHints: Record<string, string> = {
   research: '研究：完整 IC / 分层 / CNE6 风格中性化 / 泛化诊断',
-  admission: '入库审核：含前视快照、库级共线性/正交、治理结论（最慢）'
+  admission: '入库审核：含前视快照、库级共线性/正交、治理结论（最慢）',
+  upgrade: '已入库因子升级：沿用入库审核标准，通过后同一因子版本号+1（次慢）'
 }
 const researchModeHint = computed(() => researchModeHints[researchMode.value] || '')
 
-// admission 模式：universe / forward_periods / 费率会被引擎强制覆盖
-const isAdmissionMode = computed(() => researchMode.value === 'admission')
+// admission/upgrade 模式：universe / forward_periods / 费率会被引擎强制覆盖
+const isAdmissionMode = computed(() => ['admission', 'upgrade'].includes(researchMode.value))
+
+// ---- 审核池 ----
+const admissionPool = ref('csi1000')
+const poolOptions = ref<Array<{ value: string; label: string }>>([{ value: 'csi1000', label: '中证1000 (csi1000)' }])
+
+// 轻量解析 admission yaml 中的 pools 键（与 AdmittedFactors.vue 同规则）
+const parseAdmissionPools = (yaml: string) => {
+  const pools: Array<{ value: string; label: string }> = []
+  let inPools = false
+  let poolsIndent = -1
+  let currentPool = ''
+  for (const raw of yaml.split(/\r?\n/)) {
+    const line = raw.replace(/\t/g, '  ')
+    if (!line.trim() || line.trim().startsWith('#')) continue
+    const indent = line.length - line.trimStart().length
+    const trimmed = line.trim()
+    if (trimmed.startsWith('pools:')) {
+      inPools = true
+      poolsIndent = indent
+      continue
+    }
+    if (inPools && indent <= poolsIndent) { inPools = false; continue }
+    if (!inPools) continue
+    if (indent > poolsIndent && /^[A-Za-z0-9_]+:\s*$/.test(trimmed)) {
+      currentPool = trimmed.replace(/:$/, '')
+      pools.push({ value: currentPool, label: currentPool })
+    } else if (currentPool && /^label:\s*(.+)$/.test(trimmed)) {
+      const label = trimmed.match(/^label:\s*(.+)$/)?.[1]?.trim().replace(/^['"]|['"]$/g, '')
+      const found = pools.find(p => p.value === currentPool)
+      if (label && found) found.label = label
+    }
+  }
+  return pools
+}
+
+const loadPoolOptions = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getAdmissionConfig()
+    if (result.success && result.data?.yaml) {
+      const pools = parseAdmissionPools(result.data.yaml)
+      if (pools.length) {
+        poolOptions.value = pools
+        // 默认值 csi1000 不在 v3 池列表时，回退到第一个池
+        if (!pools.some(p => p.value === admissionPool.value)) {
+          admissionPool.value = pools[0].value
+        }
+      }
+    }
+  } catch {
+    // 读取失败保持默认 csi1000
+  }
+}
 
 
 // 风险因子剥离配置（仅 quick/deep；admission 引擎强制全剥，前端不传）
@@ -4788,10 +4858,15 @@ const openBacktest = async (factor: any) => {
 }
 
 // 发起入库审核（详情卡片入口）：复用回测弹窗，但锁定 admission 档
-const openAdmission = async (factor: any) => {
+// presetPool：预选审核池（预留：从已入库因子页跳转时使用）
+const openAdmission = async (factor: any, presetPool?: string) => {
   if (!factor) return
   admissionLocked.value = true
   researchMode.value = 'admission'
+  await loadPoolOptions()
+  admissionPool.value = presetPool && poolOptions.value.some(p => p.value === presetPool)
+    ? presetPool
+    : (poolOptions.value[0]?.value || 'csi1000')
   backtestFactor.value = factor
   backtestFactors.value = [factor]
   resolveBacktestMeta(factor)
@@ -4860,7 +4935,13 @@ const submitBacktest = async () => {
     : backtestFactor.value ? [backtestFactor.value.factor_id] : []
   
   if (factorIds.length === 0) return
-  
+
+  // 升级是单因子操作，且只能从已入库因子页"升级因子"入口进入（预填目标因子）
+  if (researchMode.value === 'upgrade') {
+    ElMessage.warning('升级模式仅支持单个因子，请从「已入库因子」页使用"升级因子"按钮发起')
+    return
+  }
+
   backtestSubmitting.value = true
   
   try {
@@ -4870,6 +4951,7 @@ const submitBacktest = async () => {
       start_date: backtestForm.start_date,
       end_date: backtestForm.end_date,
       research_mode: researchMode.value,
+      ...(isAdmissionMode.value ? { admission_pool: admissionPool.value } : {}),
       universe: {
         type: 'preset',
         preset_name: backtestForm.universe_preset
@@ -4934,7 +5016,7 @@ const submitBacktest = async () => {
     }
 
     // walk-forward（顶层，研究模式且开启时传；admission 引擎全权接管，前端不传）
-    if (researchMode.value !== 'admission' && walkForward.enabled) {
+    if (!isAdmissionMode.value && walkForward.enabled) {
       data.walk_forward = {
         enabled: true,
         max_folds: walkForward.max_folds,
@@ -4944,7 +5026,7 @@ const submitBacktest = async () => {
     }
 
     // 风险因子剥离（仅 quick/deep；admission 引擎强制全剥，前端不传）
-    if (researchMode.value !== 'admission') {
+    if (!isAdmissionMode.value) {
       if (riskNeutralization.enabled) {
         data.risk_neutralization = {
           enabled: true,

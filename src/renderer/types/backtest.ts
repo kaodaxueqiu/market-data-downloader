@@ -62,7 +62,10 @@ export interface BacktestSubmitRequest {
   universe: any
   backtest_params: any
   calc_options?: CalcOptions
-  research_mode?: 'research' | 'admission'
+  research_mode?: 'research' | 'admission' | 'upgrade'
+  admission_pool?: string                                 // 审核池，缺省 csi1000
+  upgrade_target_factor_id?: string                       // 升级模式必填：目标已入库因子
+  upgrade_base_version?: number                           // 升级模式可选：乐观锁基准版本
   walk_forward?: any
   risk_neutralization?: any
   parameter_scan?: any
@@ -233,28 +236,13 @@ export interface IntermediateCreateResp {
   leakage_check_error?: string
 }
 
-// ---- 已入库因子管理与替换 ----
+// ---- 已入库因子管理（v2.9.3：替换已下线，改为版本化升级）----
 export interface AdmittedFactorMetrics {
   excess_sharpe?: number | null
   excess_annual_return?: number | null
   turnover_annual?: number | null
   rank_ic_mean?: number | null
   ic_mean?: number | null
-}
-
-export interface ReplacementOffer {
-  eligible: boolean
-  status: string
-  message?: string
-  threshold?: number
-  blocking_factor_id?: string | null
-  blocking_factor_name?: string | null
-  blocking_factor_is_self?: boolean
-  blocking_factor_display?: string
-  blocking_abs_corr?: number | null
-  new_metrics?: AdmittedFactorMetrics
-  old_metrics?: AdmittedFactorMetrics
-  better_rule?: string
 }
 
 export interface AdmittedFactor {
@@ -269,29 +257,10 @@ export interface AdmittedFactor {
   stock_count?: number
   metrics?: AdmittedFactorMetrics
   owner_source?: 'values_owner' | 'backtest_task' | string
-}
-
-export interface ReplacementCandidate {
-  new_task_id: string
-  new_factor_id: string
-  new_factor_name: string
-  created_at?: string
-  offer: ReplacementOffer
-}
-
-export interface AdmittedFactorReplacement {
-  old_factor_id: string
-  new_factor_id: string
-  old_task_id: string
-  new_task_id: string
-  max_abs_corr: number
-  threshold: number
-  old_excess_sharpe?: number | null
-  new_excess_sharpe?: number | null
-  old_excess_annual_return?: number | null
-  new_excess_annual_return?: number | null
-  replaced_at: string
-  operator_id?: string
+  pool: string
+  current_version?: number
+  version_count?: number
+  status?: 'active' | 'superseded' | 'failed'
 }
 
 export interface AdmittedFactorListResponse {
@@ -299,16 +268,47 @@ export interface AdmittedFactorListResponse {
   factor_count: number
   threshold: number
   factors: AdmittedFactor[]
-  replacement_candidates?: ReplacementCandidate[]
-  replacements?: AdmittedFactorReplacement[]
+  admission_pool?: string
 }
 
-export interface ReplaceAdmittedFactorResponse {
-  status: string
-  reason?: string
-  message?: string
-  old_factor_id?: string
-  new_factor_id?: string
-  rows_written?: number
-  rows_deleted?: number
+// 已入库因子版本（detail.versions[]）
+export interface AdmittedFactorVersion {
+  version: number
+  parent_version?: number | null
+  task_id: string
+  owner_id: string
+  decision: string
+  status: 'active' | 'superseded' | 'failed'
+  config_version?: string
+  upgrade_of_task_id?: string | null
+  metrics?: AdmittedFactorMetrics
+  admitted_at?: string
+  superseded_at?: string | null
+}
+
+// 生命周期事件（detail.events[]）
+export interface AdmittedFactorEvent {
+  event: 'admitted' | 'upgraded' | 'upgrade_rejected' | 'upgrade_failed' | string
+  version?: number
+  from_version?: number | null
+  to_version?: number | null
+  task_id?: string
+  owner_id?: string
+  config_version?: string
+  detail?: Record<string, any>
+  created_at: string
+}
+
+// 升级报告（summary.upgrade_report）
+export interface UpgradeReport {
+  status: 'upgraded' | 'rejected'
+  target_factor_id: string
+  base_version: number
+  base_task_id?: string
+  new_version?: number
+  decision: string
+  reason?: string | null
+  threshold?: number
+  correlation_scope?: string
+  excluded_target_family?: boolean
 }

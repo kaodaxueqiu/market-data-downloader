@@ -289,12 +289,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:downloadLedgerAudit', taskId, period, group),
     myFactorCollinearity: (taskId: string, topK?: number, minOverlap?: number) =>
       ipcRenderer.invoke('backtest:myFactorCollinearity', taskId, topK, minOverlap),
-    listAdmittedFactors: (includeReplacements = true) =>
-      ipcRenderer.invoke('backtest:listAdmittedFactors', includeReplacements),
-    getAdmittedFactorDetail: (factorId: string) =>
-      ipcRenderer.invoke('backtest:getAdmittedFactorDetail', factorId),
-    replaceAdmittedFactor: (newTaskId: string, oldFactorId: string, dryRun: boolean) =>
-      ipcRenderer.invoke('backtest:replaceAdmittedFactor', newTaskId, oldFactorId, dryRun),
+    listAdmittedFactors: (admissionPool = 'csi1000') =>
+      ipcRenderer.invoke('backtest:listAdmittedFactors', admissionPool),
+    getAdmittedFactorDetail: (factorId: string, admissionPool = 'csi1000') =>
+      ipcRenderer.invoke('backtest:getAdmittedFactorDetail', factorId, admissionPool),
     getStockPools: () => ipcRenderer.invoke('backtest:getStockPools'),
     getPriceTypeOptions: () => ipcRenderer.invoke('backtest:getPriceTypeOptions'),
     getAdmissionConfig: () => ipcRenderer.invoke('backtest:getAdmissionConfig'),
@@ -407,10 +405,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 研究成果API
   research: {
-    getList: (params?: { page?: number; page_size?: number; researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_passed?: boolean; start_date?: string; end_date?: string; sort_by?: string; sort_order?: string }) =>
+    getList: (params?: { page?: number; page_size?: number; researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_pool?: string; admission_passed?: boolean; start_date?: string; end_date?: string; sort_by?: string; sort_order?: string }) =>
       ipcRenderer.invoke('research:getList', params || {}),
     getDetail: (factorId: string) => ipcRenderer.invoke('research:getDetail', factorId),
-    getStats: (params?: { researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_passed?: boolean; start_date?: string; end_date?: string }) =>
+    getStats: (params?: { researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_pool?: string; admission_passed?: boolean; start_date?: string; end_date?: string }) =>
       ipcRenderer.invoke('research:getStats', params),
     getResearchers: () => ipcRenderer.invoke('research:getResearchers'),
     getResult: (factorId: string) => ipcRenderer.invoke('research:getResult', factorId)
@@ -932,9 +930,8 @@ declare global {
         downloadRankIC: (taskId: string, period: number) => Promise<{ success: boolean; filePath?: string; error?: string }>
         downloadLedgerAudit: (taskId: string, period: number, group: number) => Promise<{ success: boolean; filePath?: string; error?: string }>
         myFactorCollinearity: (taskId: string, topK?: number, minOverlap?: number) => Promise<{ success: boolean; data?: any; error?: string }>
-        listAdmittedFactors: (includeReplacements?: boolean) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
-        getAdmittedFactorDetail: (factorId: string) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
-        replaceAdmittedFactor: (newTaskId: string, oldFactorId: string, dryRun: boolean) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
+        listAdmittedFactors: (admissionPool?: string) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
+        getAdmittedFactorDetail: (factorId: string, admissionPool?: string) => Promise<{ success: boolean; data?: any; status?: number; error?: string }>
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
         getPriceTypeOptions: () => Promise<{ success: boolean; data?: { rebalance_price_types?: Array<{ value: string; label: string; description?: string; category?: string }>; buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }>; time_filter_presets?: Array<{ name: string; start: string; end: string; description?: string }> }; error?: string }>
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
@@ -1016,9 +1013,9 @@ declare global {
         moveTable: (dbType: string, dbName: string, tableName: string, body: { target_database?: string; target_table: string }) => Promise<any>
       }
       research: {
-        getList: (params?: { page?: number; page_size?: number; researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_passed?: boolean; start_date?: string; end_date?: string; sort_by?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getList: (params?: { page?: number; page_size?: number; researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_pool?: string; admission_passed?: boolean; start_date?: string; end_date?: string; sort_by?: string; sort_order?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         getDetail: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
-        getStats: (params?: { researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_passed?: boolean; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        getStats: (params?: { researcher?: string; status?: string; keyword?: string; research_mode?: string; admission_pool?: string; admission_passed?: boolean; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
         getResearchers: () => Promise<{ success: boolean; researchers?: string[]; error?: string }>
         getResult: (factorId: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }

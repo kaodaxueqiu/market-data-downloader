@@ -489,48 +489,58 @@
                 </div>
               </div>
 
-              <div v-if="admissionReport?.decision === 'replaceable' && replacementOffer" class="replacement-offer">
+              <!-- 池信息条（admission / upgrade 任务） -->
+              <div v-if="isAdmissionMode" class="admission-pool-info">
+                <el-descriptions :column="2" border size="small">
+                  <el-descriptions-item label="审核池">{{ poolDisplayLabel }}</el-descriptions-item>
+                  <el-descriptions-item label="配置版本">{{ summary.admission_config_version || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="判定窗口（样本内）">
+                    {{ formatWindow(summary.admission_sample_window?.in_sample) }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="样本外">
+                    {{ formatWindow(summary.admission_sample_window?.out_sample) }}
+                  </el-descriptions-item>
+                </el-descriptions>
                 <el-alert
-                  v-if="replacementOffer.message"
-                  :title="replacementOffer.message"
+                  v-if="summary.pool_override === true"
+                  class="pool-override-alert"
+                  title="提交的股票池已被池配置覆盖"
                   type="warning"
                   :closable="false"
                   show-icon
                 />
-                <el-descriptions :column="2" border size="small" class="replacement-offer-meta">
-                  <el-descriptions-item label="相关已入库因子">
-                    {{ replacementOffer.blocking_factor_display || '-' }}
-                  </el-descriptions-item>
-                  <el-descriptions-item label="相关性">
-                    {{ formatNumber(replacementOffer.blocking_abs_corr, 4) }}
-                  </el-descriptions-item>
-                  <el-descriptions-item v-if="replacementOffer.status !== 'blocked_other_owner'" label="阈值">
-                    {{ formatNumber(replacementOffer.threshold, 4) }}
-                  </el-descriptions-item>
-                </el-descriptions>
+              </div>
+
+              <!-- 升级结果（upgrade_report 存在时） -->
+              <div v-if="upgradeReport" class="upgrade-report">
+                <el-alert
+                  v-if="upgradeReport.status === 'upgraded'"
+                  :title="`升级成功：${upgradeReport.target_factor_id} v${upgradeReport.base_version} → v${upgradeReport.new_version ?? '?'}`"
+                  type="success"
+                  :closable="false"
+                  show-icon
+                />
+                <el-alert
+                  v-else
+                  :title="`升级未通过：${upgradeReport.reason || upgradeReport.decision || '未达到升级标准'}`"
+                  type="warning"
+                  :closable="false"
+                  show-icon
+                />
                 <el-table
-                  v-if="replacementOffer.status !== 'blocked_other_owner' && (replacementOffer.new_metrics || replacementOffer.old_metrics)"
-                  :data="replacementMetricRows"
+                  v-if="upgradeCollinearityMatches.length"
+                  :data="upgradeCollinearityMatches"
                   size="small"
                   border
-                  class="replacement-offer-metrics"
+                  class="upgrade-corr-table"
                 >
-                  <el-table-column prop="label" label="指标" />
-                  <el-table-column label="当前因子" align="center">
-                    <template #default="{ row }">{{ row.format(replacementOffer.new_metrics?.[row.key]) }}</template>
-                  </el-table-column>
-                  <el-table-column label="已入库因子" align="center">
-                    <template #default="{ row }">{{ row.format(replacementOffer.old_metrics?.[row.key]) }}</template>
+                  <el-table-column prop="factor" label="相关因子" min-width="140" />
+                  <el-table-column prop="factor_id" label="因子 ID" min-width="140" />
+                  <el-table-column prop="version" label="版本" width="80" align="center" />
+                  <el-table-column label="Pearson 相关" width="120" align="right">
+                    <template #default="{ row }">{{ formatNumber(row.pearson_corr, 4) }}</template>
                   </el-table-column>
                 </el-table>
-                <el-button
-                  v-if="replacementOffer.status !== 'blocked_other_owner'"
-                  type="warning"
-                  class="replacement-offer-button"
-                  @click="goToAdmittedFactors"
-                >
-                  前往已入库因子管理
-                </el-button>
               </div>
 
               <el-descriptions :column="2" border size="small">
@@ -2081,15 +2091,13 @@ const periodOptionsOf = (factor: any): any[] => {
 // v0.2.6 report（追加式，缺失则子组件显示空态）
 const reportData = computed<any>(() => summary.value?.report ?? null)
 
-// 入库审核报告（仅 admission 模式有）
+// 入库审核报告（admission / upgrade 模式均有）
 const admissionReport = computed<any>(() => summary.value?.admission_report ?? null)
-const replacementOffer = computed<any>(() => admissionReport.value?.replacement_offer ?? null)
 const admissionDecisionText = computed(() => {
   const texts: Record<string, string> = {
     pass: '已入库',
     reject: '未通过',
-    pending: '待定',
-    replaceable: '可替换本人已入库因子'
+    pending: '待定'
   }
   return texts[admissionReport.value?.decision] || '待复核'
 })
@@ -2100,15 +2108,18 @@ const admissionDecisionType = computed<'success' | 'danger' | 'warning' | 'info'
   if (decision === 'pending') return 'info'
   return 'warning'
 })
-const replacementMetricRows = [
-  { key: 'excess_sharpe' as const, label: '超额夏普', format: (value?: number | null) => formatNumber(value, 4) },
-  { key: 'excess_annual_return' as const, label: '年化超额收益', format: (value?: number | null) => formatPercent(value) }
-]
-const goToAdmittedFactors = () => {
-  router.push({
-    path: '/factor-library/admitted-factors',
-    query: props.taskId ? { new_task_id: props.taskId } : undefined
-  })
+// 升级报告与相关性冲突明细（summary.upgrade_report，仅 upgrade 任务有）
+const upgradeReport = computed<any>(() => summary.value?.upgrade_report ?? null)
+const upgradeCollinearityMatches = computed<any[]>(() =>
+  admissionReport.value?.admitted_factor_collinearity?.matches ?? []
+)
+// 池信息展示
+const poolDisplayLabel = computed(() =>
+  summary.value?.admission_pool_label || summary.value?.admission_pool || 'csi1000'
+)
+const formatWindow = (win?: { start?: string; end?: string } | null) => {
+  if (!win?.start && !win?.end) return '-'
+  return `${win.start || '-'} ~ ${win.end || '-'}`
 }
 const modeBudget = computed<any>(() => summary.value?.mode_budget ?? null)
 
@@ -2270,12 +2281,13 @@ const splitQualifiedTable = (t: string) => {
 }
 
 // ============ admission effective 字段读取（v0.2.7 对接） ============
-// 仅 admission 模式且 v0.2.7+ 任务才会有这些字段；历史任务需降级到 task_config
+// admission/upgrade 模式且 v0.2.7+ 任务才会有这些字段；历史任务需降级到 task_config
 const isAdmissionMode = computed<boolean>(() => {
   const s = summary.value
   if (s?.admission_overrides === true) return true
+  if (s?.upgrade_report != null) return true
   // 兼容历史任务：从 task_config 读 research_mode（字段已核实存在）
-  return task.value?.task_config?.research_mode === 'admission'
+  return ['admission', 'upgrade'].includes(task.value?.task_config?.research_mode)
 })
 
 // 股票池：admission 读 effective_pool，其他读用户配置
@@ -4013,15 +4025,18 @@ $transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
         }
       }
 
-      .replacement-offer {
+      .admission-pool-info {
         margin-bottom: 12px;
 
-        .replacement-offer-meta,
-        .replacement-offer-metrics {
-          margin-top: 12px;
+        .pool-override-alert {
+          margin-top: 10px;
         }
+      }
 
-        .replacement-offer-button {
+      .upgrade-report {
+        margin-bottom: 12px;
+
+        .upgrade-corr-table {
           margin-top: 12px;
         }
       }

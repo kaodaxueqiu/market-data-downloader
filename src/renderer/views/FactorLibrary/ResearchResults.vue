@@ -55,6 +55,21 @@
           <el-option label="快速初筛" value="quick" />
           <el-option label="深度研究" value="deep" />
           <el-option label="入库审核" value="admission" />
+          <el-option label="升级" value="upgrade" />
+        </el-select>
+        <el-select
+          v-model="filters.admissionPool"
+          placeholder="审核池"
+          clearable
+          style="width: 150px;"
+          @change="handleFilterChange"
+        >
+          <el-option
+            v-for="pool in poolOptions"
+            :key="pool.value"
+            :label="pool.label"
+            :value="pool.value"
+          />
         </el-select>
         <el-date-picker
           v-model="filters.dateRange"
@@ -152,6 +167,15 @@
         </template>
       </el-table-column>
 
+      <el-table-column v-if="isVisible('admission_pool')" label="审核池" align="center" width="110">
+        <template #default="{ row }">
+          <el-tag v-if="['admission', 'upgrade'].includes(row.research_mode)" size="small" type="info" effect="plain">
+            {{ row.admission_pool || 'csi1000' }}
+          </el-tag>
+          <span v-else style="color: #cbd5e1;">-</span>
+        </template>
+      </el-table-column>
+
       <el-table-column v-if="isVisible('engine_version')" label="引擎版本" align="center" width="90">
         <template #default="{ row }">
           <span v-if="row.engine_version" style="color: #94a3b8; font-size: 11px;">v{{ row.engine_version }}</span>
@@ -202,7 +226,7 @@
       <el-table-column v-if="isVisible('status')" label="状态" align="center" min-width="110">
         <template #default="{ row }">
           <div class="status-wrapper">
-            <template v-if="row.research_mode === 'admission' && row.status === 'completed'">
+            <template v-if="['admission', 'upgrade'].includes(row.research_mode) && row.status === 'completed'">
               <span :class="row.admission_passed === true ? 'status-text admission-passed' : 'status-text admission-failed'">
                 {{ row.admission_passed === true ? '✓ 审核通过' : '✗ 审核未通过' }}
               </span>
@@ -504,6 +528,7 @@ const allColumns = [
   { prop: 'task_id', label: '任务ID' },
   { prop: 'factor_id', label: '因子ID' },
   { prop: 'research_mode', label: '运行类型' },
+  { prop: 'admission_pool', label: '审核池' },
   { prop: 'engine_version', label: '引擎版本' },
   { prop: 'researcher', label: '研究员' },
   { prop: 'universe', label: '股票池' },
@@ -529,14 +554,60 @@ const filters = ref({
   status: '',
   keyword: '',
   researchMode: '',
+  admissionPool: '',
   dateRange: [] as string[]
 })
 
 // 是否有激活的筛选
 const hasActiveFilters = computed(() => {
   return filters.value.researcher || filters.value.status || filters.value.keyword ||
-    filters.value.researchMode || (filters.value.dateRange && filters.value.dateRange.length > 0)
+    filters.value.researchMode || filters.value.admissionPool || (filters.value.dateRange && filters.value.dateRange.length > 0)
 })
+
+// ---- 审核池筛选 ----
+const poolOptions = ref<Array<{ value: string; label: string }>>([{ value: 'csi1000', label: '中证1000 (csi1000)' }])
+
+// 轻量解析 admission yaml 中的 pools 键（与 AdmittedFactors.vue 同规则）
+const parseAdmissionPools = (yaml: string) => {
+  const pools: Array<{ value: string; label: string }> = []
+  let inPools = false
+  let poolsIndent = -1
+  let currentPool = ''
+  for (const raw of yaml.split(/\r?\n/)) {
+    const line = raw.replace(/\t/g, '  ')
+    if (!line.trim() || line.trim().startsWith('#')) continue
+    const indent = line.length - line.trimStart().length
+    const trimmed = line.trim()
+    if (trimmed.startsWith('pools:')) {
+      inPools = true
+      poolsIndent = indent
+      continue
+    }
+    if (inPools && indent <= poolsIndent) { inPools = false; continue }
+    if (!inPools) continue
+    if (indent > poolsIndent && /^[A-Za-z0-9_]+:\s*$/.test(trimmed)) {
+      currentPool = trimmed.replace(/:$/, '')
+      pools.push({ value: currentPool, label: currentPool })
+    } else if (currentPool && /^label:\s*(.+)$/.test(trimmed)) {
+      const label = trimmed.match(/^label:\s*(.+)$/)?.[1]?.trim().replace(/^['"]|['"]$/g, '')
+      const found = pools.find(p => p.value === currentPool)
+      if (label && found) found.label = label
+    }
+  }
+  return pools
+}
+
+const loadPoolOptions = async () => {
+  try {
+    const result = await window.electronAPI.backtest.getAdmissionConfig()
+    if (result.success && result.data?.yaml) {
+      const pools = parseAdmissionPools(result.data.yaml)
+      if (pools.length) poolOptions.value = pools
+    }
+  } catch {
+    // 读取失败保持默认 csi1000
+  }
+}
 
 // 分页
 const pagination = ref({
@@ -565,6 +636,7 @@ const loadStats = async () => {
       status: isAdmissionFilter ? 'completed' : (filters.value.status || undefined),
       keyword: filters.value.keyword || undefined,
       research_mode: isAdmissionFilter ? 'admission' : (filters.value.researchMode || undefined),
+      admission_pool: filters.value.admissionPool || undefined,
       admission_passed: isAdmissionFilter ? filters.value.status === 'admission_passed' : undefined,
       start_date: filters.value.dateRange?.[0] || undefined,
       end_date: filters.value.dateRange?.[1] || undefined
@@ -615,6 +687,7 @@ const loadList = async () => {
       status: apiStatus || undefined,
       keyword: filters.value.keyword || undefined,
       research_mode: apiResearchMode || undefined,
+      admission_pool: filters.value.admissionPool || undefined,
       admission_passed: localAdmissionFilter !== null ? localAdmissionFilter : undefined,
       start_date: filters.value.dateRange?.[0] || undefined,
       end_date: filters.value.dateRange?.[1] || undefined,
@@ -649,6 +722,7 @@ const resetFilters = () => {
     status: '',
     keyword: '',
     researchMode: '',
+    admissionPool: '',
     dateRange: []
   }
   sort.value = {
@@ -794,7 +868,8 @@ const getResearchModeName = (mode?: string) => {
     'research': '研究',
     'quick': '快速初筛',
     'deep': '深度研究',
-    'admission': '入库审核'
+    'admission': '入库审核',
+    'upgrade': '升级'
   }
   return mode ? (map[mode] || mode) : '-'
 }
@@ -908,6 +983,7 @@ const copyError = (msg: string) => {
 onMounted(() => {
   loadStats()
   loadResearchers()
+  loadPoolOptions()
   loadList()
 })
 </script>
@@ -1194,6 +1270,7 @@ onMounted(() => {
     &.quick { background: #eff6ff; color: #2563eb; }
     &.deep { background: #f5f3ff; color: #7c3aed; }
     &.admission { background: #fdf4ff; color: #c026d3; }
+    &.upgrade { background: #fff7ed; color: #ea580c; }
   }
 
   // 状态
