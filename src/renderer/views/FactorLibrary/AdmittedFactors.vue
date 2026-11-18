@@ -337,7 +337,7 @@ const openDetail = async (factorId: string) => {
       const message = result.error || '加载因子详情失败'
       throw new Error(/404/.test(message) ? '因子不存在或不属于当前账号' : message)
     }
-    detail.value = result.data
+    detail.value = result.data.factor ?? result.data
     detailVersions.value = result.data.versions || []
     detailEvents.value = result.data.events || []
   } catch (error) {
