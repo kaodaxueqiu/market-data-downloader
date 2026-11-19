@@ -1405,6 +1405,7 @@ const researchModeHint = computed(() => researchModeHints[researchMode.value] ||
 const isAdmissionMode = computed(() => researchMode.value === 'admission' || researchMode.value === 'upgrade')
 
 // ---- 审核池与升级目标因子 ----
+const route = useRoute()
 const admissionPool = ref(DEFAULT_POOL)
 const poolOptions = ref([...DEFAULT_POOL_OPTIONS])
 const upgradeTargetId = ref('')
@@ -2615,7 +2616,6 @@ onMounted(async () => {
   loadPriceTypeOptions()
 
   // 从已入库因子页"升级因子"跳转预填：?mode=upgrade&pool=xxx&target_factor_id=xxx
-  const route = useRoute()
   if (route.query.mode === 'upgrade') {
     researchMode.value = 'upgrade'
     if (typeof route.query.pool === 'string' && poolOptions.value.some(p => p.value === route.query.pool)) {
