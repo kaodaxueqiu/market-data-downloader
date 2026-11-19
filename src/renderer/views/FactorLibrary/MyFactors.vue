@@ -1475,21 +1475,6 @@
             </div>
           </el-form-item>
 
-          <!-- 调度通道（与 SubmitContent.vue 对齐） -->
-          <el-form-item label="调度通道">
-            <el-select v-model="backtestForm.scheduling_lane" style="width: 220px;">
-              <el-option label="自动（auto）" value="auto" />
-              <el-option label="快速（quick）" value="quick" />
-              <el-option label="标准（standard）" value="standard" />
-              <el-option label="慢速（slow）" value="slow" />
-              <el-option label="大内存（highmem）" value="highmem" />
-            </el-select>
-            <div class="form-hint">
-              <el-icon><InfoFilled /></el-icon>
-              自动由网关根据任务属性判定 lane；指定具体值则覆盖网关判定
-            </div>
-          </el-form-item>
-
           <!-- 高级选项 -->
           <div class="advanced-section">
             <div class="advanced-title">高级选项</div>
@@ -1508,15 +1493,6 @@
                 <div class="form-hint">
                   <el-icon><InfoFilled /></el-icon>
                   留空则引擎自动（Python 因子默认 60，上限 750）
-                </div>
-              </el-form-item>
-
-              <!-- 长任务模式 -->
-              <el-form-item label="长任务模式">
-                <el-switch v-model="advancedOptions.allowLongRunning" active-text="允许长任务调度" />
-                <div class="form-hint">
-                  <el-icon><InfoFilled /></el-icon>
-                  适用于超长耗时任务，调度器会放宽超时限制
                 </div>
               </el-form-item>
 
@@ -2064,6 +2040,7 @@ import { ref, reactive, onMounted, computed, watch, nextTick, inject } from 'vue
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { previewPolars } from '@/utils/translatePreview'
+import { fetchAdmissionPools, DEFAULT_POOL, DEFAULT_POOL_OPTIONS } from '@/utils/admissionPools'
 import AdmittedFactors from './AdmittedFactors.vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { python as pythonLang } from '@codemirror/lang-python'
@@ -4419,16 +4396,13 @@ const backtestForm = reactive({
   // 费率三件套（单位 bp），留空则引擎回退 A 股拆分模型
   risk_free_rate: null as number | null,
   buy_cost_bps: null as number | null,
-  sell_cost_bps: null as number | null,
-  // 调度通道（批量回测只用 preferred_lane，不加 allow_long_running）
-  scheduling_lane: 'auto' as 'auto' | 'quick' | 'standard' | 'slow' | 'highmem'
+  sell_cost_bps: null as number | null
 })
 
 // 高级选项（批量回测）
 const advancedOptions = reactive({
   memoryLimitMb: null as number | null,
   warmupDays: null as number | null,
-  allowLongRunning: false,
   parameterScan: {
     enabled: false,
     grid: [] as Array<{ key: string; values: string }>,
@@ -4453,54 +4427,14 @@ const researchModeHint = computed(() => researchModeHints[researchMode.value] ||
 const isAdmissionMode = computed(() => ['admission', 'upgrade'].includes(researchMode.value))
 
 // ---- 审核池 ----
-const admissionPool = ref('csi1000')
-const poolOptions = ref<Array<{ value: string; label: string }>>([{ value: 'csi1000', label: '中证1000 (csi1000)' }])
-
-// 轻量解析 admission yaml 中的 pools 键（与 AdmittedFactors.vue 同规则）
-const parseAdmissionPools = (yaml: string) => {
-  const pools: Array<{ value: string; label: string }> = []
-  let inPools = false
-  let poolsIndent = -1
-  let currentPool = ''
-  for (const raw of yaml.split(/\r?\n/)) {
-    const line = raw.replace(/\t/g, '  ')
-    if (!line.trim() || line.trim().startsWith('#')) continue
-    const indent = line.length - line.trimStart().length
-    const trimmed = line.trim()
-    if (trimmed.startsWith('pools:')) {
-      inPools = true
-      poolsIndent = indent
-      continue
-    }
-    if (inPools && indent <= poolsIndent) { inPools = false; continue }
-    if (!inPools) continue
-    if (indent > poolsIndent && /^[A-Za-z0-9_]+:\s*$/.test(trimmed)) {
-      currentPool = trimmed.replace(/:$/, '')
-      pools.push({ value: currentPool, label: currentPool })
-    } else if (currentPool && /^label:\s*(.+)$/.test(trimmed)) {
-      const label = trimmed.match(/^label:\s*(.+)$/)?.[1]?.trim().replace(/^['"]|['"]$/g, '')
-      const found = pools.find(p => p.value === currentPool)
-      if (label && found) found.label = label
-    }
-  }
-  return pools
-}
+const admissionPool = ref(DEFAULT_POOL)
+const poolOptions = ref([...DEFAULT_POOL_OPTIONS])
 
 const loadPoolOptions = async () => {
-  try {
-    const result = await window.electronAPI.backtest.getAdmissionConfig()
-    if (result.success && result.data?.yaml) {
-      const pools = parseAdmissionPools(result.data.yaml)
-      if (pools.length) {
-        poolOptions.value = pools
-        // 默认值 csi1000 不在 v3 池列表时，回退到第一个池
-        if (!pools.some(p => p.value === admissionPool.value)) {
-          admissionPool.value = pools[0].value
-        }
-      }
-    }
-  } catch {
-    // 读取失败保持默认 csi1000
+  const { pools } = await fetchAdmissionPools()
+  poolOptions.value = pools
+  if (!pools.some(p => p.value === admissionPool.value)) {
+    admissionPool.value = pools[0].value
   }
 }
 
@@ -4866,7 +4800,7 @@ const openAdmission = async (factor: any, presetPool?: string) => {
   await loadPoolOptions()
   admissionPool.value = presetPool && poolOptions.value.some(p => p.value === presetPool)
     ? presetPool
-    : (poolOptions.value[0]?.value || 'csi1000')
+    : (poolOptions.value[0]?.value || 'zz1000')
   backtestFactor.value = factor
   backtestFactors.value = [factor]
   resolveBacktestMeta(factor)
@@ -4967,10 +4901,6 @@ const submitBacktest = async () => {
         risk_free_rate: backtestForm.risk_free_rate ?? undefined,
         buy_cost_bps: backtestForm.buy_cost_bps ?? undefined,
         sell_cost_bps: backtestForm.sell_cost_bps ?? undefined
-      },
-      scheduling: {
-        allow_long_running: advancedOptions.allowLongRunning || undefined,
-        preferred_lane: backtestForm.scheduling_lane && backtestForm.scheduling_lane !== 'auto' ? backtestForm.scheduling_lane : undefined
       }
     }
 

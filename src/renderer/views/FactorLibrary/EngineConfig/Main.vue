@@ -77,6 +77,9 @@
           <el-button type="primary" :icon="Check" @click="saveAdmissionYaml" :loading="admissionSaving" :disabled="!isDirty">保存</el-button>
         </div>
         <div ref="yamlEditorRef" class="yaml-editor"></div>
+        <div v-if="admissionSchemaVersion === 2" class="admission-error">
+          <el-alert type="warning" :closable="false" show-icon title="当前配置为旧版单池格式（无 pools 段），需迁移到 schema v3.0（defaults + pools）后才能保存" />
+        </div>
         <div v-if="admissionError" class="admission-error">
           <el-alert type="error" :closable="false" :title="admissionError" />
         </div>
@@ -190,6 +193,7 @@ let yamlEditor: EditorView | null = null
 const admissionLoading = ref(false)
 const admissionSaving = ref(false)
 const admissionError = ref('')
+const admissionSchemaVersion = ref(0)
 // 记录加载时的原始内容，用于判断是否有改动
 const originalYaml = ref('')
 const isDirty = ref(false)
@@ -227,6 +231,7 @@ const loadAdmissionYaml = async () => {
     if (res.success) {
       const yaml = res.data?.yaml || ''
       setEditorValue(yaml)
+      admissionSchemaVersion.value = res.data?.schema_version ?? 0
       // 记录原始内容，重置改动状态
       originalYaml.value = yaml
       isDirty.value = false
@@ -248,6 +253,7 @@ const saveAdmissionYaml = async () => {
     const res = await window.electronAPI.backtest.saveAdmissionConfig(yaml)
     if (res.success) {
       ElMessage.success('已保存，下一个入库审核任务生效')
+      admissionSchemaVersion.value = 3
       // 保存成功后，当前内容成为新的原始内容
       originalYaml.value = yaml
       isDirty.value = false

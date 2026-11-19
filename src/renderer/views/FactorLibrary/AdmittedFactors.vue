@@ -183,6 +183,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
+import { fetchAdmissionPools, DEFAULT_POOL, DEFAULT_POOL_OPTIONS } from '@/utils/admissionPools'
 import type {
   AdmittedFactorListResponse,
   AdmittedFactor,
@@ -205,64 +206,20 @@ const detailVersions = ref<AdmittedFactorVersion[]>([])
 const detailEvents = ref<AdmittedFactorEvent[]>([])
 
 // ---- 审核池 ----
-const admissionPool = ref('csi1000')
-const poolOptions = ref<Array<{ value: string; label: string }>>([{ value: 'csi1000', label: '中证1000 (csi1000)' }])
+const admissionPool = ref(DEFAULT_POOL)
+const poolOptions = ref([...DEFAULT_POOL_OPTIONS])
 
 const poolLabel = (pool?: string) => {
-  if (!pool) return 'csi1000'
+  if (!pool) return DEFAULT_POOL
   const found = poolOptions.value.find(p => p.value === pool)
   return found ? found.label : pool
 }
 
-// 轻量解析 admission yaml 中的 pools 键（缩进两层：pools: 下每池 key: label: xx）
-const parseAdmissionPools = (yaml: string) => {
-  const pools: Array<{ value: string; label: string }> = []
-  const lines = yaml.split(/\r?\n/)
-  let inPools = false
-  let poolsIndent = -1
-  let currentPool = ''
-  for (const raw of lines) {
-    const line = raw.replace(/\t/g, '  ')
-    if (!line.trim() || line.trim().startsWith('#')) continue
-    const indent = line.length - line.trimStart().length
-    const trimmed = line.trim()
-    if (trimmed.startsWith('pools:')) {
-      inPools = true
-      poolsIndent = indent
-      continue
-    }
-    if (inPools && indent <= poolsIndent) { inPools = false; continue }
-    if (!inPools) continue
-    // 池 key 行（缩进一层）
-    if (indent > poolsIndent && /^[A-Za-z0-9_]+:\s*$/.test(trimmed)) {
-      currentPool = trimmed.replace(/:$/, '')
-      pools.push({ value: currentPool, label: currentPool })
-    } else if (currentPool && /^label:\s*(.+)$/.test(trimmed)) {
-      const label = trimmed.match(/^label:\s*(.+)$/)?.[1]?.trim().replace(/^['"]|['"]$/g, '')
-      if (label) {
-        const found = pools.find(p => p.value === currentPool)
-        if (found) found.label = label
-      }
-    }
-  }
-  return pools
-}
-
 const loadPoolOptions = async () => {
-  try {
-    const result = await window.electronAPI.backtest.getAdmissionConfig()
-    if (result.success && result.data?.yaml) {
-      const pools = parseAdmissionPools(result.data.yaml)
-      if (pools.length) {
-        poolOptions.value = pools
-        // 默认值 csi1000 不在 v3 池列表时，回退到第一个池
-        if (!pools.some(p => p.value === admissionPool.value)) {
-          admissionPool.value = pools[0].value
-        }
-      }
-    }
-  } catch {
-    // 读��失败保持默认 csi1000
+  const { pools } = await fetchAdmissionPools()
+  poolOptions.value = pools
+  if (!pools.some(p => p.value === admissionPool.value)) {
+    admissionPool.value = pools[0].value
   }
 }
 

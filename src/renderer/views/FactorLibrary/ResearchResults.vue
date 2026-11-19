@@ -170,7 +170,7 @@
       <el-table-column v-if="isVisible('admission_pool')" label="审核池" align="center" width="110">
         <template #default="{ row }">
           <el-tag v-if="['admission', 'upgrade'].includes(row.research_mode)" size="small" type="info" effect="plain">
-            {{ row.admission_pool || 'csi1000' }}
+            {{ row.admission_pool || 'zz1000' }}
           </el-tag>
           <span v-else style="color: #cbd5e1;">-</span>
         </template>
@@ -186,7 +186,7 @@
       <el-table-column v-if="isVisible('researcher')" prop="researcher" label="研究员" align="center" />
 
       <el-table-column v-if="isVisible('universe')" label="股票池" align="center">
-        <template #default="{ row }">{{ getUniverseDisplay(row.universe) }}</template>
+        <template #default="{ row }">{{ getUniverseDisplay(row.universe ?? row.task_config?.universe) }}</template>
       </el-table-column>
 
       <el-table-column v-if="isVisible('rank_ic_5')" label="5日RankIC" align="center">
@@ -512,6 +512,7 @@ import {
 } from '@element-plus/icons-vue'
 import StageErrors from '@/components/StageErrors.vue'
 import { formatUniverse } from '@/utils/universe'
+import { fetchAdmissionPools, DEFAULT_POOL_OPTIONS } from '@/utils/admissionPools'
 
 const router = useRouter()
 
@@ -565,48 +566,11 @@ const hasActiveFilters = computed(() => {
 })
 
 // ---- 审核池筛选 ----
-const poolOptions = ref<Array<{ value: string; label: string }>>([{ value: 'csi1000', label: '中证1000 (csi1000)' }])
-
-// 轻量解析 admission yaml 中的 pools 键（与 AdmittedFactors.vue 同规则）
-const parseAdmissionPools = (yaml: string) => {
-  const pools: Array<{ value: string; label: string }> = []
-  let inPools = false
-  let poolsIndent = -1
-  let currentPool = ''
-  for (const raw of yaml.split(/\r?\n/)) {
-    const line = raw.replace(/\t/g, '  ')
-    if (!line.trim() || line.trim().startsWith('#')) continue
-    const indent = line.length - line.trimStart().length
-    const trimmed = line.trim()
-    if (trimmed.startsWith('pools:')) {
-      inPools = true
-      poolsIndent = indent
-      continue
-    }
-    if (inPools && indent <= poolsIndent) { inPools = false; continue }
-    if (!inPools) continue
-    if (indent > poolsIndent && /^[A-Za-z0-9_]+:\s*$/.test(trimmed)) {
-      currentPool = trimmed.replace(/:$/, '')
-      pools.push({ value: currentPool, label: currentPool })
-    } else if (currentPool && /^label:\s*(.+)$/.test(trimmed)) {
-      const label = trimmed.match(/^label:\s*(.+)$/)?.[1]?.trim().replace(/^['"]|['"]$/g, '')
-      const found = pools.find(p => p.value === currentPool)
-      if (label && found) found.label = label
-    }
-  }
-  return pools
-}
+const poolOptions = ref([...DEFAULT_POOL_OPTIONS])
 
 const loadPoolOptions = async () => {
-  try {
-    const result = await window.electronAPI.backtest.getAdmissionConfig()
-    if (result.success && result.data?.yaml) {
-      const pools = parseAdmissionPools(result.data.yaml)
-      if (pools.length) poolOptions.value = pools
-    }
-  } catch {
-    // 读取失败保持默认 csi1000
-  }
+  const { pools } = await fetchAdmissionPools()
+  poolOptions.value = pools
 }
 
 // 分页

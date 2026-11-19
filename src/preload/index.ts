@@ -289,9 +289,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('backtest:downloadLedgerAudit', taskId, period, group),
     myFactorCollinearity: (taskId: string, topK?: number, minOverlap?: number) =>
       ipcRenderer.invoke('backtest:myFactorCollinearity', taskId, topK, minOverlap),
-    listAdmittedFactors: (admissionPool = 'csi1000') =>
+    listAdmittedFactors: (admissionPool = 'zz1000') =>
       ipcRenderer.invoke('backtest:listAdmittedFactors', admissionPool),
-    getAdmittedFactorDetail: (factorId: string, admissionPool = 'csi1000') =>
+    getAdmittedFactorDetail: (factorId: string, admissionPool = 'zz1000') =>
       ipcRenderer.invoke('backtest:getAdmittedFactorDetail', factorId, admissionPool),
     getStockPools: () => ipcRenderer.invoke('backtest:getStockPools'),
     getPriceTypeOptions: () => ipcRenderer.invoke('backtest:getPriceTypeOptions'),
@@ -935,7 +935,7 @@ declare global {
         getStockPools: () => Promise<{ success: boolean; data?: Array<{ id: string; name: string; description: string; start_date: string }>; error?: string }>
         getPriceTypeOptions: () => Promise<{ success: boolean; data?: { rebalance_price_types?: Array<{ value: string; label: string; description?: string; category?: string }>; buy_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; sell_price_types: Array<{ value: string; label: string; description?: string; category?: string }>; benchmarks?: Array<{ value: string; label: string; description?: string }>; time_filter_presets?: Array<{ name: string; start: string; end: string; description?: string }> }; error?: string }>
         getDailyMetrics: (taskId: string, params?: { page?: number; page_size?: number; start_date?: string; end_date?: string }) => Promise<{ success: boolean; data?: any; error?: string }>
-        getAdmissionConfig: () => Promise<{ success: boolean; data?: { yaml: string }; error?: string }>
+        getAdmissionConfig: () => Promise<{ success: boolean; data?: { yaml: string; schema_version?: number; pools?: Array<{ pool_id: string; label?: string }> }; error?: string }>
         saveAdmissionConfig: (yaml: string) => Promise<{ success: boolean; data?: any; error?: string }>
         getQuotaConfig: () => Promise<{ success: boolean; data?: { yaml: string; updated_at?: string; updated_by?: string }; error?: string }>
         saveQuotaConfig: (yaml: string) => Promise<{ success: boolean; data?: any; error?: string }>

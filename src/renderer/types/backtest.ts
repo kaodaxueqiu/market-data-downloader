@@ -1,9 +1,3 @@
-// 调度提示（与引擎 TaskConfig.scheduling 对齐）
-export interface SchedulingConfig {
-  allow_long_running?: boolean
-  preferred_lane?: 'quick' | 'standard' | 'slow' | 'highmem'
-}
-
 // Python 因子执行元信息
 export interface FactorCodeMeta {
   entrypoint: 'calculate_factor' | 'factor'
@@ -63,14 +57,13 @@ export interface BacktestSubmitRequest {
   backtest_params: any
   calc_options?: CalcOptions
   research_mode?: 'research' | 'admission' | 'upgrade'
-  admission_pool?: string                                 // 审核池，缺省 csi1000
+  admission_pool?: string                                 // 审核池，缺省 zz1000
   upgrade_target_factor_id?: string                       // 升级模式必填：目标已入库因子
   upgrade_base_version?: number                           // 升级模式可选：乐观锁基准版本
   walk_forward?: any
   risk_neutralization?: any
   parameter_scan?: any
   udfs?: any[]
-  scheduling?: SchedulingConfig
 }
 
 // 中间统计表元数据（列表页用，对齐后端 data.tables[].meta + 顶层字段）

@@ -209,7 +209,7 @@
               <div class="config-item">
                 <span class="config-label">
                   股票池
-                  <el-tooltip v-if="showPoolOverrideBadge" content="admission 模式已强制覆盖为 csi1000" placement="top">
+                  <el-tooltip v-if="showPoolOverrideBadge" :content="`审核模式已按审核池强制覆盖为 ${poolDisplayLabel}`" placement="top">
                     <el-tag type="warning" size="small" effect="dark" class="override-badge">强制覆盖</el-tag>
                   </el-tooltip>
                 </span>
@@ -2115,7 +2115,7 @@ const upgradeCollinearityMatches = computed<any[]>(() =>
 )
 // 池信息展示
 const poolDisplayLabel = computed(() =>
-  summary.value?.admission_pool_label || summary.value?.admission_pool || 'csi1000'
+  summary.value?.admission_pool_label || summary.value?.admission_pool || 'zz1000'
 )
 const formatWindow = (win?: { start?: string; end?: string } | null) => {
   if (!win?.start && !win?.end) return '-'
@@ -3329,7 +3329,7 @@ const getUniverseName = (universe: any) => {
     'zz1000': '中证1000',
     'sz50': '上证50',
     'zz2000': '中证2000',
-    'csi1000': '中证1000'  // 引擎 effective_pool 返回的是 csi1000
+    'csi1000': '中证1000'  // 历史任务兼容
   }
   return presetMap[presetName] || presetName || '全市场'
 }

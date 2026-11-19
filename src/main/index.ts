@@ -6197,8 +6197,8 @@ ipcMain.handle('backtest:myFactorCollinearity', async (_event, taskId: string, t
   }
 })
 
-// 已入库因子列表（按审核池筛选，缺省 csi1000）
-ipcMain.handle('backtest:listAdmittedFactors', async (_event, admissionPool = 'csi1000') => {
+// 已入库因子列表（按审核池筛选，缺省 zz1000）
+ipcMain.handle('backtest:listAdmittedFactors', async (_event, admissionPool = 'zz1000') => {
   try {
     const apiKey = getDefaultApiKeyForBacktest()
     if (!apiKey) return { success: false, error: '未找到API Key' }
@@ -6217,8 +6217,8 @@ ipcMain.handle('backtest:listAdmittedFactors', async (_event, admissionPool = 'c
   }
 })
 
-// 已入库因子详情（按审核池，缺省 csi1000）
-ipcMain.handle('backtest:getAdmittedFactorDetail', async (_event, factorId: string, admissionPool = 'csi1000') => {
+// 已入库因子详情（按审核池，缺省 zz1000）
+ipcMain.handle('backtest:getAdmittedFactorDetail', async (_event, factorId: string, admissionPool = 'zz1000') => {
   try {
     const apiKey = getDefaultApiKeyForBacktest()
     if (!apiKey) return { success: false, error: '未找到API Key' }
